@@ -26,6 +26,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import time
 import unicodedata
 import urllib.error
 import urllib.request
@@ -526,9 +527,6 @@ class Categorizer:
             return self.cache[key], "cache", 0.5
 
         if self.use_llm:
-            asked = self.stats["llm"] + self.stats["llm-vuoto"]
-            if asked and asked % 10 == 0:
-                print(f"  ...{asked} descrizioni chieste al modello")
             category = self._ask_llm(description)
             if category:
                 self.cache[key] = category
@@ -609,6 +607,7 @@ class Categorizer:
             OLLAMA_URL, data=payload,
             headers={"Content-Type": "application/json"},
         )
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(request, timeout=120) as response:
                 answer = json.loads(response.read())["response"]
@@ -624,15 +623,31 @@ class Categorizer:
             self.llm_available = False
             return ""
 
+        elapsed = time.monotonic() - started
+        # Il ragionamento del modello non serve alla decisione, ma vederlo
+        # aiuta a capire perche' ha risposto cosi'.
+        thinking = " ".join(re.findall(r"<think>(.*?)</think>", answer,
+                                       flags=re.DOTALL)).strip()
         answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL)
         answer = answer.strip().strip('"').strip()
+
+        def report(outcome, detail=""):
+            print(f"LLM {elapsed:5.1f}s | {description[:64]}")
+            if thinking:
+                print(f"LLM       ragiona: {thinking[:180]}")
+            print(f"LLM       risponde: {answer[:80]!r} -> {outcome}{detail}")
+
         if answer in self.categories:
+            report("accettata")
             return answer
         # Il modello a volte parafrasa: accetta solo se combacia normalizzato.
         target = normalize(answer)
         for category in self.categories:
             if normalize(category) == target:
+                report("accettata", f" (normalizzata in {category!r})")
                 return category
+        report("SCARTATA", " (non e' una categoria esistente)"
+               if answer.upper() != "NESSUNA" else " (il modello si e' astenuto)")
         return ""
 
     def save_cache(self):

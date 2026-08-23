@@ -15,12 +15,12 @@ dalle altre macchine della rete.
 """
 
 import csv
-import io
 import json
 import os
 import re
 import threading
 import time
+import urllib.parse
 import traceback
 import webbrowser
 from contextlib import redirect_stdout, redirect_stderr
@@ -129,6 +129,52 @@ def read_layout():
     return saved + [c for c in DEFAULT_LAYOUT if c["id"] not in known]
 
 
+class LiveLog:
+    """Raccoglie l'output della pipeline riga per riga, mentre gira.
+
+    Prima il log si leggeva solo alla fine, da uno StringIO: durante i minuti
+    del passo LLM l'interfaccia non aveva niente da mostrare. Qui ogni riga
+    completa e' disponibile subito, e il browser se le porta via a pezzi.
+    """
+
+    def __init__(self, limit=4000):
+        self.lock = threading.Lock()
+        self.lines = []
+        self.partial = ""
+        self.limit = limit
+
+    def write(self, text):
+        with self.lock:
+            self.partial += text
+            while "\n" in self.partial:
+                line, self.partial = self.partial.split("\n", 1)
+                self.lines.append(line)
+            # Tagliare sposterebbe gli indici sotto i piedi del browser, che
+            # chiede "dammi dalla riga N": si tiene largo e si azzera solo fra
+            # un giro e l'altro, in reset().
+            if len(self.lines) > self.limit * 2:
+                del self.lines[:len(self.lines) - self.limit]
+        return len(text)
+
+    def flush(self):
+        pass
+
+    def reset(self):
+        with self.lock:
+            self.lines, self.partial = [], ""
+
+    def since(self, index):
+        """Le righe dalla N in poi, piu' il nuovo segnalibro."""
+        with self.lock:
+            index = max(0, min(index, len(self.lines)))
+            return self.lines[index:], len(self.lines)
+
+    def tail(self, n=40):
+        with self.lock:
+            return self.lines[-n:]
+
+
+
 # --------------------------------------------------------------------------
 # stato dell'applicazione
 # --------------------------------------------------------------------------
@@ -142,7 +188,7 @@ class State:
         self.version = 0
         self.running = False
         self.error = None
-        self.log = []
+        self.log = LiveLog()
         self.frame = pd.DataFrame()
         self.again = False        # una modifica e' arrivata durante un giro
 
@@ -178,20 +224,19 @@ class State:
             return
         with self.lock:
             self.running, self.error = True, None
-            buffer = io.StringIO()
+            self.log.reset()
             try:
                 # Senza export si lavora sullo storico MoneyWiz, cosi'
                 # l'interfaccia ha qualcosa da mostrare fin dal primo avvio.
-                with redirect_stdout(buffer), redirect_stderr(buffer):
+                with redirect_stdout(self.log), redirect_stderr(self.log):
                     self.frame = bilancio.run(
                         self.folder, use_llm=use_llm,
                         from_history=not self.has_exports(),
                         make_dashboard=False)
             except Exception as exc:                      # noqa: BLE001
                 self.error = f"{type(exc).__name__}: {exc}"
-                buffer.write("\n" + traceback.format_exc())
+                self.log.write(traceback.format_exc() + chr(10))
             finally:
-                self.log = buffer.getvalue().strip().split("\n")[-40:]
                 self.version += 1
                 self.running = False
         if self.again:
@@ -230,7 +275,7 @@ class State:
             "version": self.version,
             "running": self.running,
             "error": self.error,
-            "log": self.log,
+            "log": self.log.tail(),
             "transactions": transactions,
             "accounts": accounts,
             "categories": categories,
@@ -480,6 +525,20 @@ class Handler(BaseHTTPRequestHandler):
                                        "running": STATE.running,
                                        "error": STATE.error})
             return self.send_json(STATE.payload())
+        if self.path.startswith("/api/log"):
+            # "dammi dalla riga N in poi": il browser tiene il segno e non
+            # riscarica quello che ha gia'. Deve restare leggibile mentre
+            # la pipeline gira, altrimenti il log non serve a niente.
+            query = urllib.parse.urlparse(self.path).query
+            start = urllib.parse.parse_qs(query).get("from", ["0"])[0]
+            try:
+                start = int(start)
+            except ValueError:
+                start = 0
+            entries, total = STATE.log.since(start)
+            return self.send_json({"lines": entries, "next": total,
+                                   "running": STATE.running,
+                                   "version": STATE.version})
         self.fail(404, "non trovato")
 
     def do_POST(self):
@@ -508,9 +567,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True,
                                        "file": [p.name for p in written]})
             if route == "/api/run":
-                STATE.refresh(use_llm=payload.get("llm", True))
-                return self.send_json({"ok": True, "version": STATE.version,
-                                       "errore": STATE.error})
+                # Col modello un giro dura minuti: la richiesta non puo
+                # restare appesa, altrimenti il browser molla e il log non
+                # si vede proprio nel momento in cui serve.
+                if STATE.running:
+                    return self.send_json({"ok": True, "gia_in_corso": True})
+                threading.Thread(
+                    target=STATE.refresh,
+                    kwargs={"use_llm": payload.get("llm", True)},
+                    daemon=True).start()
+                return self.send_json({"ok": True, "avviato": True})
             if route in ACTIONS:
                 ACTIONS[route](payload)
                 STATE.refresh(use_llm=False)

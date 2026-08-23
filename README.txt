@@ -61,6 +61,19 @@ Regole e merchant  Con anteprima: "prova" dice quante transazioni colpirebbe
 
 Componi            Quali riquadri mostrare e in che ordine.
 
+Log                Pannello a destra, si apre col pulsante "Log" e da solo
+                   quando premi "Rielabora". Mostra la pipeline riga per riga
+                   MENTRE gira, non alla fine.
+
+                   Del modello si vede: la descrizione che gli e' stata data,
+                   quanto ci ha messo, il suo ragionamento se lo produce, e la
+                   risposta esatta. Verde = categoria accettata, rosso =
+                   scartata perche' non esiste o perche' si e' astenuto.
+
+                   Scorrere verso l'alto ferma l'inseguimento della coda, cosi'
+                   puoi leggere in pace mentre continua a scrivere; tornare in
+                   fondo lo riattiva.
+
 
 COME DECIDE LA CATEGORIA
 ------------------------

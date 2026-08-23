@@ -5,7 +5,30 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
-## IN CORSO (23/08/2026) — sotto git, e i periodi seguono il calendario
+## IN CORSO (23/08/2026) — il log del modello, in diretta
+
+**Pannello a destra.** Si apre col pulsante "Log" e da solo premendo
+"Rielabora". `LiveLog` in `server.py` sostituisce lo `StringIO`: raccoglie
+l'output riga per riga mentre la pipeline gira, e `/api/log?from=N` lo serve a
+pezzi — il browser tiene il segno e non riscarica quello che ha già.
+
+**`/api/run` ora parte in un thread e torna subito.** Prima teneva la
+richiesta appesa per tutta la durata: col modello sono minuti, e il browser
+mollava proprio mentre il log serviva. La fine la scopre `poll()`, che
+riabilita il pulsante quando `running` torna falso.
+
+**`_ask_llm` racconta cosa fa**: descrizione, secondi impiegati, il contenuto
+di `<think>` se c'è, la risposta esatta, e se è stata accettata o scartata.
+
+**Quello che il log ha fatto vedere subito.** Il modello risponde `NESSUNA` a
+gran parte del residuo, e ha ragione: le descrizioni sono `Transazione senza
+nome`, `AMO`, `Berfis 25.02`. Sono ~3 secondi ciascuna per farsi dire "non lo
+so". Un filtro che non chieda nulla al modello quando la descrizione non ha
+token significativi taglierebbe minuti a ogni giro.
+
+---
+
+## Sotto git, e i periodi seguono il calendario (23/08/2026)
 
 **C'è git.** `git init` fatto, primo commit `56b738b`. I derivati
 (`consolidato.csv`, le dashboard, la cache LLM, il backup MoneyWiz) sono

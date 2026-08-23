@@ -97,6 +97,27 @@ padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
 .quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .quick .anchor{font-size:11px;color:var(--dim);margin-left:auto}
 input[data-rule-pattern]{min-width:340px;font-family:ui-monospace,monospace;font-size:12px}
+/* Il log vive in un pannello a destra: la pagina si stringe invece di
+   finirgli sotto, cosi' si legge la dashboard mentre il modello lavora. */
+#log{position:fixed;top:0;right:0;bottom:0;width:440px;background:var(--card);
+border-left:1px solid var(--line);display:none;flex-direction:column;z-index:20}
+body.log-on #log{display:flex}
+body.log-on .wrap{margin-right:440px}
+#log .top{display:flex;align-items:center;gap:8px;padding:10px 12px;
+border-bottom:1px solid var(--line);font:12px ui-sans-serif,system-ui,sans-serif}
+#log .top b{font-size:11px;text-transform:uppercase;letter-spacing:.11em;
+color:var(--dim);font-weight:600}
+#log pre{margin:0;padding:10px 12px;overflow:auto;flex:1;white-space:pre-wrap;
+word-break:break-word;font:11px/1.5 ui-monospace,SFMono-Regular,monospace;
+color:var(--dim)}
+#log .llm{color:var(--ink)}
+#log .ok{color:var(--accent)}
+#log .ko{color:var(--warn)}
+#log .think{opacity:.65;font-style:italic}
+@media (max-width:1100px){
+  #log{width:100%;border-left:none}
+  body.log-on .wrap{margin-right:0;display:none}
+}
 </style>
 </head>
 <body>
@@ -107,6 +128,7 @@ input[data-rule-pattern]{min-width:340px;font-family:ui-monospace,monospace;font
     <span class="status" id="status"></span>
     <button id="btn-run">Rielabora</button>
     <button id="btn-export">Esporta HTML + Excel</button>
+    <button id="btn-log">Log</button>
   </header>
   <div class="status ui" id="source"></div>
 
@@ -128,6 +150,17 @@ input[data-rule-pattern]{min-width:340px;font-family:ui-monospace,monospace;font
 
   <div id="view"></div>
 </div>
+
+<aside id="log">
+  <div class="top">
+    <b>Log</b>
+    <span id="log-state" class="mini"></span>
+    <span class="grow"></span>
+    <button class="link" id="log-follow" title="segui la coda">↓ segui</button>
+    <button class="link" id="log-close">chiudi</button>
+  </div>
+  <pre id="log-body"></pre>
+</aside>
 
 <script>
 "use strict";
@@ -696,6 +729,7 @@ function fillSelect(id, values, current, blank){
 }
 
 function setStatus(){
+  el("btn-run").disabled = !!(S && S.running);
   const dot = S && S.running ? "busy" : (S && S.error ? "err" : "");
   el("status").innerHTML = `<span class="dot ${dot}"></span>`
     + (S && S.running ? "elaboro…"
@@ -839,11 +873,83 @@ el("f-reset").addEventListener("click", () => {
   Object.keys(F).forEach(k => F[k] = "");
   render();
 });
+// --------------------------------------------------------------------------
+// log
+// --------------------------------------------------------------------------
+let LOG_AT = 0;          // segnalibro: da quale riga chiedere la prossima volta
+let LOG_TIMER = null;
+let LOG_FOLLOW = true;
+
+const openLog = () => { document.body.classList.add("log-on"); pullLog(); };
+const closeLog = () => {
+  document.body.classList.remove("log-on");
+  clearTimeout(LOG_TIMER); LOG_TIMER = null;
+};
+
+function logLine(text){
+  // Le righe del modello si distinguono a colpo d'occhio: quando ne scorrono
+  // centinaia, l'esito e' l'unica cosa che si cerca davvero.
+  let cls = "";
+  if(text.startsWith("LLM")){
+    cls = "llm";
+    if(text.includes("ragiona:")) cls = "think";
+    else if(text.includes("accettata")) cls = "ok";
+    else if(text.includes("SCARTATA")) cls = "ko";
+  }
+  return cls ? `<span class="${cls}">${esc(text)}</span>` : esc(text);
+}
+
+async function pullLog(){
+  clearTimeout(LOG_TIMER); LOG_TIMER = null;
+  if(!document.body.classList.contains("log-on")) return;
+  let data;
+  try{
+    data = await (await fetch("/api/log?from=" + LOG_AT)).json();
+  }catch(e){ LOG_TIMER = setTimeout(pullLog, 2000); return; }
+
+  if(data.next < LOG_AT){ LOG_AT = 0; el("log-body").innerHTML = ""; }
+  if(data.lines.length){
+    const body = el("log-body");
+    body.insertAdjacentHTML("beforeend",
+      data.lines.map(logLine).join("\n") + "\n");
+    LOG_AT = data.next;
+    if(LOG_FOLLOW) body.scrollTop = body.scrollHeight;
+  }
+  el("log-state").textContent = data.running
+    ? `elaboro… ${data.next} righe` : `${data.next} righe`;
+  // Mentre gira si guarda spesso, a riposo quasi mai.
+  LOG_TIMER = setTimeout(pullLog, data.running ? 600 : 3000);
+}
+
+el("btn-log").addEventListener("click", () =>
+  document.body.classList.contains("log-on") ? closeLog() : openLog());
+el("log-close").addEventListener("click", closeLog);
+el("log-follow").addEventListener("click", () => {
+  LOG_FOLLOW = !LOG_FOLLOW;
+  el("log-follow").textContent = LOG_FOLLOW ? "↓ segui" : "↓ fermo";
+  if(LOG_FOLLOW) el("log-body").scrollTop = el("log-body").scrollHeight;
+});
+// Scorrere a mano verso l'alto significa "voglio leggere qui": non trascinare.
+el("log-body").addEventListener("scroll", () => {
+  const b = el("log-body");
+  const inCoda = b.scrollHeight - b.scrollTop - b.clientHeight < 30;
+  if(LOG_FOLLOW !== inCoda){
+    LOG_FOLLOW = inCoda;
+    el("log-follow").textContent = LOG_FOLLOW ? "↓ segui" : "↓ fermo";
+  }
+});
+
 el("btn-run").addEventListener("click", async () => {
   el("btn-run").disabled = true;
+  // Il log si apre da solo: e' il momento in cui serve, ed e' l'unico modo di
+  // sapere che il modello sta lavorando e non e' bloccato.
+  LOG_AT = 0;
+  el("log-body").innerHTML = "";
+  openLog();
   await post("/api/run", {llm:true});
-  el("btn-run").disabled = false;
-  reload();
+  // Il server ha solo AVVIATO il giro. La fine la scopre poll(), che
+  // riabilita il pulsante quando running torna falso.
+  pullLog();
 });
 el("btn-export").addEventListener("click", async () => {
   const r = await post("/api/export", {});
