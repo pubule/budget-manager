@@ -5,7 +5,28 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
-## IN CORSO (23/08/2026) — la dashboard è diventata un'applicazione
+## IN CORSO (23/08/2026) — sotto git, e i periodi seguono il calendario
+
+**C'è git.** `git init` fatto, primo commit `56b738b`. I derivati
+(`consolidato.csv`, le dashboard, la cache LLM, il backup MoneyWiz) sono
+gitignorati: si rigenerano e riempirebbero la cronologia di rumore. È un repo
+**locale**, senza remoto: la sincronizzazione è quella di iCloud, non di un
+server. Ogni pulizia futura è reversibile con `git checkout -- <file>`.
+
+**Scritture atomiche.** `write_rows` e la cache LLM scrivono su un file `.tmp`
+e poi rinominano. Prima aprivano il file vero in scrittura, che lo tronca
+subito: un arresto a metà lasciava un CSV di configurazione mutilato.
+
+**I filtri rapidi seguono il calendario, non i dati.** Erano ancorati
+all'ultima transazione: "Mese in corso" mostrava gennaio essendo agosto. Era
+una bugia, e l'etichetta "riferimento" che avevo aggiunto era una pezza su una
+scelta sbagliata. Ora "Mese in corso" dà agosto anche se è vuoto — e quando è
+vuoto lo dice indicando dove sono gli ultimi dati. Il caso ancorato ai dati ha
+un pulsante suo, **"Ultimo mese con dati"**, con un nome che dice quello che fa.
+
+---
+
+## La dashboard è diventata un'applicazione
 
 `python server.py` apre l'interfaccia nel browser. Da lì si corregge tutto:
 categorie, tassonomia, regole, merchant, importi. La cartella è sorvegliata:
@@ -118,11 +139,13 @@ si calcola sul bilancio intero: su una fetta di sole uscite è un numero che
 sembra una conclusione e non vuol dire niente. Sotto filtro compaiono invece
 quota, totale, transazioni e mesi coperti.
 
-### 6. I filtri rapidi si ancorano all'ultima transazione, non a oggi
+### 6. I filtri rapidi seguono il calendario (corretto il 23/08/2026)
 
-Oggi è agosto 2026, i dati finiscono a gennaio. "Mese in corso" calcolato sulla
-data odierna darebbe sempre zero righe. Quando le due date non coincidono la
-barra lo scrive.
+Prima erano ancorati all'ultima transazione, perché così i pulsanti erano
+sempre utili. Sbagliato: un pulsante che dice "Mese in corso" e mostra gennaio
+essendo agosto mente, e un periodo vuoto è **informazione vera** — vuol dire
+che i dati non sono aggiornati. Ora seguono il calendario, e "Ultimo mese con
+dati" è un pulsante separato con un nome onesto.
 
 ### 7. Il periodo chiesto e quello coperto sono due cose diverse
 
@@ -189,6 +212,11 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
   salta), ma sono filtrate dall'elenco mostrato: altrimenti comparivano come
   regole senza categoria e "salva" dava errore.
 
+- **Dopo un ridisegno i nodi del DOM sono altri.** Tenere un riferimento ai
+  pulsanti e cliccarli dopo che `render()` è passato non fa niente: l'evento
+  parte da un nodo staccato e non arriva al listener sul documento. Nei test
+  via JS bisogna riprendere gli elementi ogni volta.
+
 - **Il primo clic dopo `navigate` con l'automazione del browser va a vuoto.**
   Non è un difetto dell'app: verificato con `document.elementFromPoint` e un
   `.click()` da codice, che funziona. Nei test bisogna cliccare due volte o
@@ -216,5 +244,5 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
 - **`transaction_processor.py`** è la versione precedente, completamente
   superata da `bilancio.py`. Tenuta solo perché non c'è git: se non serve più
   a niente, si cancella.
-- **Non c'è controllo di versione.** Un `git init` qui dentro renderebbe
-  reversibile ogni pulizia futura.
+- **Il repo git non ha un remoto.** La copia di sicurezza è iCloud. Se serve
+  un backup vero, va aggiunto un remoto privato.
