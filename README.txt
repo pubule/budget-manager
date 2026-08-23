@@ -29,15 +29,16 @@ Dashboard          Indicatori e grafici. La barra in alto filtra per periodo,
                    conto, natura, categoria e testo, e i grafici si aggiornano
                    con lei. Cliccare una barra filtra tutto su quella voce.
 
-                   I filtri rapidi (mese in corso, mese scorso, ultimi 3 mesi,
-                   anno in corso, anno scorso) fanno da interruttore: premere
-                   di nuovo lo stesso pulsante toglie il filtro.
+                   I filtri rapidi seguono il CALENDARIO: "mese in corso" e' il
+                   mese di oggi. Se e' vuoto vuol dire che non hai ancora
+                   caricato gli export di questo mese, e il messaggio te lo
+                   dice indicando dov'e' l'ultimo movimento che hai.
 
-                   ATTENZIONE al riferimento: "mese in corso" NON e' il mese
-                   di oggi, e' il mese dell'ultima transazione che hai. Se gli
-                   export sono fermi a gennaio, contare da oggi darebbe sempre
-                   zero righe. Quando le due date non coincidono la barra lo
-                   scrive: "riferimento: ultima transazione ...".
+                   "Ultimo mese con dati" e' il pulsante per saltare
+                   direttamente li'.
+
+                   Fanno da interruttore: premere di nuovo lo stesso pulsante
+                   toglie il filtro.
 
                    Filtrando su una natura o una categoria, risparmio e tasso
                    di risparmio spariscono: si calcolano sul bilancio intero,

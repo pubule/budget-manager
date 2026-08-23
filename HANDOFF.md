@@ -61,7 +61,7 @@ python server.py                   # l'applicazione, http://127.0.0.1:8770
 python bilancio.py --selfcheck     # motore di categorizzazione + selftest
 python bilancio.py --da-storico    # elabora da riga di comando, senza export
 
-# l'interfaccia, senza aprire un browser (47 controlli)
+# l'interfaccia, senza aprire un browser (51 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
 node test_app.js "$TEMP/state.json"
 ```
