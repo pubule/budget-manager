@@ -1,0 +1,15 @@
+# Derivati: si rigenerano con `python bilancio.py`. Versionarli riempirebbe la
+# cronologia di rumore a ogni elaborazione.
+consolidato.csv
+da_rivedere.csv
+dashboard.html
+dashboard.xlsx
+
+# Cache e residui
+categorie_cache.json
+__pycache__/
+*.tmp
+state.json
+
+# Il backup MoneyWiz pesa 1,8 MB ed e' gia' un archivio a se'.
+backup/*.zip

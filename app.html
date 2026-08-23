@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilancio familiare</title>
+<style>
+:root{--bg:#fbfaf8;--card:#fff;--ink:#1c1a17;--dim:#6b6560;--line:#e6e1da;
+--accent:#3f6f5f;--warn:#b5654a;--soft:#f2efe9}
+@media (prefers-color-scheme:dark){:root{
+--bg:#16161a;--card:#1e1e24;--ink:#eceaf0;--dim:#9c96a3;--line:#31313a;
+--accent:#6fae99;--warn:#d98a6a;--soft:#26262e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.55 "Iowan Old Style",Georgia,serif}
+.wrap{max-width:1060px;margin:0 auto;padding:22px 20px 80px}
+h1{font-size:26px;margin:0;letter-spacing:-.02em}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
+margin:0 0 12px;font-family:ui-sans-serif,system-ui,sans-serif}
+.ui{font-family:ui-sans-serif,system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.grow{flex:1}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+display:inline-block;margin-right:6px}
+.dot.busy{background:#d99442;animation:pulse 1s infinite}
+.dot.err{background:var(--warn)}
+@keyframes pulse{50%{opacity:.3}}
+.status{font:12px ui-sans-serif,system-ui,sans-serif;color:var(--dim)}
+button,select,input{font:13px ui-sans-serif,system-ui,sans-serif;color:var(--ink);
+background:var(--card);border:1px solid var(--line);border-radius:7px;
+padding:6px 10px}
+button{cursor:pointer}
+button:hover{border-color:var(--dim)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.link{border:none;background:none;color:var(--dim);padding:2px 5px}
+button.link:hover{color:var(--ink)}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:16px 0 20px}
+nav button{border:none;background:none;border-radius:0;padding:9px 14px;
+border-bottom:2px solid transparent;color:var(--dim)}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:10px 12px;margin-bottom:14px}
+.bar label{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--dim);
+text-transform:uppercase;letter-spacing:.08em}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{font:12px ui-sans-serif,system-ui,sans-serif;background:var(--soft);
+border:1px solid var(--line);border-radius:20px;padding:3px 10px;cursor:pointer}
+.chip:hover{border-color:var(--warn)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:18px 20px;margin-bottom:14px}
+.card>.head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:12px;
+margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:15px 17px}
+.kpi b{display:block;font-size:23px;letter-spacing:-.02em;font-weight:600;
+font-family:ui-sans-serif,system-ui,sans-serif}
+.kpi span{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+color:var(--dim);font-family:ui-sans-serif,system-ui,sans-serif}
+.kpi.good b{color:var(--accent)}.kpi.bad b{color:var(--warn)}
+text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
+text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
+text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
+line.grid{stroke:var(--line);stroke-width:1}
+svg .hit{cursor:pointer}
+svg .hit:hover rect{opacity:.75}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;
+font:12px ui-sans-serif,system-ui,sans-serif;color:var(--dim)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;
+margin-right:5px;vertical-align:-1px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font:13px ui-sans-serif,system-ui,sans-serif}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.09em;
+color:var(--dim);border-bottom:1px solid var(--line);padding:7px 12px 7px 0;
+font-weight:600;white-space:nowrap}
+td{padding:6px 12px 6px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--soft)}
+.note{font-size:13px;color:var(--dim);border-left:2px solid var(--line);
+padding-left:14px;margin:12px 0}
+.err{color:var(--warn);font:13px ui-sans-serif,system-ui,sans-serif;
+border-left:2px solid var(--warn);padding-left:14px;margin:12px 0;
+white-space:pre-wrap}
+.compose{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+gap:6px}
+.compose div{display:flex;align-items:center;gap:6px;font:13px ui-sans-serif,
+system-ui,sans-serif}
+.compose .grow{flex:1}
+.hide{display:none}
+.mini{font:11px ui-monospace,monospace;color:var(--dim)}
+.wide{min-width:260px}
+.quick{display:flex;gap:5px;flex-wrap:wrap;width:100%;align-items:center;
+padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
+.quick button{padding:4px 11px;border-radius:20px;font-size:12px}
+.quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.quick .anchor{font-size:11px;color:var(--dim);margin-left:auto}
+input[data-rule-pattern]{min-width:340px;font-family:ui-monospace,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bilancio familiare</h1>
+    <div class="grow"></div>
+    <span class="status" id="status"></span>
+    <button id="btn-run">Rielabora</button>
+    <button id="btn-export">Esporta HTML + Excel</button>
+  </header>
+  <div class="status ui" id="source"></div>
+
+  <nav id="tabs"></nav>
+  <div id="error" class="err hide"></div>
+
+  <div class="bar ui" id="filters">
+    <div class="quick" id="f-quick"></div>
+    <label>dal</label><input type="date" id="f-from">
+    <label>al</label><input type="date" id="f-to">
+    <label>conto</label><select id="f-account"></select>
+    <label>natura</label><select id="f-nature"></select>
+    <label>categoria</label><select id="f-category"></select>
+    <input type="search" id="f-text" placeholder="cerca nella descrizione"
+           class="wide">
+    <button class="link" id="f-reset">azzera</button>
+  </div>
+  <div class="chips" id="crumbs"></div>
+
+  <div id="view"></div>
+</div>
+
+<script>
+"use strict";
+
+// --------------------------------------------------------------------------
+// stato
+// --------------------------------------------------------------------------
+let S = null;                     // ultimo payload dal server
+let TAB = "dashboard";
+let VERSION = -1;
+const F = {from:"", to:"", account:"", nature:"", category:"", text:""};
+
+const TABS = [
+  ["dashboard", "Dashboard"],
+  ["revisione", "Da rivedere"],
+  ["transazioni", "Transazioni"],
+  ["categorie", "Categorie"],
+  ["regole", "Regole e merchant"],
+  ["componi", "Componi"],
+];
+
+const NATURE_COLOR = {
+  "Vincolate":"#7c6a9c", "Ricorrenti":"#4a7fb5", "Quotidiane":"#3f9e8c",
+  "Discrezionali":"#d99442", "Straordinarie":"#b5654a",
+  "Da classificare":"#8a8a8a", "Non spesa":"#6b6560", "Entrate":"#3f9e8c"
+};
+
+// --------------------------------------------------------------------------
+// utilita'
+// --------------------------------------------------------------------------
+// Raggruppamento fatto a mano invece di toLocaleString: cosi' il formato non
+// dipende dalla lingua del browser ne' dalla presenza dei dati ICU.
+const euro = v => (v<0?"-":"")
+  + String(Math.abs(Math.round(v))).replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  + " €";
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const el = id => document.getElementById(id);
+const month = t => (t.Data||"").slice(0,7);
+const uniq = a => [...new Set(a)].filter(Boolean).sort();
+
+// --------------------------------------------------------------------------
+// filtri rapidi
+// --------------------------------------------------------------------------
+const pad = n => String(n).padStart(2, "0");
+
+// Intervallo di un mese, spostato di `delta` mesi. Date in UTC per non farsi
+// spostare il primo del mese dal fuso orario.
+function monthRange(year, monthNumber, delta){
+  const start = new Date(Date.UTC(year, monthNumber - 1 + delta, 1));
+  const y = start.getUTCFullYear(), m = start.getUTCMonth() + 1;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return [`${y}-${pad(m)}-01`, `${y}-${pad(m)}-${pad(last)}`];
+}
+
+// I periodi del calendario si contano dal calendario. Ancorarli all'ultima
+// transazione rendeva "Mese in corso" una bugia: mostrava gennaio essendo
+// agosto. Se il periodo e' vuoto la risposta giusta e' "non hai dati per
+// agosto", non un mese diverso da quello chiesto.
+function today(){
+  const d = new Date();
+  return {y:d.getFullYear(), m:d.getMonth()+1,
+          iso:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+}
+
+// L'ultimo mese che ha davvero movimenti. Ha un pulsante suo, con un nome che
+// dice quello che fa.
+function lastDataMonth(){
+  const dates = (S ? S.transactions : []).map(t => t.Data).filter(Boolean);
+  if(!dates.length) return null;
+  const last = dates.reduce((a,b) => a > b ? a : b);
+  return {y:+last.slice(0,4), m:+last.slice(5,7), iso:last};
+}
+
+const QUICK = [
+  ["Mese in corso", () => { const a = today(); return monthRange(a.y, a.m, 0); }],
+  ["Mese scorso",   () => { const a = today(); return monthRange(a.y, a.m, -1); }],
+  ["Ultimi 3 mesi", () => { const a = today();
+                            return [monthRange(a.y, a.m, -2)[0],
+                                    monthRange(a.y, a.m, 0)[1]]; }],
+  ["Anno in corso", () => { const a = today();
+                            return [`${a.y}-01-01`, `${a.y}-12-31`]; }],
+  ["Anno scorso",   () => { const a = today();
+                            return [`${a.y-1}-01-01`, `${a.y-1}-12-31`]; }],
+  ["Ultimo mese con dati", () => { const a = lastDataMonth();
+                                   return a ? monthRange(a.y, a.m, 0)
+                                            : ["", ""]; }],
+];
+
+function renderQuick(){
+  const ultimo = lastDataMonth();
+  const adesso = today();
+  const vecchi = ultimo && ultimo.iso.slice(0,7) !== adesso.iso.slice(0,7);
+  el("f-quick").innerHTML = QUICK.map(([label, range], i) => {
+    const [from, to] = range();
+    const on = !!from && F.from === from && F.to === to;
+    return `<button data-quick="${i}"${from ? "" : " disabled"} `
+         + `class="${on ? "on" : ""}">${esc(label)}</button>`;
+  }).join("")
+    + (vecchi ? `<span class="anchor">oggi ${esc(adesso.iso)} · ultimo `
+                + `movimento ${esc(ultimo.iso)}</span>` : "");
+}
+
+
+// Mesi contenuti nel periodo CHIESTO, estremi inclusi.
+function monthsBetween(from, to){
+  if(!from || !to) return 0;
+  const a = +from.slice(0,4)*12 + +from.slice(5,7);
+  const b = +to.slice(0,4)*12 + +to.slice(5,7);
+  return b >= a ? b - a + 1 : 0;
+}
+
+const mesi = n => n === 1 ? "1 mese" : `${n} mesi`;
+
+// Il periodo chiesto e quello effettivamente coperto dai dati sono due cose
+// diverse, e vanno dette separatamente: "anno in corso" che mostra un solo
+// mese sembra un filtro rotto, invece e' un anno appena cominciato. Serve
+// anche a leggere le medie: "uscite/mese" sotto "anno in corso" e' la media
+// dei mesi che hai, non di dodici.
+function coverage(rows, months){
+  if(!months.length){
+    // Vuoto non e' un errore: e' l'informazione che per quel periodo non hai
+    // ancora caricato niente. Dire dove sono gli ultimi dati evita di dover
+    // andare a cercarli a mano.
+    const ultimo = lastDataMonth();
+    return "  ·  nessuna transazione nel periodo scelto"
+      + (ultimo ? `. L'ultimo movimento che hai e' del ${ultimo.iso}: `
+                  + `usa "Ultimo mese con dati", oppure copia nella cartella `
+                  + `gli export piu' recenti.` : "");
+  }
+  const span = `da ${months[0]} a ${months[months.length-1]}`;
+  const asked = monthsBetween(F.from, F.to);
+  if(asked > months.length){
+    return `  ·  ${rows.length} righe  ·  periodo chiesto ${mesi(asked)} `
+      + `(${F.from} – ${F.to}), dati presenti per ${mesi(months.length)}: `
+      + `${span}. Le medie mensili usano ${mesi(months.length)}, `
+      + `non ${mesi(asked)}.`;
+  }
+  return `  ·  ${rows.length} righe su ${mesi(months.length)}, ${span}`;
+}
+
+
+function post(route, body){
+  return fetch(route, {method:"POST", headers:{"Content-Type":"application/json"},
+                       body:JSON.stringify(body)})
+    .then(r => r.json())
+    .then(r => { if(r.errore) alert(r.errore); return r; });
+}
+
+// Solo le uscite vere: i giroconti non impoveriscono, includerli falsa tutto.
+const spending = rows => rows.filter(t => t.Natura !== "Non spesa");
+const outflow = rows => spending(rows).filter(t => t.Importo < 0);
+const inflow  = rows => spending(rows).filter(t => t.Importo > 0);
+const sum = rows => rows.reduce((a,t) => a + (t.Importo||0), 0);
+const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
+
+function filtered(){
+  if(!S) return [];
+  return S.transactions.filter(t => {
+    if(F.from && (t.Data||"") < F.from) return false;
+    if(F.to && (t.Data||"") > F.to) return false;
+    if(F.account && t.Conto !== F.account) return false;
+    if(F.nature && t.Natura !== F.nature) return false;
+    if(F.category && t.Categoria !== F.category) return false;
+    if(F.text){
+      const hay = ((t.Descrizione||"")+" "+(t.Merchant||"")).toLowerCase();
+      if(!hay.includes(F.text.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+function groupSum(rows, key){
+  const map = new Map();
+  for(const t of rows){
+    const k = t[key] || "Senza categoria";
+    const cur = map.get(k) || {total:0, n:0};
+    cur.total += t.Importo || 0; cur.n++;
+    map.set(k, cur);
+  }
+  return [...map.entries()].map(([name,v]) => ({name, ...v}))
+                           .sort((a,b) => a.total - b.total);
+}
+
+// --------------------------------------------------------------------------
+// grafici (stessa logica di dashboard.py, ma reagiscono ai filtri)
+// --------------------------------------------------------------------------
+function barChart(items, opts){
+  opts = opts || {};
+  if(!items.length) return '<p class="note">nessun dato</p>';
+  const W = 760, RH = 30, LW = 210, PAD = 130;
+  const top = Math.max(...items.map(i => Math.abs(i.value))) || 1;
+  const H = items.length*RH + 10;
+  let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  items.forEach((it, i) => {
+    const y = i*RH + 6;
+    const w = Math.abs(it.value)/top * (W-LW-PAD);
+    const click = opts.drill ? ` class="hit" data-drill="${esc(opts.drill)}"`
+                             + ` data-value="${esc(it.name)}"` : "";
+    out += `<g${click}>`
+        + `<text x="0" y="${y+14}" class="lbl">${esc(String(it.name).slice(0,34))}</text>`
+        + `<rect x="${LW}" y="${y+3}" width="${w.toFixed(1)}" height="16" rx="3"`
+        + ` fill="${it.color||"#4a7fb5"}"/>`
+        + `<text x="${(LW+w+8).toFixed(1)}" y="${y+15}" class="val">${euro(it.value)}</text>`
+        + `</g>`;
+  });
+  return out + "</svg>";
+}
+
+function lineChart(labels, series){
+  if(!labels.length) return '<p class="note">nessun dato</p>';
+  const W = 760, H = 230, LEFT = 56, BASE = H - 26;
+  const flat = series.flatMap(s => s.values).concat([0]);
+  const top = Math.max(...flat) || 1, bottom = Math.min(...flat);
+  const span = (top - bottom) || 1;
+  const px = (i,v) => [LEFT + i*(W-LEFT-12)/Math.max(labels.length-1,1),
+                       12 + (top-v)/span*(BASE-12)];
+  let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  [0,0.5,1].forEach(f => {
+    const y = 12 + f*(BASE-12), v = top - f*span;
+    out += `<line x1="${LEFT}" y1="${y.toFixed(0)}" x2="${W-12}" y2="${y.toFixed(0)}" class="grid"/>`
+        + `<text x="0" y="${(y+4).toFixed(0)}" class="axis">${(v/1000).toFixed(1)}k</text>`;
+  });
+  for(const s of series){
+    const pts = s.values.map((v,i) => px(i,v).map(n => n.toFixed(1)).join(",")).join(" ");
+    out += `<polyline points="${pts}" fill="none" stroke="${s.color}"`
+        + ` stroke-width="2.5" stroke-linejoin="round"/>`;
+  }
+  const step = Math.max(1, Math.floor(labels.length/12));
+  for(let i=0;i<labels.length;i+=step){
+    const [x] = px(i, top);
+    out += `<text x="${x.toFixed(0)}" y="${H-6}" class="axis" text-anchor="middle">`
+        + `${esc(labels[i].slice(2))}</text>`;
+  }
+  return out + "</svg>";
+}
+
+const legend = series => '<div class="legend">' + series.map(s =>
+  `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("") + "</div>";
+
+function tableHTML(headers, rows, right){
+  right = right || [];
+  return '<div class="scroll"><table><thead><tr>'
+    + headers.map(h => `<th>${esc(h)}</th>`).join("")
+    + "</tr></thead><tbody>"
+    + rows.map(r => "<tr>" + r.map((c,i) =>
+        `<td${right.includes(i)?' class="num"':""}>${c}</td>`).join("") + "</tr>").join("")
+    + "</tbody></table></div>";
+}
+
+// --------------------------------------------------------------------------
+// riquadri della dashboard
+// --------------------------------------------------------------------------
+const CARDS = {};
+
+CARDS.indicatori = rows => {
+  const out = outflow(rows), inc = inflow(rows), m = monthsOf(spending(rows));
+  const spent = sum(out), earned = sum(inc), saved = earned + spent;
+  const ordinary = sum(out.filter(t => t.Natura !== "Straordinarie"));
+
+  // Risparmio e tasso hanno senso solo sul bilancio intero. Su un
+  // sottoinsieme di sole uscite darebbero "tasso di risparmio -760%": un
+  // numero che sembra una conclusione e non vuol dire niente. Quando un
+  // filtro esclude le entrate si mostra il peso di quella fetta.
+  const partial = !!(F.nature || F.category || F.text);
+  if(partial){
+    const whole = sum(outflow(S.transactions));
+    return '<div class="kpis">'
+      + kpi("uscite / mese", euro(-spent/m))
+      + kpi("totale nel periodo", euro(spent))
+      + kpi("quota sulle uscite",
+            whole ? Math.round(spent/whole*100) + "%" : "—")
+      + kpi("transazioni", String(out.length))
+      + kpi("mesi coperti", String(m))
+      + "</div>"
+      + '<p class="note">Vista filtrata: risparmio e tasso di risparmio non '
+      + 'compaiono perche' + "'" + ' si calcolano sul bilancio intero, non su '
+      + 'una fetta di sole uscite.</p>';
+  }
+
+  const rate = earned ? saved/earned : 0;
+  return '<div class="kpis">'
+    + kpi("entrate / mese", euro(earned/m))
+    + kpi("uscite / mese", euro(-spent/m))
+    + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad")
+    + kpi("tasso di risparmio", Math.round(rate*100) + "%")
+    + kpi("spesa ordinaria / mese", euro(-ordinary/m))
+    + "</div>"
+    + '<p class="note">La <b>spesa ordinaria</b> esclude le straordinarie: '
+    + 'sono episodiche e, lasciate nella media, fanno sembrare cattivo un mese '
+    + 'normale.</p>';
+};
+const kpi = (label, value, cls) =>
+  `<div class="kpi ${cls||""}"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+
+CARDS.natura = rows => {
+  const m = monthsOf(spending(rows));
+  // Una barra da zero euro e' solo rumore: capita quando una categoria di
+  // entrate contiene una riga negativa isolata.
+  const items = groupSum(outflow(rows), "Natura")
+    .filter(g => Math.abs(g.total/m) >= 1)
+    .map(g => ({name:g.name, value:g.total/m,
+                color:NATURE_COLOR[g.name]||"#8a8a8a"}));
+  return barChart(items, {drill:"nature"})
+    + '<p class="note">Media mensile. Clicca una barra per filtrare tutto il '
+    + 'resto su quella natura.</p>';
+};
+
+CARDS.andamento = rows => {
+  const out = outflow(rows), inc = inflow(rows);
+  const labels = uniq(spending(rows).map(month));
+  const by = (set, pred) => labels.map(l =>
+    sum(set.filter(t => month(t)===l && (!pred || pred(t)))));
+  const series = [
+    {name:"entrate", values:by(inc), color:"#3f9e8c"},
+    {name:"uscite", values:by(out).map(v => -v), color:"#b5654a"},
+    {name:"uscite ordinarie",
+     values:by(out, t => t.Natura!=="Straordinarie").map(v => -v), color:"#d99442"},
+  ];
+  return lineChart(labels, series) + legend(series);
+};
+
+CARDS.aree = rows => {
+  const out = outflow(rows);
+  const years = uniq(out.map(t => (t.Data||"").slice(0,4))).slice(-2);
+  if(years.length < 2) return '<p class="note">serve piu\' di un anno di dati</p>';
+
+  // L'anno in corso e' quasi sempre incompleto. Confrontarlo tutto intero
+  // contro un anno pieno direbbe "hai speso il 97% in meno", che e' falso:
+  // mancano undici mesi. Si confrontano gli stessi mesi dei due anni.
+  const lastMonth = out.filter(t => (t.Data||"").startsWith(years[1]))
+    .reduce((m,t) => Math.max(m, +(t.Data||"").slice(5,7) || 0), 0);
+  const inWindow = (t, y) => (t.Data||"").startsWith(y)
+    && +(t.Data||"").slice(5,7) <= lastMonth;
+  const partial = lastMonth < 12;
+  const MESI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set","ott",
+                "nov","dic"];
+
+  const area = t => (t.Categoria||"Senza categoria").split(" > ")[0];
+  const names = uniq(out.map(area));
+  const body = names.map(n => {
+    const a = sum(out.filter(t => area(t)===n && inWindow(t, years[0])));
+    const b = sum(out.filter(t => area(t)===n && inWindow(t, years[1])));
+    return {n, a, b, d:b-a};
+  }).filter(r => r.a || r.b).sort((x,y) => x.b - y.b);
+
+  const span = partial ? ` (gen–${MESI[lastMonth]})` : "";
+  return tableHTML(["area", years[0]+span, years[1]+span, "differenza", "%"],
+    body.map(r => [esc(r.n), euro(r.a), euro(r.b),
+      `<span style="color:${r.d<0?"var(--warn)":"inherit"}">${euro(r.d)}</span>`,
+      r.a ? ((r.d/Math.abs(r.a))*100).toFixed(0)+"%" : "—"]),
+    [1,2,3,4])
+    + `<p class="note">Differenza negativa = quest'anno hai speso di piu'.`
+    + (partial ? ` Il ${years[1]} arriva a ${MESI[lastMonth]}, quindi il `
+        + `confronto usa solo gen–${MESI[lastMonth]} di entrambi gli anni.` : "")
+    + "</p>";
+};
+
+CARDS.voci = rows => {
+  const m = monthsOf(spending(rows));
+  const groups = groupSum(outflow(rows), "Categoria").slice(0,20);
+  return tableHTML(["voce", "all'anno", "al mese", "tx"],
+    groups.map(g => [
+      `<button class="link" data-drill="category" data-value="${esc(g.name)}">${esc(g.name)}</button>`,
+      euro(g.total/m*12), euro(g.total/m), g.n]), [1,2,3]);
+};
+
+CARDS.ricorrenti = rows => {
+  const m = monthsOf(spending(rows));
+  const out = outflow(rows), map = new Map();
+  for(const t of out){
+    const k = t.Merchant; if(!k) continue;
+    const cur = map.get(k) || {total:0, n:0, months:new Set(), cats:{}};
+    cur.total += t.Importo; cur.n++; cur.months.add(month(t));
+    cur.cats[t.Categoria] = (cur.cats[t.Categoria]||0)+1;
+    map.set(k, cur);
+  }
+  const rec = [...map.entries()].filter(([,v]) => v.months.size >= 6)
+    .map(([name,v]) => ({name, ...v, months:v.months.size,
+      yearly: v.total/v.months.size*12,
+      cat: Object.entries(v.cats).sort((a,b)=>b[1]-a[1])[0][0]}))
+    .sort((a,b) => a.yearly - b.yearly).slice(0,20);
+  if(!rec.length) return '<p class="note">nessun costo ricorrente nel periodo scelto</p>';
+  return tableHTML(["merchant", "categoria", "mesi attivi", "costo annuo", "al mese"],
+    rec.map(r => [
+      `<button class="link" data-drill="text" data-value="${esc(r.name)}">${esc(r.name)}</button>`,
+      esc(r.cat), `${r.months}/${m}`, euro(r.yearly), euro(r.total/r.months)]),
+    [2,3,4])
+    + '<p class="note">Presenti in almeno 6 mesi distinti. E\' la lista da cui '
+    + 'partire per disdette e cambi fornitore.</p>';
+};
+
+CARDS.merchant = rows => {
+  const m = monthsOf(spending(rows));
+  const items = groupSum(outflow(rows).filter(t => t.Merchant), "Merchant")
+    .slice(0,18).map(g => ({name:g.name, value:g.total/m, color:"#4a7fb5"}));
+  return barChart(items, {drill:"text"})
+    + '<p class="note">Media mensile per negozio. Se lo stesso posto compare '
+    + 'due volte con nomi diversi, aggiungilo in Regole e merchant.</p>';
+};
+
+CARDS.revisione = rows => {
+  const todo = rows.filter(t => (t.Confidenza ?? 1) < 1);
+  return `<p class="note">${todo.length} righe con confidenza sotto 1. `
+    + `Aprile nella scheda <b>Da rivedere</b>.</p>`;
+};
+
+// --------------------------------------------------------------------------
+// schede
+// --------------------------------------------------------------------------
+const VIEWS = {};
+
+VIEWS.dashboard = rows => S.layout.filter(c => c.visibile && CARDS[c.id])
+  .map(c => `<div class="card"><div class="head"><h2>${esc(c.titolo)}</h2></div>`
+            + CARDS[c.id](rows) + "</div>").join("");
+
+function categorySelect(current, id){
+  const opts = S.categories.map(c =>
+    `<option ${c.nome===current?"selected":""}>${esc(c.nome)}</option>`).join("");
+  return `<select data-setcat="${esc(id)}"><option value=""></option>${opts}</select>`;
+}
+
+VIEWS.revisione = rows => {
+  // Prima le meno sicure, e a parita' di confidenza le piu' recenti: le
+  // righe del 2022 sono poche e vecchie, correggerle per prime non serve.
+  const todo = rows.filter(t => (t.Confidenza ?? 1) < 1)
+    .sort((a,b) => (a.Confidenza||0) - (b.Confidenza||0)
+                   || (b.Data||"").localeCompare(a.Data||""));
+  if(!todo.length) return '<div class="card"><p class="note">Niente da rivedere '
+    + 'con i filtri attuali.</p></div>';
+  return '<div class="card"><div class="head"><h2>Da rivedere</h2>'
+    + `<span class="mini">${todo.length} righe</span></div>`
+    + '<p class="note">Se il negozio si ripete, conviene creare una regola invece '
+    + 'di correggere la singola riga: una regola vale per sempre.</p>'
+    + tableHTML(["data","descrizione","merchant","importo","proposta","conf.","correggi"],
+        todo.slice(0,300).map(t => [
+          esc(t.Data), esc((t.Descrizione||"").slice(0,58)), esc(t.Merchant),
+          euro(t.Importo), esc(t.Categoria||"—"),
+          (t.Confidenza ?? 0).toFixed(2),
+          categorySelect(t.Categoria, t.ID)
+            + ` <button class="link" data-rule="${esc(t.Merchant||"")}">regola</button>`]),
+        [3,5])
+    + "</div>";
+};
+
+VIEWS.transazioni = rows => {
+  const shown = rows.slice(0, 500);
+  return '<div class="card"><div class="head"><h2>Transazioni</h2>'
+    + `<span class="mini">${rows.length} righe, ne mostro ${shown.length}</span></div>`
+    + tableHTML(["data","descrizione","merchant","importo","conto","natura",
+                 "categoria","origine",""],
+        shown.map(t => [
+          `<input type="date" value="${esc(t.Data)}" data-fix="Data" data-id="${esc(t.ID)}">`,
+          esc((t.Descrizione||"").slice(0,52)), esc(t.Merchant),
+          `<input style="width:92px;text-align:right" value="${t.Importo}"`
+            + ` data-fix="Importo" data-id="${esc(t.ID)}">`,
+          esc(t.Conto), esc(t.Natura), categorySelect(t.Categoria, t.ID),
+          `<span class="mini">${esc(t.Origine)}</span>`,
+          `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`]),
+        [3])
+    + '<p class="note">Cambiare la categoria scrive override.csv. Cambiare data '
+    + 'o importo scrive correzioni.csv. "annulla" toglie entrambe le modifiche '
+    + 'per quella riga.</p></div>';
+};
+
+VIEWS.categorie = () => {
+  const natures = uniq(Object.keys(NATURE_COLOR).concat(S.nature));
+  const rows = S.categories.slice().sort((a,b) => a.totale - b.totale);
+  return '<div class="card"><div class="head"><h2>Categorie</h2>'
+    + `<span class="mini">${rows.length}</span></div>`
+    + tableHTML(["categoria","tx","totale","natura","azioni"],
+        rows.map(c => [
+          esc(c.nome), c.n, euro(c.totale),
+          `<select data-natura="${esc(c.nome)}">`
+            + natures.map(n => `<option ${n===c.natura?"selected":""}>${esc(n)}</option>`).join("")
+            + "</select>",
+          `<button class="link" data-cat-rename="${esc(c.nome)}">rinomina</button>`
+          + `<button class="link" data-cat-merge="${esc(c.nome)}">unisci</button>`
+          + `<button class="link" data-cat-drop="${esc(c.nome)}">ignora</button>`]),
+        [1,2])
+    + '<p class="note">"ignora" non cancella le transazioni: dice al motore di '
+    + 'non imparare da quella categoria, e le righe vengono ricategorizzate '
+    + 'dalle regole.</p></div>';
+};
+
+VIEWS.regole = () => {
+  const block = (title, list, kind, valueField, note) =>
+    '<div class="card"><div class="head">' + `<h2>${esc(title)}</h2>`
+    + `<span class="mini">${list.length}</span></div>`
+    + `<p class="note">${note}</p>`
+    + tableHTML(["#","pattern",valueField,""],
+        list.map((r,i) => [
+          `<span class="mini">${i+1}</span>`,
+          `<input class="wide" value="${esc(r.pattern)}" data-rule-pattern="${kind}" data-i="${i}">`,
+          `<input value="${esc(r[valueField]||"")}" data-rule-value="${kind}" data-i="${i}">`,
+          `<button class="link" data-rule-save="${kind}" data-i="${i}">salva</button>`
+          + `<button class="link" data-rule-test="${kind}" data-i="${i}">prova</button>`
+          + `<button class="link" data-rule-del="${kind}" data-i="${i}">elimina</button>`]),
+        [0])
+    + `<div style="margin-top:10px">`
+    + `<input class="wide" placeholder="nuovo pattern" data-new-pattern="${kind}"> `
+    + `<input placeholder="${esc(valueField)}" data-new-value="${kind}"> `
+    + `<button data-new-save="${kind}">aggiungi</button></div>`
+    + `<div id="preview-${kind}"></div></div>`;
+
+  return block("Regole di categorizzazione", S.rules, "rule", "categoria",
+      "Vince la prima riga che combacia: le regole specifiche devono stare "
+      + "sopra le generiche. \"prova\" dice quante transazioni colpirebbe "
+      + "prima di salvare.")
+    + block("Merchant canonici", S.merchants, "merchant", "merchant",
+      "Unifica le grafie dello stesso negozio. Senza questa mappa lo stesso "
+      + "supermercato conta come decine di negozi diversi.");
+};
+
+VIEWS.componi = () => '<div class="card"><div class="head">'
+  + "<h2>Composizione della dashboard</h2></div>"
+  + '<div class="compose">' + S.layout.map((c,i) =>
+      `<div><input type="checkbox" data-card="${esc(c.id)}" ${c.visibile?"checked":""}>`
+      + `<span class="grow">${esc(c.titolo)}</span>`
+      + `<button class="link" data-move="${i}" data-dir="-1">↑</button>`
+      + `<button class="link" data-move="${i}" data-dir="1">↓</button></div>`).join("")
+  + "</div></div>";
+
+// --------------------------------------------------------------------------
+// disegno
+// --------------------------------------------------------------------------
+function render(){
+  if(!S) return;
+  el("tabs").innerHTML = TABS.map(([id,label]) =>
+    `<button data-tab="${id}" class="${TAB===id?"on":""}">${esc(label)}</button>`).join("");
+
+  el("filters").classList.toggle("hide",
+    TAB==="categorie" || TAB==="regole" || TAB==="componi");
+
+  renderQuick();
+  fillSelect("f-account", S.accounts, F.account, "tutti");
+  fillSelect("f-nature", S.nature, F.nature, "tutte");
+  fillSelect("f-category", S.categories.map(c => c.nome), F.category, "tutte");
+  el("f-from").value = F.from; el("f-to").value = F.to; el("f-text").value = F.text;
+
+  const ETICHETTE = {from:"dal", to:"al", account:"conto", nature:"natura",
+                     category:"categoria", text:"cerca"};
+  el("crumbs").innerHTML = Object.entries(F).filter(([,v]) => v)
+    .map(([k,v]) => `<span class="chip" data-clear="${k}">`
+                    + `${esc(ETICHETTE[k]||k)}: ${esc(v)} ×</span>`)
+    .join("");
+
+  el("error").classList.toggle("hide", !S.error);
+  if(S.error) el("error").textContent = S.error + "\n\n" + (S.log||[]).slice(-12).join("\n");
+
+  const rows = filtered();
+  // Il denominatore delle medie deve essere visibile: senza, "-300 €/mese"
+  // non dice su quanti mesi e' calcolato, e i mesi cambiano coi filtri.
+  const months = uniq(spending(rows).map(month));
+  el("source").textContent =
+    (S.has_exports ? "sorgente: export nella cartella"
+                   : "sorgente: storico MoneyWiz (nessun export nella cartella)")
+    + coverage(rows, months);
+
+  el("view").innerHTML = VIEWS[TAB](rows);
+}
+
+function fillSelect(id, values, current, blank){
+  el(id).innerHTML = `<option value="">${blank}</option>`
+    + values.map(v => `<option ${v===current?"selected":""}>${esc(v)}</option>`).join("");
+}
+
+function setStatus(){
+  const dot = S && S.running ? "busy" : (S && S.error ? "err" : "");
+  el("status").innerHTML = `<span class="dot ${dot}"></span>`
+    + (S && S.running ? "elaboro…"
+       : S && S.error ? "errore"
+       : S ? `${S.transactions.length} transazioni` : "…");
+}
+
+// --------------------------------------------------------------------------
+// eventi
+// --------------------------------------------------------------------------
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
+    + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
+    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule]");
+  if(!t) return;
+  const d = t.dataset;
+
+  if(d.tab){ TAB = d.tab; render(); return; }
+  if(d.clear){ F[d.clear] = ""; render(); return; }
+  if(d.quick !== undefined){
+    const [from, to] = QUICK[+d.quick][1]();
+    if(!from) return;
+    // Ripremere lo stesso periodo lo toglie, cosi' il pulsante fa da
+    // interruttore e non serve andare ad "azzera" per tornare a tutto.
+    const on = F.from === from && F.to === to;
+    F.from = on ? "" : from;
+    F.to = on ? "" : to;
+    render(); return;
+  }
+  if(d.drill){
+    const map = {nature:"nature", category:"category", text:"text"};
+    F[map[d.drill]] = d.value; render(); return;
+  }
+  if(d.move !== undefined){
+    const i = +d.move, j = i + (+d.dir);
+    if(j<0 || j>=S.layout.length) return;
+    [S.layout[i], S.layout[j]] = [S.layout[j], S.layout[i]];
+    await post("/api/layout", {layout:S.layout}); render(); return;
+  }
+  if(d.catRename || d.catMerge){
+    const name = d.catRename || d.catMerge;
+    const target = prompt(d.catRename ? `Nuovo nome per "${name}":`
+                                      : `Unisci "${name}" dentro:`, name);
+    if(!target || target === name) return;
+    await post("/api/categories", {azione:d.catRename?"rinomina":"unisci",
+                                   nome:name, destinazione:target});
+    return reload();
+  }
+  if(d.catDrop){
+    if(!confirm(`Non imparare piu' dalla categoria "${d.catDrop}"?`)) return;
+    await post("/api/categories", {azione:"elimina", nome:d.catDrop});
+    return reload();
+  }
+  if(d.resetTx){
+    await post("/api/transaction", {id:d.resetTx, azzera:true});
+    return reload();
+  }
+  if(d.rule){
+    const value = prompt(`Categoria per tutte le transazioni di "${d.rule}":`);
+    if(!value) return;
+    await post("/api/rules", {tipo:"regola", pattern:"(?i)"+d.rule, valore:value,
+                              posizione:0});
+    return reload();
+  }
+  if(d.ruleSave || d.ruleDel || d.ruleTest || d.newSave){
+    return handleRule(d);
+  }
+});
+
+async function handleRule(d){
+  const kind = d.ruleSave || d.ruleDel || d.ruleTest || d.newSave;
+  const isMerchant = kind === "merchant";
+  const type = isMerchant ? "merchant" : "regola";
+  if(d.newSave){
+    const p = document.querySelector(`[data-new-pattern="${kind}"]`).value.trim();
+    const v = document.querySelector(`[data-new-value="${kind}"]`).value.trim();
+    if(!p || !v) return alert("servono pattern e valore");
+    await post("/api/rules", {tipo:type, pattern:p, valore:v});
+    return reload();
+  }
+  const i = d.i;
+  const p = document.querySelector(`[data-rule-pattern="${kind}"][data-i="${i}"]`).value.trim();
+  const v = document.querySelector(`[data-rule-value="${kind}"][data-i="${i}"]`).value.trim();
+  const list = isMerchant ? S.merchants : S.rules;
+  const before = (list[i]||{}).pattern || p;
+
+  if(d.ruleTest){
+    const r = await post("/api/rules/preview", {pattern:p, valore:v});
+    const box = el("preview-"+kind);
+    box.innerHTML = r.errore ? `<p class="err">${esc(r.errore)}</p>`
+      : `<p class="note">${r.n} transazioni combaciano, ${r.cambierebbero} `
+        + `cambierebbero categoria, ${euro(r.totale)} in totale.</p>`
+        + tableHTML(["data","descrizione","importo","categoria attuale"],
+            (r.esempi||[]).map(e => [esc(e.Data), esc((e.Descrizione||"").slice(0,60)),
+              euro(e.Importo), esc(e.Categoria)]), [2]);
+    return;
+  }
+  await post("/api/rules", {tipo:type, pattern:p, valore:v,
+                            pattern_precedente:before,
+                            elimina: !!d.ruleDel});
+  reload();
+}
+
+document.addEventListener("change", async ev => {
+  const d = ev.target.dataset;
+  if(d.setcat){
+    await post("/api/transaction", {id:d.setcat, categoria:ev.target.value});
+    return reload();
+  }
+  if(d.natura){
+    await post("/api/categories", {azione:"natura", nome:d.natura,
+                                   natura:ev.target.value});
+    return reload();
+  }
+  if(d.fix){
+    await post("/api/transaction", {id:d.id, [d.fix.toLowerCase()]:ev.target.value});
+    return reload();
+  }
+  if(d.card){
+    const card = S.layout.find(c => c.id === d.card);
+    card.visibile = ev.target.checked;
+    await post("/api/layout", {layout:S.layout});
+    return render();
+  }
+});
+
+["f-from","f-to","f-account","f-nature","f-category"].forEach(id =>
+  el(id).addEventListener("change", () => {
+    F[id.slice(2).replace("account","account")] = el(id).value;
+    F.from = el("f-from").value; F.to = el("f-to").value;
+    F.account = el("f-account").value; F.nature = el("f-nature").value;
+    F.category = el("f-category").value;
+    render();
+  }));
+let typing;
+el("f-text").addEventListener("input", () => {
+  clearTimeout(typing);
+  typing = setTimeout(() => { F.text = el("f-text").value; render(); }, 250);
+});
+el("f-reset").addEventListener("click", () => {
+  Object.keys(F).forEach(k => F[k] = "");
+  render();
+});
+el("btn-run").addEventListener("click", async () => {
+  el("btn-run").disabled = true;
+  await post("/api/run", {llm:true});
+  el("btn-run").disabled = false;
+  reload();
+});
+el("btn-export").addEventListener("click", async () => {
+  const r = await post("/api/export", {});
+  if(r.ok) alert("scritti: " + r.file.join(", "));
+});
+
+// --------------------------------------------------------------------------
+// caricamento
+// --------------------------------------------------------------------------
+async function reload(){
+  const r = await fetch("/api/state");
+  S = await r.json();
+  VERSION = S.version;
+  setStatus();
+  render();
+}
+
+async function poll(){
+  try{
+    const r = await fetch("/api/state?light=1");
+    const light = await r.json();
+    if(light.version !== VERSION || light.running !== (S && S.running)){
+      if(light.running){ S.running = true; setStatus(); }
+      else await reload();
+    }
+  }catch(e){ /* server fermo, riprova al giro dopo */ }
+}
+
+// Disegnati subito, prima dei dati: altrimenti la barra dei filtri si sposta
+// in giu' quando arrivano, e un clic partito prima colpisce la riga sbagliata.
+renderQuick();
+reload().then(() => setInterval(poll, 4000));
+</script>
+</body>
+</html>
