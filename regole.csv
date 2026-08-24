@@ -2,6 +2,7 @@
 # I giroconti verso conti propri o familiari non sono spese: vanno per primi.;
 (?i)\ba:? *(hype|fideuram|fabio stocco|michela bogoni|mikela bogoni)\b;Giroconto
 (?i)a favore di (hype|fideuram|fabio stocco|michela bogoni);Giroconto
+(?i)(stocco fabio|fabio stocco|bogoni|michela|mikela) +da +\w;Giroconto
 (?i)giroconto|travaso|trasferimento fondi;Giroconto
 (?i)condomin[io]|rata condominio;Casa > Condominio
 (?i)borgo mangano|camminamento|mangano per:? *rata;Casa > Ristrutturazione

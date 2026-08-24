@@ -1,6 +1,6 @@
-pattern;conto
+﻿pattern;conto
 (?i)intesa|isybank;Intesa Sanpaolo
 (?i)fineco;Fineco
-(?i)hype;Hype
+(?i)hype|lista movimenti;Hype
 (?i)fideuram;Fideuram
 (?i)splitwise;Splitwise
