@@ -783,6 +783,31 @@ def find_columns(frame):
     return date_col, desc_col, amount_col, debit_col, credit_col
 
 
+def is_shared_export(frame):
+    """Vero se il file divide ogni spesa fra piu' persone.
+
+    La firma e' numerica, non nominale: oltre alle colonne che find_columns()
+    riconosce, ce ne sono altre numeriche la cui somma per riga fa zero. Chi
+    anticipa ha un credito, gli altri un debito pari e contrario.
+
+    Riconoscerlo dai nomi delle persone si romperebbe al primo cambio di nome
+    o all'ingresso di un terzo. Dal nome del file non funziona affatto:
+    Splitwise lo chiama "koala_<data>_export.csv".
+    """
+    known = {c for c in find_columns(frame) if c}
+    extra = [c for c in frame.columns if c not in known]
+    if not extra:
+        return False
+    quotas = pd.DataFrame({c: pd.to_numeric(frame[c], errors="coerce")
+                           for c in extra}).dropna(axis=1, how="all")
+    # Serve piu' di una colonna: una sola (un saldo progressivo) non e' una
+    # divisione fra persone.
+    if len(quotas.columns) < 2:
+        return False
+    balanced = quotas.fillna(0).sum(axis=1).abs() < 0.01
+    return bool(len(balanced) and balanced.mean() >= 0.95)
+
+
 def load_transactions(path, account=None):
     """Righe grezze (data, descrizione, importo) da un singolo export."""
     frame = read_table(path)
@@ -994,6 +1019,39 @@ def selftest():
     both = {"abc#1": "Casa > Bollette", ("2026-01-12", -84.30): "Shopping"}
     assert override_for(row, both) == "Casa > Bollette"
     assert override_for(row, {("2026-01-12", -84.30): "Shopping"}) == "Shopping"
+
+    # Un export di spese condivise si riconosce da una firma numerica, non
+    # dai nomi delle persone: oltre alle colonne standard ce ne sono altre
+    # che si annullano riga per riga. Chi anticipa ha un credito, gli altri
+    # un debito pari e contrario.
+    condiviso = pd.DataFrame({
+        "Data": ["2022-01-12", "2022-01-15"],
+        "Descrizione": ["Eurospin", "Bolletta luce"],
+        "Categorie": ["Generali", "Generali"],
+        "Costo": ["60.00", "86.40"],
+        "Valuta": ["EUR", "EUR"],
+        "Tizio": ["30.00", "-43.20"],
+        "Caio": ["-30.00", "43.20"],
+    })
+    assert is_shared_export(condiviso), "export condiviso non riconosciuto"
+
+    # Un estratto conto normale non deve essere scambiato per condiviso.
+    banca = pd.DataFrame({
+        "Data": ["12/01/2026"],
+        "Descrizione": ["PAGAMENTO POS ESSELUNGA"],
+        "Importo": ["-84,30"],
+    })
+    assert not is_shared_export(banca), "estratto conto scambiato per condiviso"
+
+    # Nemmeno uno con una colonna numerica in piu' (saldo progressivo): una
+    # colonna sola non e' una divisione fra persone.
+    con_saldo = pd.DataFrame({
+        "Data": ["12/01/2026"],
+        "Descrizione": ["PAGAMENTO POS ESSELUNGA"],
+        "Importo": ["-84,30"],
+        "Saldo": ["1250,00"],
+    })
+    assert not is_shared_export(con_saldo), "colonna saldo scambiata per quote"
 
     print("selftest: ok")
 
