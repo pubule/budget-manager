@@ -719,7 +719,7 @@ function render(){
   const attesa = S.pending || [];
   el("source").textContent =
     (S.has_exports ? "sorgente: export/"
-                   : "sorgente: storico MoneyWiz (nessun export in export/)")
+                   : "nessun export caricato: metti i file in export/ e premi Carica")
     + coverage(rows, months)
     // Il sorvegliante avvisa e basta: se non lo dicesse qui, un export
     // depositato e mai caricato resterebbe invisibile.

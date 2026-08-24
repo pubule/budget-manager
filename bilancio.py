@@ -1392,13 +1392,14 @@ def all_exports(folder, include_pending=False):
     return found
 
 
-def read_sources(folder, config, output, from_history, include_pending=False):
-    """Le transazioni grezze: dallo storico oppure dagli export nella cartella."""
-    if from_history:
-        print("STORICO MoneyWiz")
-        return (load_history_transactions(config["db_path"])
-                if config["db_path"] else [])
+def read_sources(folder, config, output, include_pending=False):
+    """Le transazioni grezze, dagli export in export/.
 
+    Lo storico MoneyWiz non e' piu' una sorgente: le sue transazioni sono
+    state migrate una volta in export/elaborati/storico-moneywiz.csv, e
+    quello che resta (i 1635 esempi etichettati) alimenta solo il motore di
+    categorizzazione.
+    """
     print("EXPORT")
     # Un estratto conto lasciato nella radice e' un file dimenticato, non un
     # export: dirlo evita di chiedersi perche' quei movimenti non compaiono.
@@ -1417,7 +1418,7 @@ def read_sources(folder, config, output, from_history, include_pending=False):
     return rows
 
 
-def run(folder, use_llm=True, from_history=False, output="consolidato.csv",
+def run(folder, use_llm=True, output="consolidato.csv",
         make_dashboard=True, config=None, include_pending=False):
     """L'intera pipeline, chiamabile da codice. Ritorna il DataFrame finale.
 
@@ -1432,10 +1433,12 @@ def run(folder, use_llm=True, from_history=False, output="consolidato.csv",
         raise RuntimeError("nessuna categoria disponibile: serve un backup "
                            "MoneyWiz in backup/ oppure un regole.csv")
 
-    rows = read_sources(folder, config, output, from_history, include_pending)
+    rows = read_sources(folder, config, output, include_pending)
     if not rows:
-        raise RuntimeError("nessuna transazione trovata: metti gli export "
-                           "nella cartella, oppure usa --da-storico")
+        raise RuntimeError(
+            f"nessuna transazione: metti gli export in {EXPORT_DIR}/ e premi "
+            "Carica dati. Se e' la prima volta, esegui prima "
+            "python bilancio.py --migra-storico")
 
     # L'ordine conta: prima gli ID sui valori originali, poi le correzioni.
     # Al contrario, correggere un importo cambierebbe l'ID della sua riga e
@@ -1512,8 +1515,6 @@ def main():
                         help="misura l'accuratezza sullo storico ed esce")
     parser.add_argument("--no-dashboard", action="store_true",
                         help="non rigenerare dashboard.html e .xlsx")
-    parser.add_argument("--da-storico", action="store_true",
-                        help="usa le transazioni MoneyWiz invece degli export")
     parser.add_argument("--migra-storico", action="store_true",
                         help="estrae lo storico MoneyWiz in export/elaborati/ "
                              "e smette di usarlo come sorgente")
@@ -1537,7 +1538,7 @@ def main():
         return
 
     try:
-        run(folder, use_llm=not args.no_llm, from_history=args.da_storico,
+        run(folder, use_llm=not args.no_llm,
             output=args.output, make_dashboard=not args.no_dashboard)
     except RuntimeError as exc:
         sys.exit(str(exc))

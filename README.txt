@@ -44,7 +44,6 @@ niente dalla rete.
 Serve ancora la riga di comando? C'e':
 
     python bilancio.py                 elabora e rigenera dashboard.html/.xlsx
-    python bilancio.py --da-storico    usa MoneyWiz invece degli export
     python bilancio.py --no-llm        salta Ollama
     python bilancio.py --selfcheck     verifica che il motore non sia rotto
 
@@ -194,10 +193,6 @@ Da backup/iMoneyWiz-Data-Backup-*.zip, dal database SQLite: 1635 transazioni
 gia' categorizzate a mano, con la gerarchia padre/figlio. Viene usato il backup
 piu' recente. Per aggiornare lo storico basta metterne uno piu' nuovo in
 backup/.
-
-Finche' non ci sono export nella cartella, la dashboard lavora sullo storico
-MoneyWiz, cosi' c'e' subito qualcosa da guardare. Appena arriva un export
-passa a quello.
 
 Le TRANSAZIONI dello storico sono state migrate una volta sola in
 export/elaborati/storico-moneywiz.csv con:

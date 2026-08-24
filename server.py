@@ -229,12 +229,9 @@ class State:
             self.running, self.error = True, None
             self.log.reset()
             try:
-                # Senza export si lavora sullo storico MoneyWiz, cosi'
-                # l'interfaccia ha qualcosa da mostrare fin dal primo avvio.
                 with redirect_stdout(self.log), redirect_stderr(self.log):
                     self.frame = bilancio.run(
                         self.folder, use_llm=use_llm,
-                        from_history=not (self.has_exports() or include_pending),
                         make_dashboard=False,
                         include_pending=include_pending)
             except Exception as exc:                      # noqa: BLE001
