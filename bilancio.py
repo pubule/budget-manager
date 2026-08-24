@@ -786,10 +786,7 @@ def shared_shares(folder):
         frame = read_table(path)
         if frame is None or frame.empty or not is_shared_export(frame):
             continue
-        known = {c for c in find_columns(frame) if c}
-        extra = [c for c in frame.columns if c not in known]
-        quotas = pd.DataFrame({c: pd.to_numeric(frame[c], errors="coerce")
-                               for c in extra}).dropna(axis=1, how="all")
+        quotas = quota_columns(frame)
         if quotas.empty or not len(quotas.columns):
             continue
         date_col = find_columns(frame)[0] or frame.columns[0]
@@ -884,6 +881,26 @@ def find_columns(frame):
     return date_col, desc_col, amount_col, debit_col, credit_col
 
 
+def quota_columns(frame):
+    """Le colonne numeriche in piu' rispetto a quelle standard, quelle vive.
+
+    Vive vuol dire: non tutte NaN e non tutte zero. Commissioni, spese e
+    competenze valgono 0,00 su ogni riga in molti tracciati bancari:
+    dropna() non le toglie (zero non e' NaN), sommano zero su tutte le righe
+    e farebbero scattare la firma condivisa su un estratto conto qualunque,
+    con la conseguenza peggiore possibile - ogni entrata diventa un'uscita.
+    """
+    known = {c for c in find_columns(frame) if c}
+    extra = [c for c in frame.columns if c not in known]
+    if not extra:
+        return pd.DataFrame()
+    quotas = pd.DataFrame({c: pd.to_numeric(frame[c], errors="coerce")
+                           for c in extra}).dropna(axis=1, how="all")
+    if quotas.empty or not len(quotas.columns):
+        return pd.DataFrame()
+    return quotas.loc[:, (quotas.fillna(0) != 0).any()]
+
+
 def is_shared_export(frame):
     """Vero se il file divide ogni spesa fra piu' persone.
 
@@ -895,14 +912,9 @@ def is_shared_export(frame):
     o all'ingresso di un terzo. Dal nome del file non funziona affatto:
     Splitwise lo chiama "koala_<data>_export.csv".
     """
-    known = {c for c in find_columns(frame) if c}
-    extra = [c for c in frame.columns if c not in known]
-    if not extra:
-        return False
-    quotas = pd.DataFrame({c: pd.to_numeric(frame[c], errors="coerce")
-                           for c in extra}).dropna(axis=1, how="all")
-    # Serve piu' di una colonna: una sola (un saldo progressivo) non e' una
-    # divisione fra persone.
+    quotas = quota_columns(frame)
+    # Serve piu' di una colonna viva: una sola (un saldo progressivo) non e'
+    # una divisione fra persone, e nessuna nemmeno.
     if len(quotas.columns) < 2:
         return False
     balanced = quotas.fillna(0).sum(axis=1).abs() < 0.01
@@ -929,7 +941,7 @@ def is_settlement(description, category=""):
     return bool(SETTLEMENT_WORDS.search(str(description or "")))
 
 
-def load_transactions(path, account=None):
+def load_transactions(path, account=None, discarded=None):
     """Righe grezze (data, descrizione, importo) da un singolo export."""
     frame = read_table(path)
     if frame is None or frame.empty:
@@ -957,8 +969,15 @@ def load_transactions(path, account=None):
             continue
         if shared and is_settlement(description,
                                     row.get(category_col) if category_col else ""):
-            settled.append((description,
-                            parse_amount(row.get(amount_col)) if amount_col else 0.0))
+            settled.append({
+                "Data": parse_date(row.get(date_col)),
+                "Descrizione": description,
+                "Importo": round(parse_amount(row.get(amount_col))
+                                 if amount_col else 0.0, 2),
+                "Conto": account or path.stem,
+                "Origine file": path.name,
+                "Rango": source_rank(path, shared),
+            })
             continue
         if amount_col:
             amount = parse_amount(row.get(amount_col))
@@ -984,9 +1003,10 @@ def load_transactions(path, account=None):
 
     print(f"  {path.name}: {len(rows)} transazioni")
     if settled:
-        totale = sum(a for _, a in settled)
+        totale = sum(r["Importo"] for r in settled)
         print(f"    {len(settled)} saldi scartati per {totale:,.2f}: "
-              f"{', '.join(d[:34] for d, _ in settled[:3])}")
+              f"{', '.join(r['Descrizione'][:34] for r in settled[:3])}")
+        note_discarded(discarded, "saldo", settled)
     # Un estratto conto ha entrambi i segni. Se non li ha, o e' una lista di
     # spese o il parser ha sbagliato colonna: dirlo evita di scoprirlo dai
     # totali.
@@ -996,7 +1016,18 @@ def load_transactions(path, account=None):
     return rows
 
 
-def drop_cross_file_duplicates(rows):
+def note_discarded(discarded, step, rows):
+    """Annota le righe tolte da un passo di scarto, per scartate.csv.
+
+    Sapere QUANTE righe sono sparite non basta a controllarle: con estratti
+    conto veri i numeri crescono e nessuno rifa' la verifica a mano.
+    """
+    if discarded is None:
+        return
+    discarded.extend(dict(row, **{"Scartata da": step}) for row in rows)
+
+
+def drop_cross_file_duplicates(rows, discarded=None):
     """Scarta le righe presenti in piu' export, tenendo la prima.
 
     Due estratti conto che si sovrappongono di periodo contengono le stesse
@@ -1015,6 +1046,7 @@ def drop_cross_file_duplicates(rows):
         first = seen.get(key)
         if first is not None and first != source:
             dropped[source] += 1
+            note_discarded(discarded, "doppione fra file", [row])
             continue
         if first is None:
             seen[key] = source
@@ -1040,7 +1072,7 @@ def source_rank(path, shared):
     return RANK_SHARED if shared else RANK_BANK
 
 
-def drop_covered_by(rows, days=3):
+def drop_covered_by(rows, days=3, discarded=None):
     """Scarta le righe gia' coperte da una sorgente di rango superiore.
 
     Due casi, un meccanismo solo:
@@ -1052,6 +1084,10 @@ def drop_covered_by(rows, days=3):
 
     Accoppiamento uno-a-uno, preferendo la data piu' vicina, come in
     drop_internal_transfers().
+
+    Le due righe devono avere lo STESSO SEGNO. Sul valore assoluto un
+    accredito bancario di +60,00 cancellava una spesa condivisa di -60,00,
+    che non c'entra niente con lui.
     """
     def as_date(value):
         try:
@@ -1059,9 +1095,10 @@ def drop_covered_by(rows, days=3):
         except (ValueError, TypeError):
             return None
 
+    # Chiave con segno: una copertura vale solo per righe dello stesso verso.
     higher = defaultdict(list)
     for position, row in enumerate(rows):
-        higher[round(abs(row.get("Importo", 0)), 2)].append(position)
+        higher[round(row.get("Importo", 0), 2)].append(position)
 
     dropped, used, ambiguous, contese = set(), set(), 0, 0
     counts = Counter()
@@ -1087,7 +1124,7 @@ def drop_covered_by(rows, days=3):
         day = as_date(row.get("Data"))
         candidates = []
         consumed = False
-        for other in higher.get(round(abs(row.get("Importo", 0)), 2), ()):
+        for other in higher.get(round(row.get("Importo", 0), 2), ()):
             if other == position:
                 continue
             if rows[other].get("Rango", RANK_BANK) >= rank:
@@ -1114,6 +1151,7 @@ def drop_covered_by(rows, days=3):
         used.add(candidates[0][1])
         dropped.add(position)
         counts[row.get("Conto", "?")] += 1
+        note_discarded(discarded, "coperta da sorgente superiore", [row])
 
     if dropped:
         print(f"  {len(dropped)} righe scartate: gia' coperte da una sorgente "
@@ -1129,7 +1167,7 @@ def drop_covered_by(rows, days=3):
     return [row for position, row in enumerate(rows) if position not in dropped]
 
 
-def drop_internal_transfers(rows, days=3, tolerance=0.01):
+def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None):
     """Rimuove le coppie +X / -X fra conti propri, che raddoppiano i totali.
 
     Due righe si annullano se hanno importo opposto, conti diversi e date
@@ -1170,7 +1208,51 @@ def drop_internal_transfers(rows, days=3, tolerance=0.01):
     if matched:
         print(f"  {len(matched)} righe rimosse: giroconti fra conti propri "
               f"({len(matched) // 2} coppie)")
+        note_discarded(discarded, "giroconto",
+                       [rows[i] for i in sorted(matched)])
     return [row for i, row in enumerate(rows) if i not in matched]
+
+
+def drop_import_artifacts(rows, discarded=None):
+    """Toglie i residui POSITIVI che l'importazione MoneyWiz si e' lasciata
+    dietro a fronte di una spesa condivisa.
+
+    MoneyWiz non importava sempre le due quote negative: per una parte delle
+    spese Splitwise ha scritto anche una riga col costo PIENO e segno
+    positivo ("Rossetto +203,03" contro "Rossetto -203,03" condivisa dello
+    stesso giorno). drop_shared_halves() non le prende perche' accoppia sulla
+    quota, non sul costo pieno.
+
+    Non e' un'entrata: nessun soldo e' mai arrivato. Vincoli stretti - stessa
+    data esatta, rango RANK_HISTORY, accoppiamento uno-a-uno con una riga
+    RANK_SHARED - perche' allentandoli si mangiano entrate vere dello stesso
+    importo.
+    """
+    shared = defaultdict(list)
+    for position, row in enumerate(rows):
+        if row.get("Rango", RANK_BANK) == RANK_SHARED:
+            key = (row.get("Data"), round(abs(row.get("Importo", 0)), 2))
+            shared[key].append(position)
+
+    dropped, used = set(), set()
+    for position, row in enumerate(rows):
+        amount = row.get("Importo", 0)
+        if amount <= 0 or row.get("Rango", RANK_BANK) != RANK_HISTORY:
+            continue
+        for other in shared.get((row.get("Data"), round(amount, 2)), ()):
+            if other in used:
+                continue
+            used.add(other)
+            dropped.add(position)
+            break
+
+    if dropped:
+        totale = sum(rows[i]["Importo"] for i in dropped)
+        print(f"  {len(dropped)} righe rimosse: artefatti di importazione "
+              f"(entrate finte a fronte di una spesa condivisa) per {totale:,.2f}")
+        note_discarded(discarded, "artefatto di importazione",
+                       [rows[i] for i in sorted(dropped)])
+    return [row for i, row in enumerate(rows) if i not in dropped]
 
 
 # --------------------------------------------------------------------------
@@ -1362,6 +1444,60 @@ def selftest():
     })
     assert not is_shared_export(con_saldo), "colonna saldo scambiata per quote"
 
+    # Il caso che faceva davvero danno: due colonne numeriche in piu' che
+    # valgono SEMPRE zero (commissioni, spese, competenze). Sommano zero su
+    # tutte le righe, dropna() non le toglie, e la firma scattava: ogni
+    # entrata dell'estratto conto diventava un'uscita.
+    con_zeri = pd.DataFrame({
+        "Data": ["13/01/2026", "14/01/2026"],
+        "Descrizione": ["STIPENDIO", "PAGAMENTO POS ESSELUNGA"],
+        "Importo": ["2450,00", "-84,30"],
+        "Commissioni": ["0", "0"],
+        "Spese": ["0.0", "0.0"],
+    })
+    assert not is_shared_export(con_zeri),         "colonne sempre a zero scambiate per quote: le entrate diventano uscite"
+
+    # Una copertura vale solo a parita' di segno: un accredito di +60,00 non
+    # e' la stessa spesa di un'uscita condivisa di -60,00.
+    segni = [
+        {"Data": "2026-03-02", "Descrizione": "RIMBORSO ASSICURAZIONE",
+         "Importo": 60.0, "Conto": "Intesa", "Rango": RANK_BANK},
+        {"Data": "2026-03-02", "Descrizione": "Cena fuori",
+         "Importo": -60.0, "Conto": "Koala", "Rango": RANK_SHARED},
+    ]
+    assert len(drop_covered_by(segni)) == 2,         "un accredito bancario non copre una spesa condivisa di pari valore assoluto"
+
+    # Una riga positiva dello storico che combacia, stesso giorno, con una
+    # spesa condivisa e' un residuo dell'importazione, non un'entrata.
+    artefatti = [
+        {"Data": "2024-09-15", "Descrizione": "Rossetto", "Importo": -203.03,
+         "Conto": "Koala", "Rango": RANK_SHARED},
+        {"Data": "2024-09-15", "Descrizione": "Rossetto", "Importo": 203.03,
+         "Conto": "Storico", "Rango": RANK_HISTORY},
+        {"Data": "2024-09-15", "Descrizione": "VOSTRI EMOLUMENTI",
+         "Importo": 2450.0, "Conto": "Storico", "Rango": RANK_HISTORY},
+    ]
+    resto = drop_import_artifacts(artefatti)
+    assert len(resto) == 2, f"atteso un solo artefatto tolto, restano {len(resto)}"
+    assert any(r["Descrizione"] == "VOSTRI EMOLUMENTI" for r in resto),         "lo stipendio non e' un artefatto di importazione"
+    # Uno-a-uno: una sola riga condivisa non giustifica due entrate.
+    doppio = artefatti[:2] + [dict(artefatti[1])]
+    assert len(drop_import_artifacts(doppio)) == 2,         "accoppiamento non uno-a-uno: una riga condivisa ne copre solo una"
+
+    # L'ordine dei passi: se le coperture si cercassero PRIMA dei giroconti,
+    # la spesa condivisa verrebbe coperta da una gamba di giroconto che poi
+    # sparisce, e tre righe darebbero zero superstiti.
+    ordine = [
+        {"Data": "2026-03-10", "Descrizione": "GIROCONTO A HYPE", "Importo": -300.0,
+         "Conto": "Intesa", "Rango": RANK_BANK},
+        {"Data": "2026-03-10", "Descrizione": "RICARICA DA INTESA", "Importo": 300.0,
+         "Conto": "Hype", "Rango": RANK_BANK},
+        {"Data": "2026-03-10", "Descrizione": "Affitto marzo", "Importo": -300.0,
+         "Conto": "Koala", "Rango": RANK_SHARED},
+    ]
+    resto = drop_covered_by(drop_internal_transfers(ordine))
+    assert len(resto) == 1 and resto[0]["Descrizione"] == "Affitto marzo",         f"la spesa condivisa non deve sparire con i giroconti: {resto}"
+
     # Un saldo fra le due persone bilancia spese gia' tracciate: non e' una
     # transazione di questo bilancio.
     assert is_settlement("Fabio S. ha pagato Mikela b.", "Pagamento")
@@ -1462,7 +1598,7 @@ GENERATED = {
     "consolidato.csv", "da_rivedere.csv", "dashboard.xlsx", "dashboard.html",
     "categorie_merge.csv", "regole.csv", "merchant.csv", "override.csv",
     "natura.csv", "correzioni.csv", "categorie_cache.json",
-    "dashboard_layout.json", "conti.csv",
+    "dashboard_layout.json", "conti.csv", "scartate.csv",
 }
 
 
@@ -1556,7 +1692,7 @@ def all_exports(folder, include_pending=False):
     return found
 
 
-def read_sources(folder, config, output, include_pending=False):
+def read_sources(folder, config, output, include_pending=False, discarded=None):
     """Le transazioni grezze, dagli export in export/.
 
     Lo storico MoneyWiz non e' piu' una sorgente: le sue transazioni sono
@@ -1578,7 +1714,8 @@ def read_sources(folder, config, output, include_pending=False):
     accounts = config.get("accounts", [])
     rows = []
     for path in all_exports(folder, include_pending):
-        rows.extend(load_transactions(path, account_of(path.name, accounts)))
+        rows.extend(load_transactions(path, account_of(path.name, accounts),
+                                      discarded))
     return rows
 
 
@@ -1597,7 +1734,8 @@ def run(folder, use_llm=True, output="consolidato.csv",
         raise RuntimeError("nessuna categoria disponibile: serve un backup "
                            "MoneyWiz in backup/ oppure un regole.csv")
 
-    rows = read_sources(folder, config, output, include_pending)
+    scartate = []
+    rows = read_sources(folder, config, output, include_pending, scartate)
     if not rows:
         raise RuntimeError(
             f"nessuna transazione: metti gli export in {EXPORT_DIR}/ e premi "
@@ -1609,9 +1747,15 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # la correzione si staccherebbe dalla transazione al giro successivo.
     assign_ids(rows)
     apply_corrections(rows, config["corrections"])
-    rows = drop_cross_file_duplicates(rows)
-    rows = drop_covered_by(rows)
-    rows = drop_internal_transfers(rows)
+    rows = drop_cross_file_duplicates(rows, scartate)
+    # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
+    # tocca solo il rango 0, anticiparlo non cambia niente per la banca e
+    # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
+    # una spesa condivisa "coperta" da una gamba poi annullata spariva del
+    # tutto: tre righe dentro, zero fuori.
+    rows = drop_internal_transfers(rows, discarded=scartate)
+    rows = drop_import_artifacts(rows, scartate)
+    rows = drop_covered_by(rows, discarded=scartate)
 
     print("")
     print("categorizzazione")
@@ -1645,6 +1789,13 @@ def run(folder, use_llm=True, output="consolidato.csv",
     review.to_csv(folder / "da_rivedere.csv", index=False, sep=";",
                   encoding="utf-8-sig")
 
+    # Quali righe sono sparite, e per mano di quale passo. Il totale deve
+    # tornare con la somma dei conteggi stampati qui sopra.
+    pd.DataFrame(scartate, columns=[
+        "Scartata da", "Data", "Descrizione", "Importo", "Conto",
+        "Origine file", "Rango", "ID"]).to_csv(
+        folder / "scartate.csv", index=False, sep=";", encoding="utf-8-sig")
+
     # I giroconti non sono ne' entrate ne' uscite: contarli falsa entrambi i
     # totali e fa sembrare che si spenda piu' di quanto si spende.
     moves = frame[frame["Natura"] == "Non spesa"]
@@ -1655,6 +1806,7 @@ def run(folder, use_llm=True, output="consolidato.csv",
     print("")
     print(f"{len(frame)} transazioni -> {output}")
     print(f"{len(review)} da controllare -> da_rivedere.csv")
+    print(f"{len(scartate)} scartate -> scartate.csv")
     print(f"entrate   {income:>12,.2f}")
     print(f"uscite    {spent:>12,.2f}")
     print(f"risparmio {income + spent:>12,.2f}")
