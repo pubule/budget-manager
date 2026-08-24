@@ -1,3 +1,20 @@
+# GLI ESTRATTI CONTO NON ENTRANO MAI QUI DENTRO.
+# Contengono IBAN, numeri di carta e ogni movimento: una volta committati
+# restano nella cronologia per sempre. Vale anche per export/anonimi/, che
+# e' senza IBAN ma pieno di importi, date e negozi.
+export/
+
+# Rete di sicurezza: qualunque cosa somigli a un estratto conto lasciato
+# per sbaglio nella radice.
+conto*.csv
+conto*.xls*
+estratto*.csv
+estratto*.xls*
+movimenti*.csv
+movimenti*.xls*
+*_export.csv
+*-export.csv
+
 # Derivati: si rigenerano con `python bilancio.py`. Versionarli riempirebbe la
 # cronologia di rumore a ogni elaborazione.
 consolidato.csv
