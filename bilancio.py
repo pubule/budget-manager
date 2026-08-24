@@ -1358,7 +1358,7 @@ def selftest():
         "Data": ["12/01/2026"],
         "Descrizione": ["PAGAMENTO POS ESSELUNGA"],
         "Importo": ["-84,30"],
-        "Saldo": ["1250,00"],
+        "Saldo": ["1250.00"],
     })
     assert not is_shared_export(con_saldo), "colonna saldo scambiata per quote"
 

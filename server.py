@@ -193,10 +193,12 @@ class State:
         self.again = False        # una modifica e' arrivata durante un giro
 
     def has_exports(self):
-        """Ci sono estratti conto GIA' CARICATI, o si lavora sullo storico?
+        """Ci sono estratti conto (o export condivisi) GIA' CARICATI?
 
         Quelli in attesa non contano: finche' non premi "Carica dati" la
-        dashboard deve mostrare quello che c'era prima.
+        dashboard deve mostrare quello che c'era prima. Lo storico non e'
+        una sorgente di transazioni: e' gia' stato migrato una volta sola
+        dentro export/elaborati/.
         """
         return bool(bilancio.archived_exports(self.folder))
 

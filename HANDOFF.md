@@ -5,6 +5,23 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (24/08/2026) — Splitwise e precedenza fra sorgenti
+
+**Lo storico conteneva gia' Splitwise, dimezzato.** MoneyWiz importava ogni
+spesa condivisa come le due quote: "Eurospin -30,00" due volte per una spesa
+da 60. 1027 righe su 1933. Migrate una volta sola con `--migra-storico`, che
+ha tenuto le 906 superstiti (stipendi, affitti, spese non condivise).
+
+**Splitwise si riconosce dalla firma numerica**, non dal nome del file (il suo
+si chiama `koala_...`) ne' dai nomi delle persone: le colonne quota si
+annullano riga per riga, su 669 righe su 669.
+
+**Precedenza:** estratto conto > export condiviso > storico migrato. Un solo
+passo, `drop_covered_by()`, copre sia Splitwise contro banca sia storico
+contro banca.
+
+---
+
 ## IN CORSO (24/08/2026) — cartella export/, caricamento esplicito
 
 **La falla piu' grave era in git.** `.gitignore` copriva i derivati ma non un
@@ -109,7 +126,7 @@ spesa ordinaria                 -3.401/mese   (senza le straordinarie)
 ```bash
 python server.py                   # l'applicazione, http://127.0.0.1:8770
 python bilancio.py --selfcheck     # motore di categorizzazione + selftest
-python bilancio.py --da-storico    # elabora da riga di comando, senza export
+python bilancio.py --no-llm        # elabora da riga di comando, senza LLM
 
 # l'interfaccia, senza aprire un browser (51 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
@@ -166,9 +183,10 @@ ci sarebbe modo di accorgersene.
 
 ### 2. Il 2022 e il 2023 non si usano per i trend
 
-111 e 166 transazioni contro le ~660 di 2024 e 2025. Non sono anni con poche
-spese, sono anni registrati male. Qualunque grafico pluriennale che li includa
-disegna una crescita che non è avvenuta.
+- Il 2022 e il 2023 erano poveri finche' la sorgente era lo storico MoneyWiz.
+  Con Splitwise (669 righe dal 2022-01 al 2026-08) sono coperti. Restano
+  incompleti per le spese NON condivise di quegli anni, che nessuna sorgente
+  ha mai registrato.
 
 ### 3. Le straordinarie stanno fuori dalla media
 
@@ -287,6 +305,24 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
 - **`dashboard.xlsx` non era nella lista `skip`**: con export veri nella
   cartella, la pipeline avrebbe letto la propria dashboard come estratto conto.
   Ora c'è `GENERATED` che raccoglie tutti i file prodotti.
+
+- **Un saldo Splitwise non si riconosce dall'importo.** Il primo criterio
+  ("il Costo vale una quota intera") colpiva 32 righe, ma 31 erano spese vere
+  pagate al 100% da uno e attribuite al 100% all'altro: `farmacia per Fabio`,
+  `Netflix Michela`, `Colliri post operazione`. Le avrebbe cancellate in
+  silenzio. Si riconosce da `Categorie = Pagamento` piu' la descrizione
+  (`ha pagato`, `pareggia i bilanci`), perche' Splitwise non marca tutto.
+
+- **`Path.replace()` non sposta i file dentro iCloud Drive su Windows.**
+  L'archiviazione degli export in `server.py` dice "archiviati" e i file
+  restano dove sono; un `mv` di shell funziona. Riguarda `archive_exports()`,
+  gia' presente su master, fuori dallo scopo di questo lavoro. Da sistemare.
+
+- **`drop_covered_by()` puo' lasciare un doppione residuo.** Quando la stessa
+  spesa esiste in tutte e tre le sorgenti, l'accoppiamento uno-a-uno consuma
+  la copertura bancaria una volta sola e una riga di troppo sopravvive. Il log
+  ora lo conta: nei dati veri e' 1 caso su 1572. Se quel numero cresce, serve
+  una coda di revisione manuale.
 
 ---
 

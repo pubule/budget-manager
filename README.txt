@@ -221,8 +221,10 @@ senza motivo.
 NOTE
 ----
 
-- Solo 2024 e 2025 hanno dati densi (circa 660 transazioni l'anno). Il 2022 ne
-  ha 111 e il 2023 ne ha 166: i trend su quegli anni non valgono.
+- Il 2022 e il 2023 erano poveri finche' la sorgente era lo storico MoneyWiz.
+  Con Splitwise (669 righe dal 2022-01 al 2026-08) sono coperti. Restano
+  incompleti per le spese NON condivise di quegli anni, che nessuna sorgente
+  ha mai registrato.
 - transaction_processor.py e' la versione precedente, superata da bilancio.py.
 - HANDOFF.md racconta lo stato del lavoro, le decisioni prese e le trappole
   gia' incontrate. Va letto prima di rimetterci mano, e aggiornato dopo.
