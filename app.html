@@ -127,7 +127,8 @@ color:var(--dim)}
     <div class="grow"></div>
     <span class="status" id="status"></span>
     <button id="btn-load" class="hide">Carica dati</button>
-    <button id="btn-run">Rielabora</button>
+    <button id="btn-run">Ricarica</button>
+    <button id="btn-llm">Analizza con LLM</button>
     <button id="btn-export">Esporta HTML + Excel</button>
     <button id="btn-log">Log</button>
   </header>
@@ -315,6 +316,10 @@ function post(route, body){
 const spending = rows => rows.filter(t => t.Natura !== "Non spesa");
 const outflow = rows => spending(rows).filter(t => t.Importo < 0);
 const inflow  = rows => spending(rows).filter(t => t.Importo > 0);
+// Le righe che nessun livello deterministico ha saputo classificare: sono le
+// uniche su cui l'LLM abbia qualcosa da dire, quindi sono la misura che dice
+// se vale la pena aspettare i minuti che ci mette.
+const uncategorized = rows => rows.filter(t => !t.Categoria);
 const sum = rows => rows.reduce((a,t) => a + (t.Importo||0), 0);
 const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
 
@@ -735,17 +740,29 @@ function fillSelect(id, values, current, blank){
 }
 
 function setStatus(){
-  el("btn-run").disabled = !!(S && S.running);
+  const busy = !!(S && S.running);
+  el("btn-run").disabled = busy;
   // "Carica dati" compare solo quando c'e' davvero qualcosa da caricare, col
   // numero dentro: un pulsante sempre acceso non direbbe niente.
   const attesa = (S && S.pending) || [];
   const load = el("btn-load");
   load.classList.toggle("hide", !attesa.length);
-  load.disabled = !!(S && S.running);
+  load.disabled = busy;
   load.className = attesa.length ? "primary" : "hide";
   load.textContent = attesa.length === 1
     ? "Carica 1 export" : `Carica ${attesa.length} export`;
   load.title = attesa.join("\n");
+  // Il modello ha senso solo se e' rimasto qualcosa da classificare: il numero
+  // dice se vale la pena aspettare. A zero il pulsante resta visibile ma
+  // spento, perche' sparire e ricomparire confonderebbe.
+  const aperte = uncategorized((S && S.transactions) || []).length;
+  const llm = el("btn-llm");
+  llm.disabled = busy || !aperte;
+  llm.textContent = aperte ? `Analizza con LLM (${aperte})` : "Analizza con LLM";
+  llm.title = aperte
+    ? `${aperte} transazioni che nessuna regola ha saputo classificare.\n`
+      + "Il modello viene interrogato solo su queste: dura minuti."
+    : "Nessuna transazione da classificare.";
   const dot = S && S.running ? "busy" : (S && S.error ? "err" : "");
   el("status").innerHTML = `<span class="dot ${dot}"></span>`
     + (S && S.running ? "elaboro…"
@@ -955,29 +972,31 @@ el("log-body").addEventListener("scroll", () => {
   }
 });
 
-el("btn-load").addEventListener("click", async () => {
-  const attesa = (S && S.pending) || [];
-  if(!attesa.length) return;
-  el("btn-load").disabled = true;
+// Caricare e analizzare sono due cose diverse, ed e' la ragione per cui i
+// pulsanti sono tre. "Carica" e "Ricarica" girano senza modello: durano
+// secondi e a parita' di file danno sempre lo stesso consolidato. L'LLM entra
+// solo con "Analizza", e lavora solo sulle descrizioni che nessun livello
+// deterministico ha saputo risolvere.
+//
+// Il log si apre da solo in tutti e tre i casi: e' il momento in cui serve, e
+// con il modello e' anche l'unico modo di sapere che sta lavorando e non e'
+// bloccato. Il server AVVIA e basta, la fine la scopre poll(), che riabilita i
+// pulsanti quando running torna falso.
+async function start(button, route, llm){
+  el(button).disabled = true;
   LOG_AT = 0;
   el("log-body").innerHTML = "";
   openLog();
-  await post("/api/carica", {llm:true});
+  await post(route, {llm});
   pullLog();
-});
+}
 
-el("btn-run").addEventListener("click", async () => {
-  el("btn-run").disabled = true;
-  // Il log si apre da solo: e' il momento in cui serve, ed e' l'unico modo di
-  // sapere che il modello sta lavorando e non e' bloccato.
-  LOG_AT = 0;
-  el("log-body").innerHTML = "";
-  openLog();
-  await post("/api/run", {llm:true});
-  // Il server ha solo AVVIATO il giro. La fine la scopre poll(), che
-  // riabilita il pulsante quando running torna falso.
-  pullLog();
+el("btn-load").addEventListener("click", () => {
+  if(!((S && S.pending) || []).length) return;
+  start("btn-load", "/api/carica", false);
 });
+el("btn-run").addEventListener("click", () => start("btn-run", "/api/run", false));
+el("btn-llm").addEventListener("click", () => start("btn-llm", "/api/run", true));
 el("btn-export").addEventListener("click", async () => {
   const r = await post("/api/export", {});
   if(r.ok) alert("scritti: " + r.file.join(", "));

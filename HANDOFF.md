@@ -5,6 +5,66 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (24/08/2026) — caricamento deterministico, LLM a parte
+
+**Il problema.** I due pulsanti passavano entrambi `llm:true`, quindi ogni
+caricamento di un estratto conto si portava dietro una passata del modello:
+minuti di attesa per vedere dei dati. Ma **l'LLM tocca 52 righe su 1845
+(2,8%)**: le altre escono da livelli deterministici. Le 1793 pagavano il costo
+delle 52.
+
+**La separazione è quasi gratis** perché nella cascata di
+`Categorizer.categorize()` la cache sta **fuori** dal controllo su `use_llm`:
+
+```python
+if key in self.cache:              # <- fuori dal guard
+    return self.cache[key], "cache", 0.5
+if self.use_llm:
+    category = self._ask_llm(description)
+```
+
+Un giro senza modello non perde nulla di già imparato — le 51 descrizioni in
+`categorie_cache.json` restano risolte — semplicemente non fa domande nuove.
+
+**Tre pulsanti.** `Carica N export` e `Ricarica` (era "Rielabora") girano con
+`llm:false`; `Analizza con LLM (N)` è nuovo e gira con `llm:true`. Il numero è
+il conteggio delle righe senza categoria, calcolato nel browser da
+`uncategorized()`: nessun campo nuovo nel payload. A zero il pulsante resta
+visibile ma spento — sparire e ricomparire confonderebbe.
+
+Il server non è stato toccato: `payload.get("llm", True)` accettava già il
+flag. Erano solo i due `post(..., {llm:true})` in `app.html`.
+
+**Misurato:** un giro senza modello dura **1 secondo** e due giri di fila danno
+un `consolidato.csv` **identico byte per byte**. Totali invariati (entrate
+122.595,24 €, uscite −148.688,88 €), le 52 righe a confidenza 0,50 sopravvivono
+tutte.
+
+**Riscarichi.** `archive_exports()` affiancava il nuovo file al vecchio con un
+suffisso a timestamp: l'archivio accumulava copie quasi identiche, e una
+transazione stornata dalla banca restava nel bilancio per sempre. Ora stesso
+nome = stesso conto e periodo, vince il più recente, il vecchio va in
+`export/sostituiti/`.
+
+Due trappole trovate mentre lo scrivevo:
+
+1. Il controllo era `destination.exists()`, cioè solo `elaborati/AAAA-MM/` del
+   mese corrente. Un export di agosto ricaricato a settembre **non** veniva
+   riconosciuto come riscarico. Ora il gemello si cerca in
+   `bilancio.archived_exports()`, che li restituisce tutti.
+2. `export/sostituiti/` deve stare **fuori** da `export/elaborati/`:
+   `archived_exports()` fa `rglob()` sugli elaborati, quindi una cartella lì
+   dentro riporterebbe nel consolidato le righe appena sostituite — l'opposto
+   dello scopo. C'è un'asserzione in `selftest()` a guardia di questa scelta,
+   perché è un errore che non farebbe rumore.
+
+Il gemello si tocca **solo dopo** che il nuovo è verificato in archivio: se
+occupa già la casella buona, il nuovo si posa accanto con un nome provvisorio e
+ci trasloca alla fine. Un'archiviazione fallita non lascia il bilancio senza
+nessuna delle due copie.
+
+---
+
 ## IN CORSO (24/08/2026) — Splitwise e precedenza fra sorgenti
 
 **Lo storico conteneva gia' Splitwise, dimezzato.** MoneyWiz importava ogni
@@ -61,8 +121,8 @@ scarichi sovrapposti no.
 
 ## Il log del modello, in diretta (23/08/2026)
 
-**Pannello a destra.** Si apre col pulsante "Log" e da solo premendo
-"Rielabora". `LiveLog` in `server.py` sostituisce lo `StringIO`: raccoglie
+**Pannello a destra.** Si apre col pulsante "Log" e da solo a ogni
+elaborazione, qualunque pulsante l'abbia avviata. `LiveLog` in `server.py` sostituisce lo `StringIO`: raccoglie
 l'output riga per riga mentre la pipeline gira, e `/api/log?from=N` lo serve a
 pezzi — il browser tiene il segno e non riscarica quello che ha già.
 
@@ -147,7 +207,7 @@ python bilancio.py --migra-storico # riscrive export/elaborati/storico-moneywiz.
                                    # dal backup MoneyWiz. Idempotente: stesso
                                    # percorso, sovrascrive, non duplica
 
-# l'interfaccia, senza aprire un browser (51 controlli)
+# l'interfaccia, senza aprire un browser (57 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
 node test_app.js "$TEMP/state.json"
 ```
@@ -267,7 +327,9 @@ L'intestazione ora dice entrambe le cose e avverte che le medie mensili usano
 
 Ogni chiamata a `qwen3:8b` costa ~3 secondi (14 la prima, a freddo). Con 130
 descrizioni nuove il primo avvio bloccava tutto per sette minuti. L'LLM entra
-solo col pulsante "Rielabora" e quando la cartella cambia.
+**solo** col pulsante "Analizza con LLM": non all'avvio, non al caricamento,
+non quando la cartella cambia. Caricare è deterministico e dura un secondo;
+il modello è un'operazione a parte che si chiede quando serve.
 
 ### 9. `IGNORA` nella colonna 3 di `categorie_merge.csv`
 

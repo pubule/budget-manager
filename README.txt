@@ -12,6 +12,7 @@ DOVE VANNO GLI EXPORT
     export/                  ci depositi gli estratti conto
       elaborati/2026-08/     dove finiscono dopo il caricamento
       anonimi/               copie senza IBAN
+      sostituiti/            rimpiazzati da uno scarico piu' recente
 
 Depositi i file in export/. La dashboard se ne accorge entro pochi secondi e
 compare il pulsante "Carica N export". Premi quando hai finito di copiare: la
@@ -25,6 +26,21 @@ A giro riuscito gli originali si spostano in export/elaborati/AAAA-MM/ e
 accanto, in export/anonimi/, compare la copia ripulita. Un file da cui non si
 legge nessuna transazione NON viene archiviato: resta in export/ con l'errore
 nel log.
+
+RISCARICHI. Se depositi un file con lo STESSO NOME di uno gia' archiviato, e'
+un riscarico dello stesso conto e dello stesso periodo: vince il piu' recente.
+Il vecchio non si cancella, va in export/sostituiti/ e il log dice quale ha
+sostituito quale. Senza questa regola l'archivio accumulerebbe copie quasi
+identiche, e una transazione che la banca ha stornato resterebbe nel bilancio
+per sempre.
+
+Il gemello si cerca in TUTTI i mesi, non solo in quello corrente: un export di
+agosto ricaricato a settembre finirebbe in elaborati/AAAA-09/ e i due non si
+incontrerebbero mai.
+
+export/sostituiti/ sta di proposito FUORI da export/elaborati/: gli elaborati
+si leggono ricorsivamente, quindi una cartella li' dentro riporterebbe nel
+consolidato le righe appena sostituite.
 
 Gli archiviati continuano a essere letti a ogni elaborazione: spostarli e'
 organizzare, non escludere. Togliere un file da elaborati/ significa togliere
@@ -48,6 +64,38 @@ Serve ancora la riga di comando? C'e':
     python bilancio.py --selfcheck     verifica che il motore non sia rotto
     python bilancio.py --migra-storico riscrive export/elaborati/storico-
                                        moneywiz.csv dal backup MoneyWiz
+
+
+I PULSANTI IN ALTO
+------------------
+
+Caricare i dati e farli analizzare dal modello sono due cose diverse, e i
+pulsanti sono separati apposta.
+
+    Carica N export      compare solo quando ci sono file in attesa in
+                         export/. Legge, archivia, ricostruisce. Secondi.
+
+    Ricarica             rilegge da zero TUTTI gli originali archiviati e
+                         ricostruisce il consolidato. Secondi.
+
+    Analizza con LLM     interroga qwen3:8b, e SOLO sulle descrizioni che
+    (N)                  nessun livello deterministico ha saputo risolvere.
+                         Il numero fra parentesi dice quante sono: a zero il
+                         pulsante e' spento. Minuti.
+
+I primi due non chiamano mai il modello: a parita' di file danno sempre lo
+stesso consolidato, byte per byte. E' la proprieta' che rende il caricamento
+qualcosa di cui ci si puo' fidare.
+
+Non perdono nulla di cio' che il modello ha gia' imparato: categorie_cache.json
+viene consultata anche senza Ollama acceso. Le descrizioni MAI VISTE restano
+senza categoria finche' non premi "Analizza con LLM" - le trovi nella scheda
+Revisione, e spesso conviene scriverci una regola invece di chiedere al
+modello.
+
+Il consolidato e' DERIVATO: si riscrive da capo a ogni giro leggendo gli
+originali archiviati. Il database vero sono quelli piu' i file di
+configurazione (regole.csv, merchant.csv, override.csv, correzioni.csv).
 
 
 LE SCHEDE
@@ -90,7 +138,7 @@ Regole e merchant  Con anteprima: "prova" dice quante transazioni colpirebbe
 Componi            Quali riquadri mostrare e in che ordine.
 
 Log                Pannello a destra, si apre col pulsante "Log" e da solo
-                   quando premi "Rielabora". Mostra la pipeline riga per riga
+                   a ogni elaborazione. Mostra la pipeline riga per riga
                    MENTRE gira, non alla fine.
 
                    Del modello si vede: la descrizione che gli e' stata data,
@@ -120,8 +168,8 @@ Sette livelli in cascata. Il primo che risponde vince.
   7. llm             qwen3:8b via Ollama, solo per cio' che resta
 
 Il passo LLM costa circa 3 secondi a descrizione (14 il primo, a modello
-freddo). Per questo NON parte all'avvio del server: si attiva col pulsante
-"Rielabora" e quando la cartella cambia. Le risposte finiscono in
+freddo). Per questo e' SEPARATO dal caricamento e non parte mai da solo: lo
+chiami col pulsante "Analizza con LLM". Le risposte finiscono in
 categorie_cache.json, quindi ogni descrizione si chiede una volta sola.
 
     ollama pull qwen3:8b

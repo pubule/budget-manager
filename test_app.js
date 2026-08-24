@@ -23,11 +23,15 @@ if (!fs.existsSync(stateFile)) {
 const state = JSON.parse(fs.readFileSync(stateFile, "utf-8"));
 
 // DOM minimo: basta che le funzioni pure girino senza esplodere.
-const node = () => ({
-  value: "", innerHTML: "", textContent: "", disabled: false,
+// I nodi si tengono per id invece di crearne uno nuovo a ogni chiamata, cosi'
+// si puo' anche RILEGGERE cio' che il codice ci ha scritto: e' l'unico modo di
+// verificare l'etichetta dei pulsanti senza aprire un browser.
+const nodes = {};
+const node = id => (nodes[id] || (nodes[id] = {
+  value: "", innerHTML: "", textContent: "", disabled: false, title: "",
   dataset: {}, classList: {toggle(){}, add(){}, remove(){}},
   addEventListener(){}, closest(){ return null; },
-});
+}));
 global.document = {
   getElementById: node,
   querySelector: node,
@@ -47,7 +51,8 @@ global.prompt = () => null;
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
- CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending,
+ CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
+ setStatus, el,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -211,6 +216,39 @@ api.setState({...state, transactions: [evil]});
 const rendered = api.VIEWS.transazioni(api.filtered());
 check("la descrizione ostile viene neutralizzata",
       !rendered.includes("<img src=x") && !rendered.includes("<script>bad"));
+
+// Il conteggio sul pulsante "Analizza con LLM". Conta le righe senza
+// categoria, comprese quelle a stringa vuota: il consolidato le scrive vuote,
+// il payload del server le manda come null, e il pulsante deve dire lo stesso
+// numero in entrambi i casi.
+check("il conteggio per l'LLM prende vuoti e null",
+      api.uncategorized([{Categoria: "Alimentari"}, {Categoria: ""},
+                         {Categoria: null}, {}]).length === 3);
+api.setState(state);
+check("nessuna riga categorizzata finisce nel conteggio per l'LLM",
+      api.uncategorized(state.transactions).every(t => !t.Categoria));
+
+// Il pulsante dell'LLM sui dati veri: il numero deve essere quello, e a zero
+// deve spegnersi invece di sparire.
+const aperte = api.uncategorized(state.transactions).length;
+api.setStatus();
+check("il pulsante dell'LLM porta il conteggio vero",
+      api.el("btn-llm").textContent === `Analizza con LLM (${aperte})`,
+      api.el("btn-llm").textContent);
+check("il pulsante dell'LLM e' acceso se c'e' da lavorare",
+      api.el("btn-llm").disabled === !aperte);
+api.setState({...state, transactions: state.transactions.filter(t => t.Categoria)});
+api.setStatus();
+check("senza righe scoperte il pulsante dell'LLM si spegne ma resta",
+      api.el("btn-llm").disabled === true
+      && api.el("btn-llm").textContent === "Analizza con LLM",
+      api.el("btn-llm").textContent);
+api.setState({...state, running: true});
+api.setStatus();
+check("durante un giro i pulsanti sono tutti spenti",
+      api.el("btn-llm").disabled && api.el("btn-run").disabled
+      && api.el("btn-load").disabled);
+api.setState(state);
 
 console.log(failures ? `\n${failures} controlli falliti` : "\nTutti i controlli passati");
 process.exit(failures ? 1 : 0);

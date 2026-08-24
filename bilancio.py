@@ -1652,6 +1652,23 @@ def selftest():
     assert not same_expense("5274 UCAGRIC BAR VERONA", "rossetto del 11/04"),         "un bar non e' il supermercato Rossetto"
     assert not same_expense("VINSANTO CAFE' VERONA VR", "Pannello per tettoia"),         "un pannello per la tettoia non e' un caffe'"
 
+    # Un export sostituito da uno scarico piu' recente non deve rientrare
+    # dalla finestra. archived_exports() fa rglob() sugli elaborati, quindi
+    # basta annidare la cartella dei sostituiti li' dentro perche' le righe
+    # appena rimpiazzate tornino nel consolidato senza che nessuno se ne
+    # accorga. Questa asserzione e' la guardia di quella scelta.
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / EXPORT_DIR
+        (root / ARCHIVE_DIR / "2026-08").mkdir(parents=True)
+        (root / ARCHIVE_DIR / "2026-08" / "conto.csv").write_text("", "utf-8")
+        (root / SUPERSEDED_DIR).mkdir(parents=True)
+        (root / SUPERSEDED_DIR / "conto.csv").write_text("", "utf-8")
+        found = archived_exports(temporary)
+        assert [p.name for p in found] == ["conto.csv"], found
+        assert SUPERSEDED_DIR not in found[0].parts,             f"i sostituiti non devono stare sotto {ARCHIVE_DIR}/: {found[0]}"
+        # E non devono nemmeno passare per export in attesa di caricamento.
+        assert not pending_exports(temporary), pending_exports(temporary)
+
     print("selftest: ok")
 
 
@@ -1702,6 +1719,11 @@ def selfcheck(history, rules, categories):
 EXPORT_DIR = "export"
 ARCHIVE_DIR = "elaborati"       # dentro export/, dopo un caricamento riuscito
 ANON_DIR = "anonimi"            # copie senza IBAN, accanto agli originali
+# Gli export rimpiazzati da uno scarico piu' recente. Deve stare dentro
+# export/ ma FUORI da export/elaborati/: archived_exports() fa rglob() sugli
+# elaborati, quindi una sottocartella li' dentro riporterebbe nel consolidato
+# le righe appena sostituite, cioe' l'opposto di quello che serve.
+SUPERSEDED_DIR = "sostituiti"
 
 # File che vivono nella cartella ma non sono estratti conto. Senza questa lista
 # la pipeline proverebbe a leggere come export i propri stessi output.

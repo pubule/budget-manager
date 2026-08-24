@@ -490,24 +490,64 @@ def archive_exports(names):
             skipped.append((name, "non ne e' stata letta nessuna transazione, "
                                   "controlla il formato del file"))
             continue
+        # Stesso nome file vuol dire stesso conto e stesso periodo: e' un
+        # riscarico, non un export nuovo. Vince il piu' recente, altrimenti
+        # l'archivio accumula copie quasi identiche e una transazione che la
+        # banca ha stornato resterebbe nel bilancio per sempre.
+        #
+        # Il gemello si cerca fra TUTTI gli archiviati, non nella cartella del
+        # mese corrente: un export di agosto ricaricato a settembre finirebbe
+        # in elaborati/2026-09/ e i due non si incontrerebbero mai.
+        twin = next((p for p in bilancio.archived_exports(FOLDER)
+                     if p.name == name), None)
         target = root / bilancio.ARCHIVE_DIR / time.strftime("%Y-%m")
         target.mkdir(parents=True, exist_ok=True)
         destination = target / name
+        # Il gemello si tocca solo DOPO che il nuovo e' al sicuro. Se occupa
+        # gia' la casella buona il nuovo si posa accanto con un nome
+        # provvisorio e ci trasloca alla fine, cosi' un'archiviazione fallita
+        # non lascia il bilancio senza nessuna delle due copie.
+        staged = destination
         if destination.exists():
-            stem, suffix = source.stem, source.suffix
-            destination = target / f"{stem}-{time.strftime('%d%H%M%S')}{suffix}"
-        source.replace(destination)
+            staged = target / (f"{source.stem}-{time.strftime('%d%H%M%S')}"
+                               f"{source.suffix}")
+        source.replace(staged)
         # Dentro iCloud Drive su Windows replace() puo' tornare senza errore
         # e senza aver spostato niente. Dichiarare l'archiviazione riuscita
         # a quel punto e' il danno peggiore: il giro dopo gira con
         # include_pending=False e quelle transazioni spariscono dal
         # consolidato dopo essere state viste una volta.
-        if not (destination.exists() and not source.exists()):
+        if not (staged.exists() and not source.exists()):
             skipped.append((name, "lo spostamento non e' andato a buon fine "
                                   "(iCloud Drive?)"))
             continue
-        moved.append(destination.name)
+        if twin:
+            retired = retire(twin)
+            print(f"{name} sostituisce la copia caricata prima: quella e' ora "
+                  f"in {bilancio.EXPORT_DIR}/{bilancio.SUPERSEDED_DIR}/"
+                  f"{retired.name}")
+            if staged != destination:
+                staged.replace(destination)
+                staged = destination
+        moved.append(staged.name)
     return moved, skipped
+
+
+def retire(path):
+    """Mette da parte un export sostituito da uno scarico piu' recente.
+
+    Non si cancella: se il nuovo scarico fosse monco, e' l'unica copia da cui
+    tornare indietro. Il nome si conserva, col timestamp solo se serve a non
+    coprire un pensionato precedente.
+    """
+    target = FOLDER / bilancio.EXPORT_DIR / bilancio.SUPERSEDED_DIR
+    target.mkdir(parents=True, exist_ok=True)
+    destination = target / path.name
+    if destination.exists():
+        destination = target / (f"{path.stem}-{time.strftime('%d%H%M%S')}"
+                                f"{path.suffix}")
+    path.replace(destination)
+    return destination
 
 
 def load_and_archive(use_llm=True):
