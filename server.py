@@ -193,23 +193,26 @@ class State:
         self.again = False        # una modifica e' arrivata durante un giro
 
     def has_exports(self):
-        """Ci sono estratti conto veri, o si lavora solo sullo storico?"""
-        skip = bilancio.GENERATED
-        return any(
-            path.suffix.lower() in (".csv", ".xlsx", ".xls")
-            and path.name.lower() not in skip
-            and "report" not in path.name.lower()
-            for path in self.folder.glob("*"))
+        """Ci sono estratti conto GIA' CARICATI, o si lavora sullo storico?
+
+        Quelli in attesa non contano: finche' non premi "Carica dati" la
+        dashboard deve mostrare quello che c'era prima.
+        """
+        return bool(bilancio.archived_exports(self.folder))
+
+    def pending(self):
+        """Gli export depositati e non ancora caricati."""
+        return [p.name for p in bilancio.pending_exports(self.folder)]
 
     def signature(self):
-        """Impronta degli export: cambia quando ne arriva o cambia uno."""
-        skip = bilancio.GENERATED
+        """Impronta degli export in attesa: cambia quando ne arriva uno.
+
+        Serve solo ad AVVISARE. Prima faceva partire l'elaborazione da sola, e
+        siccome guarda data e dimensione un file ancora in copia le cambia
+        entrambe: la pipeline poteva leggere meta' di un .xlsx.
+        """
         marks = {}
-        for path in sorted(self.folder.glob("*")):
-            if path.suffix.lower() not in (".csv", ".xlsx", ".xls"):
-                continue
-            if path.name.lower() in skip or "report" in path.name.lower():
-                continue
+        for path in bilancio.pending_exports(self.folder):
             try:
                 stat = path.stat()
             except OSError:
@@ -217,7 +220,7 @@ class State:
             marks[path.name] = (int(stat.st_mtime), stat.st_size)
         return marks
 
-    def refresh(self, use_llm=True):
+    def refresh(self, use_llm=True, include_pending=False):
         """Riesegue la pipeline. Un giro alla volta, gli altri si accodano."""
         if self.running:
             self.again = True
@@ -231,8 +234,9 @@ class State:
                 with redirect_stdout(self.log), redirect_stderr(self.log):
                     self.frame = bilancio.run(
                         self.folder, use_llm=use_llm,
-                        from_history=not self.has_exports(),
-                        make_dashboard=False)
+                        from_history=not (self.has_exports() or include_pending),
+                        make_dashboard=False,
+                        include_pending=include_pending)
             except Exception as exc:                      # noqa: BLE001
                 self.error = f"{type(exc).__name__}: {exc}"
                 self.log.write(traceback.format_exc() + chr(10))
@@ -241,7 +245,7 @@ class State:
                 self.running = False
         if self.again:
             self.again = False
-            self.refresh(use_llm=use_llm)
+            self.refresh(use_llm=use_llm, include_pending=include_pending)
 
     def payload(self):
         """Tutto cio' che serve al browser, in un colpo solo.
@@ -290,6 +294,7 @@ class State:
             "corrections": read_rows("correzioni.csv"),
             "layout": read_layout(),
             "has_exports": self.has_exports(),
+            "pending": self.pending(),
         }
 
 
@@ -461,6 +466,73 @@ def preview_rule(payload):
     }
 
 
+def archive_exports(names):
+    """Sposta in export/elaborati/AAAA-MM/ e scrive le copie anonime.
+
+    Solo dopo un giro riuscito: se il parsing fallisce il file deve restare
+    dov'e', altrimenti sparisce dalla vista senza essere stato elaborato.
+    """
+    root = FOLDER / bilancio.EXPORT_DIR
+    accounts = bilancio.load_accounts(FOLDER / "conti.csv")
+    moved, skipped = [], []
+    for name in names:
+        source = root / name
+        if not source.exists():
+            continue
+        # La copia si scrive PRIMA di spostare, rileggendo quel file: deve
+        # rispecchiare quell'export, non il consolidato intero.
+        #
+        # Vale anche da controllo: load_transactions non solleva errori, su un
+        # file illeggibile stampa "saltato" e torna vuoto. Senza questo, un
+        # export che non e' stato letto verrebbe archiviato lo stesso e
+        # sparirebbe dalla vista senza essere mai entrato nei conti.
+        if bilancio.write_anonymous_copy(FOLDER, source, accounts) is None:
+            skipped.append(name)
+            continue
+        target = root / bilancio.ARCHIVE_DIR / time.strftime("%Y-%m")
+        target.mkdir(parents=True, exist_ok=True)
+        destination = target / name
+        if destination.exists():
+            stem, suffix = source.stem, source.suffix
+            destination = target / f"{stem}-{time.strftime('%d%H%M%S')}{suffix}"
+        source.replace(destination)
+        moved.append(destination.name)
+    return moved, skipped
+
+
+def load_and_archive(use_llm=True):
+    """Elabora e, solo se e' andata bene, archivia gli originali."""
+    names = STATE.pending()
+    STATE.refresh(use_llm=use_llm, include_pending=True)
+
+    # redirect_stdout vale solo dentro refresh(): scrivendo con print, questi
+    # messaggi finirebbero nel terminale invece che nel pannello che l'utente
+    # sta guardando proprio adesso.
+    def say(text):
+        STATE.log.write(text + chr(10))
+        print(text)
+
+    if STATE.error:
+        say(f"elaborazione fallita: i {len(names)} file restano in "
+            f"{bilancio.EXPORT_DIR}/, non sono stati archiviati")
+        return
+    try:
+        moved, skipped = archive_exports(names)
+    except OSError as exc:
+        say(f"archiviazione fallita ({exc}). I dati sono stati elaborati, "
+            f"i file restano in {bilancio.EXPORT_DIR}/")
+        return
+    for name in skipped:
+        say(f"{name} NON archiviato: non ne e' stata letta nessuna "
+            f"transazione. Resta in {bilancio.EXPORT_DIR}/, controlla il "
+            f"formato del file")
+    if moved:
+        say(f"archiviati {len(moved)} export in {bilancio.EXPORT_DIR}/"
+            f"{bilancio.ARCHIVE_DIR}/: {', '.join(moved)}")
+        say(f"copie senza IBAN in {bilancio.EXPORT_DIR}/{bilancio.ANON_DIR}/ "
+            f"(attenzione: restano importi, date e negozi)")
+
+
 ACTIONS = {
     "/api/transaction": set_transaction,
     "/api/categories": set_category,
@@ -521,8 +593,13 @@ class Handler(BaseHTTPRequestHandler):
                 # Il browser controlla ogni pochi secondi se e' cambiato
                 # qualcosa: mandargli 300 KB di transazioni per dirgli "no"
                 # sarebbe uno spreco.
+                # Il conteggio degli export in attesa viaggia anche qui:
+                # senza elaborazione automatica la versione non cambia mai, e
+                # un file appena depositato resterebbe invisibile finche' non
+                # si ricarica la pagina a mano.
                 return self.send_json({"version": STATE.version,
                                        "running": STATE.running,
+                                       "pending": len(STATE.pending()),
                                        "error": STATE.error})
             return self.send_json(STATE.payload())
         if self.path.startswith("/api/log"):
@@ -566,6 +643,14 @@ class Handler(BaseHTTPRequestHandler):
                 written = dashboard.generate(STATE.frame, FOLDER)
                 return self.send_json({"ok": True,
                                        "file": [p.name for p in written]})
+            if route == "/api/carica":
+                if STATE.running:
+                    return self.send_json({"ok": True, "gia_in_corso": True})
+                threading.Thread(
+                    target=load_and_archive,
+                    kwargs={"use_llm": payload.get("llm", True)},
+                    daemon=True).start()
+                return self.send_json({"ok": True, "avviato": True})
             if route == "/api/run":
                 # Col modello un giro dura minuti: la richiesta non puo
                 # restare appesa, altrimenti il browser molla e il log non
@@ -604,11 +689,10 @@ def watch():
             continue
         added = sorted(set(current) - set(previous))
         previous = current
-        print(f"cartella cambiata{': ' + ', '.join(added) if added else ''}, "
-              "rielaboro")
-        # Qui l'LLM serve: un export nuovo porta descrizioni mai viste. Gira in
-        # questo thread, l'interfaccia intanto mostra "elaboro".
-        STATE.refresh(use_llm=True)
+        # Avvisa e basta. Elaborare da solo significava rischiare di leggere un
+        # file ancora in copia; adesso decide il pulsante "Carica dati".
+        if added:
+            print(f"{len(added)} export in attesa: {', '.join(added)}")
 
 
 def main():

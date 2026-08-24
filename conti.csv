@@ -1,0 +1,6 @@
+pattern;conto
+(?i)intesa|isybank;Intesa Sanpaolo
+(?i)fineco;Fineco
+(?i)hype;Hype
+(?i)fideuram;Fideuram
+(?i)splitwise;Splitwise

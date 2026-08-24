@@ -126,6 +126,7 @@ color:var(--dim)}
     <h1>Bilancio familiare</h1>
     <div class="grow"></div>
     <span class="status" id="status"></span>
+    <button id="btn-load" class="hide">Carica dati</button>
     <button id="btn-run">Rielabora</button>
     <button id="btn-export">Esporta HTML + Excel</button>
     <button id="btn-log">Log</button>
@@ -715,10 +716,15 @@ function render(){
   // Il denominatore delle medie deve essere visibile: senza, "-300 €/mese"
   // non dice su quanti mesi e' calcolato, e i mesi cambiano coi filtri.
   const months = uniq(spending(rows).map(month));
+  const attesa = S.pending || [];
   el("source").textContent =
-    (S.has_exports ? "sorgente: export nella cartella"
-                   : "sorgente: storico MoneyWiz (nessun export nella cartella)")
-    + coverage(rows, months);
+    (S.has_exports ? "sorgente: export/"
+                   : "sorgente: storico MoneyWiz (nessun export in export/)")
+    + coverage(rows, months)
+    // Il sorvegliante avvisa e basta: se non lo dicesse qui, un export
+    // depositato e mai caricato resterebbe invisibile.
+    + (attesa.length ? `  ·  ${attesa.length} export in attesa: `
+                       + `${attesa.slice(0,3).join(", ")}` : "");
 
   el("view").innerHTML = VIEWS[TAB](rows);
 }
@@ -730,6 +736,16 @@ function fillSelect(id, values, current, blank){
 
 function setStatus(){
   el("btn-run").disabled = !!(S && S.running);
+  // "Carica dati" compare solo quando c'e' davvero qualcosa da caricare, col
+  // numero dentro: un pulsante sempre acceso non direbbe niente.
+  const attesa = (S && S.pending) || [];
+  const load = el("btn-load");
+  load.classList.toggle("hide", !attesa.length);
+  load.disabled = !!(S && S.running);
+  load.className = attesa.length ? "primary" : "hide";
+  load.textContent = attesa.length === 1
+    ? "Carica 1 export" : `Carica ${attesa.length} export`;
+  load.title = attesa.join("\n");
   const dot = S && S.running ? "busy" : (S && S.error ? "err" : "");
   el("status").innerHTML = `<span class="dot ${dot}"></span>`
     + (S && S.running ? "elaboro…"
@@ -939,6 +955,17 @@ el("log-body").addEventListener("scroll", () => {
   }
 });
 
+el("btn-load").addEventListener("click", async () => {
+  const attesa = (S && S.pending) || [];
+  if(!attesa.length) return;
+  el("btn-load").disabled = true;
+  LOG_AT = 0;
+  el("log-body").innerHTML = "";
+  openLog();
+  await post("/api/carica", {llm:true});
+  pullLog();
+});
+
 el("btn-run").addEventListener("click", async () => {
   el("btn-run").disabled = true;
   // Il log si apre da solo: e' il momento in cui serve, ed e' l'unico modo di
@@ -971,7 +998,9 @@ async function poll(){
   try{
     const r = await fetch("/api/state?light=1");
     const light = await r.json();
-    if(light.version !== VERSION || light.running !== (S && S.running)){
+    const attesaOra = (S && S.pending) ? S.pending.length : 0;
+    if(light.version !== VERSION || light.running !== (S && S.running)
+       || light.pending !== attesaOra){
       if(light.running){ S.running = true; setStatus(); }
       else await reload();
     }

@@ -6,8 +6,35 @@ BILANCIO
 Apre la dashboard nel browser. Da li' si fa tutto: correggere le categorie,
 gestire la tassonomia, scrivere le regole, filtrare i grafici.
 
-Sorveglia la cartella: appena copi dentro un export nuovo, rielabora da solo
-entro pochi secondi. Non serve lanciare nessun comando.
+DOVE VANNO GLI EXPORT
+---------------------
+
+    export/                  ci depositi gli estratti conto
+      elaborati/2026-08/     dove finiscono dopo il caricamento
+      anonimi/               copie senza IBAN
+
+Depositi i file in export/. La dashboard se ne accorge entro pochi secondi e
+compare il pulsante "Carica N export". Premi quando hai finito di copiare: la
+pipeline gira e il log a destra mostra cosa fa.
+
+Finche' non premi, quei file NON entrano nei conti. E' voluto: il sorveglia-
+mento guarda data e dimensione, e un file ancora in copia le cambia entrambe,
+quindi elaborare da solo poteva leggere meta' di un .xlsx.
+
+A giro riuscito gli originali si spostano in export/elaborati/AAAA-MM/ e
+accanto, in export/anonimi/, compare la copia ripulita. Un file da cui non si
+legge nessuna transazione NON viene archiviato: resta in export/ con l'errore
+nel log.
+
+Gli archiviati continuano a essere letti a ogni elaborazione: spostarli e'
+organizzare, non escludere. Togliere un file da elaborati/ significa togliere
+quelle transazioni dal consolidato.
+
+ATTENZIONE a export/anonimi/: "anonimo" vuol dire senza IBAN, numeri di carta
+e codici tecnici. Importi, date, negozi e saldi restano tutti. Non e' un file
+da mandare in giro alla leggera.
+
+Tutta la cartella export/ e' esclusa da git, anonimi/ compresa.
 
 Il server ascolta SOLO su 127.0.0.1. Sono dati bancari e non devono essere
 raggiungibili dalle altre macchine di casa. I dati non escono mai dal PC:
@@ -141,6 +168,12 @@ merchant.csv      pattern;merchant - unifica le grafie dello stesso negozio.
                   euro: senza questo file non lo vedi in nessuna classifica.
 
 natura.csv        categoria;natura - il secondo asse.
+
+conti.csv         pattern;conto - da quale conto viene un export, dal nome del
+                  file. Senza, il "conto" e' il nome del file e due export
+                  dello stesso conto in mesi diversi diventano due conti. Non
+                  e' estetica: il riconoscimento dei giroconti guarda proprio
+                  che i conti siano diversi.
 
 categorie_merge.csv  Unifica le categorie duplicate di MoneyWiz. Colonna 1 com'e'
                   adesso, colonna 3 come deve diventare. Scrivi IGNORA nella

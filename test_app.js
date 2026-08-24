@@ -69,11 +69,16 @@ const all = api.filtered();
 check("nessun filtro restituisce tutto", all.length === state.transactions.length,
       `${all.length} vs ${state.transactions.length}`);
 const F = api.getF();
-F.nature = "Vincolate";
+// La natura si sceglie dai dati, non a mano: con un dataset piccolo o diverso
+// un nome fisso farebbe fallire il test senza che ci sia niente di rotto.
+const nature = [...new Set(all.map(t => t.Natura))].filter(Boolean);
+const scelta = nature.find(n => all.filter(t => t.Natura === n).length < all.length)
+               || nature[0];
+F.nature = scelta;
 const vinc = api.filtered();
-check("filtro natura riduce", vinc.length > 0 && vinc.length < all.length,
-      `${vinc.length}`);
-check("filtro natura e' esatto", vinc.every(t => t.Natura === "Vincolate"));
+check(`filtro natura riduce (${scelta})`,
+      vinc.length > 0 && vinc.length < all.length, `${vinc.length}/${all.length}`);
+check("filtro natura e' esatto", vinc.every(t => t.Natura === scelta));
 F.nature = ""; F.from = "2025-01-01"; F.to = "2025-12-31";
 const y2025 = api.filtered();
 check("filtro periodo", y2025.every(t => t.Data >= "2025-01-01" && t.Data <= "2025-12-31"),

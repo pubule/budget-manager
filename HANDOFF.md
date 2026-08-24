@@ -5,7 +5,34 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
-## IN CORSO (23/08/2026) — il log del modello, in diretta
+## IN CORSO (24/08/2026) — cartella export/, caricamento esplicito
+
+**La falla piu' grave era in git.** `.gitignore` copriva i derivati ma non un
+estratto conto vero: `git check-ignore conto_intesa.csv` diceva "non ignorato".
+Il `git add -A` usato per ogni commit avrebbe messo IBAN e movimenti in
+cronologia. Chiuso per primo, commit `920c2c2`.
+
+**Il flusso adesso.** Depositi in `export/`, la dashboard mostra "Carica N
+export", premi tu. Il sorvegliante avvisa e basta: guardando data e dimensione
+poteva far partire l'elaborazione su un file ancora in copia.
+
+**I file in attesa non entrano nei conti finche' non premi.** `all_exports()`
+li include solo con `include_pending=True`, che passa solo
+`load_and_archive()`. Senza questo il pulsante non caricherebbe niente: si
+limiterebbe a spostare file gia' dentro.
+
+**Il conto non e' piu' il nome del file.** `conti.csv` mappa il nome
+dell'export sul conto vero. Serviva davvero: `drop_internal_transfers`
+riconosce i giroconti guardando che i conti siano diversi, e con conti fasulli
+sbagliava.
+
+**Doppioni fra export diversi scartati**, conservati dentro lo stesso file.
+Due caffe' uguali lo stesso giorno sono due spese; le stesse righe in due
+scarichi sovrapposti no.
+
+---
+
+## Il log del modello, in diretta (23/08/2026)
 
 **Pannello a destra.** Si apre col pulsante "Log" e da solo premendo
 "Rielabora". `LiveLog` in `server.py` sostituisce lo `StringIO`: raccoglie
@@ -240,6 +267,18 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
   parte da un nodo staccato e non arriva al listener sul documento. Nei test
   via JS bisogna riprendere gli elementi ogni volta.
 
+- **Un processo server vecchio rimasto vivo confonde le prove.** Un
+  caricamento sembrava archiviare i file lasciandoli al loro posto: il log
+  diceva "archiviati", il disco no. `archive_exports` chiamata a mano
+  funzionava. Era una versione precedente del server ancora in ascolto sulla
+  stessa porta. Prima di dubitare del codice, contare i processi python.
+
+- **`load_transactions` non solleva errori.** Su un file illeggibile stampa
+  "saltato" e torna vuoto, quindi il giro risulta riuscito. Senza un controllo
+  esplicito l'export veniva archiviato lo stesso e spariva dalla vista senza
+  essere mai entrato nei conti. Ora si archivia solo cio' che ha prodotto
+  righe.
+
 - **Il primo clic dopo `navigate` con l'automazione del browser va a vuoto.**
   Non è un difetto dell'app: verificato con `document.elementFromPoint` e un
   `.click()` da codice, che funziona. Nei test bisogna cliccare due volte o
@@ -254,7 +293,8 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
 ## Quello che resta
 
 - **Provare su export bancari veri.** È il buco più grande: i formati sono
-  stati provati solo su file costruiti a mano.
+  stati provati solo su file costruiti a mano. Serve anche per riempire
+  `conti.csv` coi nomi che usano davvero le tue banche.
 - **`Utenze domiciliate` e `Mandato` finiscono in `Casa > Ipoteca/Affitto`**
   (10.655 €/anno insieme). Vengono da `storico-esatto`, cioè da come erano
   etichettate in MoneyWiz. Se sono bollette, servono due righe in

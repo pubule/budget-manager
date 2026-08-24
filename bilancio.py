@@ -392,6 +392,43 @@ def load_merchants(path):
     return merchants
 
 
+def load_accounts(path):
+    """conti.csv: regex sul nome del file -> nome del conto.
+
+    Senza questa mappa il "conto" e' il nome del file, quindi due export dello
+    stesso conto in mesi diversi diventano due conti. Non e' un dettaglio
+    estetico: drop_internal_transfers riconosce i giroconti proprio guardando
+    che i conti siano diversi, e con conti fasulli sbaglia.
+    """
+    if not path.exists():
+        return []
+    accounts = []
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter=";"):
+            pattern = (row.get("pattern") or "").strip()
+            name = (row.get("conto") or "").strip()
+            if not pattern or not name:
+                continue
+            try:
+                accounts.append((re.compile(pattern, re.IGNORECASE), name))
+            except re.error as exc:
+                print(f"  conto ignorato, regex non valida {pattern!r}: {exc}")
+    if accounts:
+        print(f"  {len(accounts)} conti riconosciuti da conti.csv")
+    return accounts
+
+
+def account_of(filename, accounts):
+    """Il conto a cui appartiene un export, dal suo nome."""
+    for pattern, name in accounts:
+        if pattern.search(filename):
+            return name
+    # Ripiego: quello che viene prima della prima cifra o del primo separatore.
+    # "intesa-2026-01.csv" e "intesa_gennaio.csv" danno entrambi "Intesa".
+    base = re.split(r"[-_ ]?\d|[-_]", Path(filename).stem, maxsplit=1)[0]
+    return base.strip().title() or Path(filename).stem
+
+
 def canonical_merchant(description, merchants):
     """Nome del negozio, unificando le grafie diverse dello stesso posto.
 
@@ -746,7 +783,7 @@ def find_columns(frame):
     return date_col, desc_col, amount_col, debit_col, credit_col
 
 
-def load_transactions(path):
+def load_transactions(path, account=None):
     """Righe grezze (data, descrizione, importo) da un singolo export."""
     frame = read_table(path)
     if frame is None or frame.empty:
@@ -779,10 +816,45 @@ def load_transactions(path):
             "Data": parse_date(row.get(date_col)),
             "Descrizione": description,
             "Importo": round(amount, 2),
-            "Conto": path.stem,
+            "Conto": account or path.stem,
+            # Serve a distinguere i doppioni fra export diversi da due spese
+            # identiche dentro lo stesso file.
+            "Origine file": path.name,
         })
     print(f"  {path.name}: {len(rows)} transazioni")
     return rows
+
+
+def drop_cross_file_duplicates(rows):
+    """Scarta le righe presenti in piu' export, tenendo la prima.
+
+    Due estratti conto che si sovrappongono di periodo contengono le stesse
+    transazioni: senza questo passo verrebbero contate due volte, e siccome
+    l'ID include il conto nemmeno gli ID coinciderebbero.
+
+    Dentro lo STESSO file i doppioni restano: due caffe' uguali lo stesso
+    giorno sono due spese vere, non un errore di scarico.
+    """
+    seen = {}
+    kept, dropped = [], Counter()
+    for row in rows:
+        key = (row.get("Data"), round(row.get("Importo", 0), 2),
+               row.get("Descrizione"), row.get("Conto"))
+        source = row.get("Origine file")
+        first = seen.get(key)
+        if first is not None and first != source:
+            dropped[source] += 1
+            continue
+        if first is None:
+            seen[key] = source
+        kept.append(row)
+
+    if dropped:
+        total = sum(dropped.values())
+        print(f"  {total} righe scartate: gia' presenti in un altro export")
+        for source, count in dropped.most_common():
+            print(f"    {count:>5} da {source}")
+    return kept
 
 
 def drop_internal_transfers(rows, days=3, tolerance=0.01):
@@ -968,13 +1040,19 @@ def selfcheck(history, rules, categories):
 # esecuzione
 # --------------------------------------------------------------------------
 
+# Dove si depositano gli estratti conto. Sta tutto fuori da git: dentro ci
+# sono IBAN e movimenti, e una volta committati restano per sempre.
+EXPORT_DIR = "export"
+ARCHIVE_DIR = "elaborati"       # dentro export/, dopo un caricamento riuscito
+ANON_DIR = "anonimi"            # copie senza IBAN, accanto agli originali
+
 # File che vivono nella cartella ma non sono estratti conto. Senza questa lista
 # la pipeline proverebbe a leggere come export i propri stessi output.
 GENERATED = {
     "consolidato.csv", "da_rivedere.csv", "dashboard.xlsx", "dashboard.html",
     "categorie_merge.csv", "regole.csv", "merchant.csv", "override.csv",
     "natura.csv", "correzioni.csv", "categorie_cache.json",
-    "dashboard_layout.json",
+    "dashboard_layout.json", "conti.csv",
 }
 
 
@@ -989,6 +1067,7 @@ def load_config(folder):
         "merchants": load_merchants(folder / "merchant.csv"),
         "natura": load_natura(folder / "natura.csv"),
         "corrections": load_corrections(folder / "correzioni.csv"),
+        "accounts": load_accounts(folder / "conti.csv"),
     }
     # Il sqlite estratto pesa ~5 MB: tienilo fuori dalla cartella iCloud,
     # altrimenti viene risincronizzato a ogni esecuzione.
@@ -1009,7 +1088,65 @@ def load_config(folder):
     return config
 
 
-def read_sources(folder, config, output, from_history):
+def write_anonymous_copy(folder, source, accounts=()):
+    """Scrive in export/anonimi/ lo stesso export senza dati sensibili.
+
+    Rilegge il file invece di ritagliare il consolidato: la copia deve
+    rispecchiare QUELL'export, non la vista d'insieme.
+
+    Attenzione al nome: "anonimo" vuol dire senza IBAN, numeri di carta e
+    codici tecnici. Importi, date, negozi e saldi restano tutti, quindi non e'
+    un file da mandare in giro alla leggera.
+    """
+    source = Path(source)
+    rows = load_transactions(source, account_of(source.name, accounts))
+    if not rows:
+        return None
+    target = Path(folder) / EXPORT_DIR / ANON_DIR
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / (source.stem + ".csv")
+    pd.DataFrame(rows)[["Data", "Descrizione", "Importo", "Conto"]].to_csv(
+        path, index=False, sep=";", encoding="utf-8-sig")
+    return path
+
+
+def pending_exports(folder):
+    """Gli export appena depositati, non ancora archiviati."""
+    root = Path(folder) / EXPORT_DIR
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.glob("*")
+                  if p.is_file() and p.suffix.lower() in (".csv", ".xlsx", ".xls"))
+
+
+def archived_exports(folder):
+    """Gli export gia' caricati, cioe' quelli sotto export/elaborati/.
+
+    Archiviare e' organizzare, non escludere: se gli archiviati non si
+    leggessero, il consolidato perderebbe tutta la storia a ogni caricamento.
+    """
+    root = Path(folder) / EXPORT_DIR / ARCHIVE_DIR
+    if not root.is_dir():
+        return []
+    found = [p for p in root.rglob("*")
+             if p.is_file() and p.suffix.lower() in (".csv", ".xlsx", ".xls")]
+    return sorted(found, key=lambda p: (p.name, str(p)))
+
+
+def all_exports(folder, include_pending=False):
+    """Gli export da leggere.
+
+    Quelli in attesa restano fuori finche' non si preme "Carica dati": se
+    entrassero da soli, il pulsante non caricherebbe niente, si limiterebbe a
+    spostare file gia' dentro ai conti.
+    """
+    found = archived_exports(folder)
+    if include_pending:
+        found = found + pending_exports(folder)
+    return found
+
+
+def read_sources(folder, config, output, from_history, include_pending=False):
     """Le transazioni grezze: dallo storico oppure dagli export nella cartella."""
     if from_history:
         print("STORICO MoneyWiz")
@@ -1017,19 +1154,25 @@ def read_sources(folder, config, output, from_history):
                 if config["db_path"] else [])
 
     print("EXPORT")
+    # Un estratto conto lasciato nella radice e' un file dimenticato, non un
+    # export: dirlo evita di chiedersi perche' quei movimenti non compaiono.
     skip = GENERATED | {output.lower()}
+    strays = [p.name for p in Path(folder).glob("*")
+              if p.is_file() and p.suffix.lower() in (".csv", ".xlsx", ".xls")
+              and p.name.lower() not in skip and "report" not in p.name.lower()]
+    if strays:
+        print(f"  attenzione: {len(strays)} file nella radice non vengono letti "
+              f"({', '.join(strays[:4])}). Gli export vanno in {EXPORT_DIR}/")
+
+    accounts = config.get("accounts", [])
     rows = []
-    for path in sorted(Path(folder).glob("*")):
-        if path.suffix.lower() not in (".csv", ".xlsx", ".xls"):
-            continue
-        if path.name.lower() in skip or "report" in path.name.lower():
-            continue
-        rows.extend(load_transactions(path))
+    for path in all_exports(folder, include_pending):
+        rows.extend(load_transactions(path, account_of(path.name, accounts)))
     return rows
 
 
 def run(folder, use_llm=True, from_history=False, output="consolidato.csv",
-        make_dashboard=True, config=None):
+        make_dashboard=True, config=None, include_pending=False):
     """L'intera pipeline, chiamabile da codice. Ritorna il DataFrame finale.
 
     Estratta da main() perche' il server la richiama a ogni modifica: farlo
@@ -1043,7 +1186,7 @@ def run(folder, use_llm=True, from_history=False, output="consolidato.csv",
         raise RuntimeError("nessuna categoria disponibile: serve un backup "
                            "MoneyWiz in backup/ oppure un regole.csv")
 
-    rows = read_sources(folder, config, output, from_history)
+    rows = read_sources(folder, config, output, from_history, include_pending)
     if not rows:
         raise RuntimeError("nessuna transazione trovata: metti gli export "
                            "nella cartella, oppure usa --da-storico")
@@ -1053,6 +1196,7 @@ def run(folder, use_llm=True, from_history=False, output="consolidato.csv",
     # la correzione si staccherebbe dalla transazione al giro successivo.
     assign_ids(rows)
     apply_corrections(rows, config["corrections"])
+    rows = drop_cross_file_duplicates(rows)
     rows = drop_internal_transfers(rows)
 
     print("")
