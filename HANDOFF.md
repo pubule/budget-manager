@@ -370,20 +370,38 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
 
 ## Quello che resta
 
-- **Provare su export bancari veri.** È il buco più grande: i formati sono
-  stati provati solo su file costruiti a mano. Serve anche per riempire
-  `conti.csv` coi nomi che usano davvero le tue banche.
-- **`Utenze domiciliate` e `Mandato` finiscono in `Casa > Ipoteca/Affitto`**
-  (10.655 €/anno insieme). Vengono da `storico-esatto`, cioè da come erano
-  etichettate in MoneyWiz. Se sono bollette, servono due righe in
-  `override.csv`.
-- **`override.csv` ha 5 righe con categoria vuota**: sono i promemoria dei
-  bonifici, ora risolti dalle regole giroconto. Si possono togliere.
-- **Il passo LLM non è mai girato su tutto il residuo** (~130 descrizioni,
-  ~7 minuti). Le 4 risposte provate erano tutte categorie valide, ma Decathlon
-  è finito in `Shopping > Tecnologia` invece di `Vestiti`.
-- **`transaction_processor.py`** è la versione precedente, completamente
-  superata da `bilancio.py`. Tenuta solo perché non c'è git: se non serve più
-  a niente, si cancella.
-- **Il repo git non ha un remoto.** La copia di sicurezza è iCloud. Se serve
-  un backup vero, va aggiunto un remoto privato.
+Nell'ordine in cui conviene affrontarli.
+
+1. **Caricare il primo estratto conto vero.** E' il buco piu' grande e sblocca
+   tutto il resto: finora i formati sono stati provati solo su file costruiti a
+   mano, e il rango 0 non e' mai esistito nei dati. Quando lo carichi:
+   - riempi `conti.csv` coi nomi che usano davvero le tue banche;
+   - **leggi `scartate.csv` riga per riga**: e' il primo giro in cui la
+     precedenza fra sorgenti lavora sul serio, e li' vedi cosa ha tolto;
+   - guarda quante righe finiscono in "copertura gia' consumata": oggi e' 1 su
+     1572, se cresce serve una coda di revisione manuale.
+
+2. **Il risparmio e' negativo (-14.976 EUR) e non e' la realta'.** Gli stipendi
+   stanno negli estratti conto, Splitwise porta solo spese. Si risolve da solo
+   al punto 1: non inseguire il numero prima.
+
+3. **`Utenze domiciliate` e `Mandato` finiscono in `Casa > Ipoteca/Affitto`**
+   (10.655 EUR/anno insieme). Vengono da `storico-esatto`, cioe' da come erano
+   etichettate in MoneyWiz. Se sono bollette, servono due righe in
+   `override.csv`.
+
+4. **Il passo LLM non e' mai girato su tutto il residuo.** Sui dati di oggi
+   aveva reso zero (41 chiamate, 41 astensioni) perche' il residuo era testo
+   non classificabile. Con gli estratti conto veri il quadro cambia: le
+   descrizioni diventano stringhe merchant, su cui il modello aveva risposto
+   4 su 4.
+
+5. **`override.csv` ha 5 righe con categoria vuota**: promemoria dei bonifici,
+   ora risolti dalle regole giroconto. Si possono togliere.
+
+6. **`transaction_processor.py`** e' la versione precedente, superata da
+   `bilancio.py`. Ora che c'e' git si puo' cancellare senza perdere niente.
+
+7. **Il repo git non ha un remoto.** La copia di sicurezza e' iCloud. Prima di
+   aggiungerne uno: `merchant.csv`, `regole.csv`, `override.csv` e questo file
+   contengono nomi propri, importi e la ripartizione delle spese di casa.
