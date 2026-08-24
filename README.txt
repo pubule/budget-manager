@@ -173,6 +173,14 @@ regole.csv        pattern;categoria - il pattern e' una regex. Vince la prima
                   le generiche.
 
 merchant.csv      pattern;merchant - unifica le grafie dello stesso negozio.
+                  Serve anche a dire che DUE DESCRIZIONI SONO LO STESSO POSTO
+                  quando non si somigliano affatto: "Rata condominio" e
+                  "BONIFICO A BORGO MANGANO" finiscono entrambe su
+                  "Borgo Mangano", e cosi' la stessa spesa vista dalla banca e
+                  da Splitwise non viene contata due volte. Quando due righe
+                  hanno stesso importo e stessa data ma descrizioni diverse, il
+                  log le elenca sotto "coppie non fuse": e' li' che si vede
+                  dove aggiungere una riga.
                   Iper Rossetto compariva con 56 scritture diverse per 7.828
                   euro: senza questo file non lo vedi in nessuna classifica.
 

@@ -448,6 +448,63 @@ def canonical_merchant(description, merchants):
     return " ".join(significant[:2]).title() if significant else ""
 
 
+def merchant_words(description):
+    """Parole utili a riconoscere un negozio, per il confronto fra sorgenti.
+
+    Diverso da tokens(): spezza anche su / e . perche' le banche incollano il
+    circuito al nome ("YYW1047657451655/PAYPAL", "WWW.AMAZON.IT"), e butta via
+    i token che sono solo cifre o date, che nelle causali abbondano e non
+    dicono nulla su chi ha incassato.
+    """
+    pieces = re.split(r"[/.]", str(description or ""))
+    words = set()
+    for piece in pieces:
+        for word in normalize(piece).split():
+            if len(word) <= 2 or word in STOPWORDS:
+                continue
+            if re.fullmatch(r"[\d\-]+", word):
+                continue
+            words.add(word)
+    return words
+
+
+def same_expense(first, second, merchants=()):
+    """Le due descrizioni parlano dello stesso acquisto?
+
+    Serve a non fondere righe che combaciano per importo e data ma sono spese
+    diverse. Al primo estratto conto vero, su 8 accoppiamenti 2 erano sbagliati
+    ("Pannello per tettoia" fuso con "VINSANTO CAFE'"): con importi tondi in una
+    citta' piccola le collisioni casuali arrivano subito.
+
+    Tre condizioni, basta che ne valga una.
+    """
+    # 1. Stesso negozio secondo merchant.csv. E' qui che si insegnano le
+    #    equivalenze non ovvie: "Rata condominio" e "BONIFICO A BORGO MANGANO"
+    #    finiscono entrambe su "Borgo Mangano" perche' il file lo dice.
+    one = canonical_merchant(str(first or ""), merchants)
+    two = canonical_merchant(str(second or ""), merchants)
+    if one and two and one == two:
+        return True
+
+    words_one, words_two = merchant_words(first), merchant_words(second)
+
+    # 3. Se una delle due non ha nessuna parola utile e' gergo bancario puro
+    #    ("ADDEBITO SEPA DD PER FATTURA A VOSTRO CARICO"): non c'e' niente su
+    #    cui decidere, quindi ci si fida di importo e data come prima.
+    if not words_one or not words_two:
+        return True
+
+    # 2. Una parola in comune. Il prefisso conta perche' le banche troncano:
+    #    "PARROCCHIA S.ANNA DI LUGA" e' "Lugagnano" tagliato.
+    if words_one & words_two:
+        return True
+    for short, long in ((words_one, words_two), (words_two, words_one)):
+        for word in short:
+            if len(word) >= 4 and any(other.startswith(word) for other in long):
+                return True
+    return False
+
+
 def load_natura(path):
     """natura.csv: categoria -> natura (quanto e' comprimibile quella spesa)."""
     if not path.exists():
@@ -1072,7 +1129,7 @@ def source_rank(path, shared):
     return RANK_SHARED if shared else RANK_BANK
 
 
-def drop_covered_by(rows, days=3, discarded=None):
+def drop_covered_by(rows, days=3, discarded=None, merchants=()):
     """Scarta le righe gia' coperte da una sorgente di rango superiore.
 
     Due casi, un meccanismo solo:
@@ -1101,6 +1158,7 @@ def drop_covered_by(rows, days=3, discarded=None):
         higher[round(row.get("Importo", 0), 2)].append(position)
 
     dropped, used, ambiguous, contese = set(), set(), 0, 0
+    diverse = []
     counts = Counter()
     # Si scorre partendo dal numero di rango piu' alto, cioe' dalla sorgente
     # meno affidabile: RANK_HISTORY (2), poi RANK_SHARED (1). Le righe
@@ -1133,6 +1191,11 @@ def drop_covered_by(rows, days=3, discarded=None):
             distance = abs((day - when).days) if day and when else 99
             if distance > days:
                 continue
+            if not same_expense(row.get("Descrizione"),
+                                rows[other].get("Descrizione"), merchants):
+                # Stesso importo, stessa data, ma non e' lo stesso acquisto.
+                diverse.append((row, rows[other]))
+                continue
             if other in used or other in dropped:
                 # C'era una copertura valida, ma un'altra sorgente l'ha gia'
                 # presa: e' la contesa che "ambiguous" non vede, perche' qui
@@ -1164,6 +1227,16 @@ def drop_covered_by(rows, days=3, discarded=None):
     if contese:
         print(f"    {contese} righe avevano una copertura gia' consumata da "
               "un'altra sorgente: restano nel consolidato come possibile doppione")
+    if diverse:
+        # Non e' un errore: e' il motivo per cui due righe simili restano due.
+        # Se una coppia qui sotto e' davvero lo stesso posto, la si insegna
+        # aggiungendo una riga a merchant.csv.
+        print(f"  {len(diverse)} coppie non fuse: stesso importo e data ma "
+              "descrizioni diverse")
+        for mine, other in diverse[:8]:
+            print(f"    {mine.get('Importo', 0):>9,.2f}  "
+                  f"{str(mine.get('Descrizione'))[:30]:<32}<-> "
+                  f"{str(other.get('Descrizione'))[:34]}")
     return [row for position, row in enumerate(rows) if position not in dropped]
 
 
@@ -1324,21 +1397,35 @@ def selftest():
         "una riga condivisa non e' un giroconto, non va accoppiata alla banca"
 
     # Fra sorgenti che descrivono lo stesso acquisto vince l'estratto conto:
-    # se Fabio paga Esselunga con la carta, l'uscita e' gia' li'.
+    # se Fabio paga Esselunga con la carta, l'uscita e' gia' li'. Le due righe
+    # devono parlare dello STESSO negozio: la prima stesura di questo caso
+    # usava "ESSELUNGA" contro "Eurospin", due supermercati diversi, e
+    # pretendeva che venissero fusi.
     righe = [
         {"Data": "2026-01-12", "Descrizione": "PAGAMENTO POS ESSELUNGA",
          "Importo": -60.0, "Conto": "Intesa", "Rango": 0},
-        {"Data": "2026-01-13", "Descrizione": "Eurospin",
+        {"Data": "2026-01-13", "Descrizione": "Esselunga",
          "Importo": -60.0, "Conto": "Splitwise", "Rango": 1},
         {"Data": "2026-01-12", "Descrizione": "Spesa di Michela",
          "Importo": -25.0, "Conto": "Splitwise", "Rango": 1},
     ]
     resto = drop_covered_by(righe)
     assert len(resto) == 2, f"attese 2 righe, trovate {len(resto)}"
-    assert not any(r["Descrizione"] == "Eurospin" for r in resto), \
+    assert not any(r["Descrizione"] == "Esselunga" for r in resto), \
         "la riga condivisa coperta dalla banca doveva sparire"
     assert any(r["Descrizione"] == "Spesa di Michela" for r in resto), \
         "cio' che la banca non vede va tenuto: e' il motivo per cui Splitwise serve"
+
+    # E due negozi diversi con lo stesso importo lo stesso giorno restano due
+    # spese: e' il difetto trovato al primo estratto conto vero.
+    diversi = [
+        {"Data": "2026-06-25", "Descrizione": "VINSANTO CAFE VERONA VR",
+         "Importo": -28.0, "Conto": "Hype", "Rango": 0},
+        {"Data": "2026-06-25", "Descrizione": "Pannello per tettoia",
+         "Importo": -28.0, "Conto": "Koala", "Rango": 1},
+    ]
+    assert len(drop_covered_by(diversi)) == 2, \
+        "un pannello per la tettoia non e' un caffe: restano due spese"
 
     # La banca non viene mai scartata da una sorgente piu' bassa.
     solo_banca = [
@@ -1540,6 +1627,30 @@ def selftest():
         "days=1 non deve raggiungere una riga a due giorni di distanza"
     assert len(drop_shared_halves(lontano, quota_lontana, days=2)) == 0, \
         "days=2 deve raggiungere una riga a due giorni di distanza"
+
+    # Due righe che combaciano per importo e data non sono per forza la stessa
+    # spesa. Casi presi dal primo estratto conto vero caricato.
+    negozi = load_merchants(Path("merchant.csv"))
+
+    # Stesso negozio secondo merchant.csv: e' li' che si insegnano le
+    # equivalenze non ovvie.
+    assert same_expense("DISPOSIZIONE DI BONIFICO SEPA A: BORGO MANGANO PER: Rata",
+                        "Rata condominio", negozi), "merchant.csv non consultato"
+    # Una parola in comune.
+    assert same_expense("BISSOLO CASA S.R.L. GAMBELLARA VI", "Bissolo")
+    assert same_expense("El Bagolo Ristorantino Sona", "Cena Bagolo")
+    # Le banche troncano: "LUGA" e' "Lugagnano" tagliato.
+    assert same_expense("PARROCCHIA S.ANNA DI LUGA SONA VR", "Sagra Lugagnano"),         "il troncamento della banca deve contare come parola in comune"
+    # La barra incolla il circuito al nome e nasconde la parola utile.
+    assert same_expense("YYW1047657451655/PAYPAL", "/PAYPAL")
+    # Gergo bancario puro: nessuna parola su cui decidere, si torna a importo
+    # e data come prima.
+    assert same_expense("ADDEBITO SEPA DD PER FATTURA A VOSTRO CARICO",
+                        "Bolletta luce"), "il gergo bancario va esentato"
+
+    # E i due che al primo estratto conto vero erano stati fusi per sbaglio.
+    assert not same_expense("5274 UCAGRIC BAR VERONA", "rossetto del 11/04"),         "un bar non e' il supermercato Rossetto"
+    assert not same_expense("VINSANTO CAFE' VERONA VR", "Pannello per tettoia"),         "un pannello per la tettoia non e' un caffe'"
 
     print("selftest: ok")
 
@@ -1755,7 +1866,8 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # tutto: tre righe dentro, zero fuori.
     rows = drop_internal_transfers(rows, discarded=scartate)
     rows = drop_import_artifacts(rows, scartate)
-    rows = drop_covered_by(rows, discarded=scartate)
+    rows = drop_covered_by(rows, discarded=scartate,
+                           merchants=config["merchants"])
 
     print("")
     print("categorizzazione")
