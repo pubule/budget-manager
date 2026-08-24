@@ -181,7 +181,7 @@ quattro ricariche HYPE erano etichettate a mano come `Affitto`, cioè come
 **entrate**. Se lo storico vincesse, il totale delle uscite mentirebbe e non
 ci sarebbe modo di accorgersene.
 
-### 2. Il 2022 e il 2023 non si usano per i trend
+### 2. Il 2022 e il 2023 sono coperti, ma solo per le spese condivise
 
 - Il 2022 e il 2023 erano poveri finche' la sorgente era lo storico MoneyWiz.
   Con Splitwise (669 righe dal 2022-01 al 2026-08) sono coperti. Restano
