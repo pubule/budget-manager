@@ -199,6 +199,15 @@ Finche' non ci sono export nella cartella, la dashboard lavora sullo storico
 MoneyWiz, cosi' c'e' subito qualcosa da guardare. Appena arriva un export
 passa a quello.
 
+Le TRANSAZIONI dello storico sono state migrate una volta sola in
+export/elaborati/storico-moneywiz.csv con:
+
+    python bilancio.py --migra-storico
+
+Da quel file in poi lo storico serve SOLO come maestro delle categorie. Non
+rilanciare la migrazione: creerebbe doppioni. Se serve rifarla, cancella
+prima export/elaborati/storico-moneywiz.csv.
+
 
 VERIFICHE
 ---------

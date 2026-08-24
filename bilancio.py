@@ -733,6 +733,103 @@ def load_history_transactions(db_path):
     return rows
 
 
+def drop_shared_halves(rows, shares, days=1):
+    """Toglie dallo storico le meta' di spese gia' presenti in un export condiviso.
+
+    MoneyWiz importava ogni spesa Splitwise come le due quote, entrambe
+    negative: "Eurospin -30,00" due volte per una spesa da 60. Misurato
+    sull'export reale, l'84% delle righe condivise trova corrispondenza sulla
+    quota, contro il 12% sul costo pieno.
+
+    Si tolgono al massimo DUE righe per ogni riga condivisa: di piu'
+    cancellerebbe spese distinte che per caso hanno lo stesso importo.
+    """
+    index = defaultdict(list)
+    for position, row in enumerate(rows):
+        index[(row.get("Data"), round(abs(row.get("Importo", 0)), 2))].append(position)
+
+    removed = set()
+    for day, share in shares:
+        if not day or not share:
+            continue
+        taken = 0
+        for offset in (0, -1, 1):
+            try:
+                near = (datetime.strptime(day, "%Y-%m-%d")
+                        + timedelta(days=offset)).strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+            for position in index.get((near, round(abs(share), 2)), []):
+                if position in removed:
+                    continue
+                removed.add(position)
+                taken += 1
+                if taken == 2:
+                    break
+            if taken == 2:
+                break
+    return [row for position, row in enumerate(rows) if position not in removed]
+
+
+def shared_shares(folder):
+    """(data, quota) da tutti gli export condivisi presenti in export/.
+
+    La quota e' il valore assoluto della colonna di una persona: in una
+    divisione fra due le due coincidono, quindi ne basta una.
+    """
+    shares = []
+    for path in all_exports(folder, include_pending=True):
+        frame = read_table(path)
+        if frame is None or frame.empty or not is_shared_export(frame):
+            continue
+        known = {c for c in find_columns(frame) if c}
+        extra = [c for c in frame.columns if c not in known]
+        quotas = pd.DataFrame({c: pd.to_numeric(frame[c], errors="coerce")
+                               for c in extra}).dropna(axis=1, how="all")
+        if quotas.empty or not len(quotas.columns):
+            continue
+        date_col = find_columns(frame)[0] or frame.columns[0]
+        column = quotas.columns[0]
+        for _, row in frame.iterrows():
+            value = pd.to_numeric(row.get(column), errors="coerce")
+            if pd.notna(value) and value:
+                shares.append((parse_date(row.get(date_col)), abs(float(value))))
+    return shares
+
+
+def migrate_history(folder, db_path):
+    """Scrive export/elaborati/storico-moneywiz.csv, una volta sola.
+
+    Dopo questo passo lo storico MoneyWiz non e' piu' una sorgente di
+    transazioni: resta il maestro delle categorie. Il backup non viene mai
+    scritto, quindi l'operazione si annulla cancellando il file prodotto.
+    """
+    folder = Path(folder)
+    if not db_path:
+        print("nessun backup MoneyWiz in backup/: niente da migrare")
+        return None
+
+    rows = load_history_transactions(db_path)
+    shares = shared_shares(folder)
+    print(f"  {len(shares)} quote lette dagli export condivisi")
+    kept = drop_shared_halves(rows, shares)
+
+    uscite = sum(r["Importo"] for r in kept if r["Importo"] < 0)
+    print(f"  {len(rows) - len(kept)} righe riconosciute come meta' condivise")
+    print(f"  {len(kept)} righe superstiti: "
+          f"{sum(1 for r in kept if r['Importo'] < 0)} uscite per {uscite:,.2f}, "
+          f"{sum(1 for r in kept if r['Importo'] > 0)} entrate")
+
+    target = folder / EXPORT_DIR / ARCHIVE_DIR
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / "storico-moneywiz.csv"
+    pd.DataFrame(kept)[["Data", "Descrizione", "Importo", "Conto"]].to_csv(
+        path, index=False, sep=";", encoding="utf-8-sig")
+    print(f"  scritto {path}")
+    print("  controlla i numeri: se non tornano, cancella il file e rilancia")
+    return path
+
+
 # --------------------------------------------------------------------------
 # lettura degli export
 # --------------------------------------------------------------------------
@@ -1112,6 +1209,23 @@ def selftest():
         assert not is_settlement(descrizione, "Spese mediche"), \
             f"{descrizione!r} e' una spesa, non un saldo"
 
+    # La migrazione toglie dallo storico le righe che sono le due meta' di una
+    # spesa Splitwise: stessa data (+-1 giorno), importo pari alla quota, al
+    # massimo due per riga condivisa.
+    storico = [
+        {"Data": "2022-01-12", "Descrizione": "Eurospin", "Importo": -30.0},
+        {"Data": "2022-01-12", "Descrizione": "Eurospin", "Importo": -30.0},
+        {"Data": "2022-01-12", "Descrizione": "Eurospin", "Importo": -30.0},
+        {"Data": "2022-01-20", "Descrizione": "VOSTRI EMOLUMENTI", "Importo": 2450.0},
+    ]
+    quote = [("2022-01-12", 30.0)]
+    resto = drop_shared_halves(storico, quote)
+    assert len(resto) == 2, f"attese 2 righe superstiti, trovate {len(resto)}"
+    assert any(r["Descrizione"] == "VOSTRI EMOLUMENTI" for r in resto), \
+        "lo stipendio non deve essere scambiato per meta' Splitwise"
+    assert sum(1 for r in resto if r["Descrizione"] == "Eurospin") == 1, \
+        "vanno tolte al massimo due meta' per riga condivisa, non tutte"
+
     print("selftest: ok")
 
 
@@ -1385,6 +1499,9 @@ def main():
                         help="non rigenerare dashboard.html e .xlsx")
     parser.add_argument("--da-storico", action="store_true",
                         help="usa le transazioni MoneyWiz invece degli export")
+    parser.add_argument("--migra-storico", action="store_true",
+                        help="estrae lo storico MoneyWiz in export/elaborati/ "
+                             "e smette di usarlo come sorgente")
     args = parser.parse_args()
 
     folder = Path(args.folder)
@@ -1396,6 +1513,12 @@ def main():
         config = load_config(folder)
         selftest()
         selfcheck(config["history"], config["rules"], config["categories"])
+        return
+
+    if args.migra_storico:
+        print("migrazione dello storico MoneyWiz")
+        config = load_config(folder)
+        migrate_history(folder, config["db_path"])
         return
 
     try:
