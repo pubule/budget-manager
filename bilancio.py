@@ -979,6 +979,7 @@ def load_transactions(path, account=None):
             # Serve a distinguere i doppioni fra export diversi da due spese
             # identiche dentro lo stesso file.
             "Origine file": path.name,
+            "Rango": source_rank(path, shared),
         })
 
     print(f"  {path.name}: {len(rows)} transazioni")
@@ -1027,11 +1028,95 @@ def drop_cross_file_duplicates(rows):
     return kept
 
 
+# Chi vince quando due sorgenti descrivono lo stesso acquisto. Numero basso
+# significa priorita' alta.
+RANK_BANK, RANK_SHARED, RANK_HISTORY = 0, 1, 2
+
+
+def source_rank(path, shared):
+    """Il rango di una sorgente, dedotto dal file."""
+    if Path(path).name == "storico-moneywiz.csv":
+        return RANK_HISTORY
+    return RANK_SHARED if shared else RANK_BANK
+
+
+def drop_covered_by(rows, days=3):
+    """Scarta le righe gia' coperte da una sorgente di rango superiore.
+
+    Due casi, un meccanismo solo:
+    - Splitwise contro banca: se Fabio paga con la carta l'uscita e' gia'
+      nell'estratto conto; se paga Michela non compare mai sul suo conto e la
+      riga condivisa va tenuta.
+    - Storico migrato contro banca: lo storico copre 2022-2026 e si
+      sovrappone a qualunque estratto conto scaricato per quel periodo.
+
+    Accoppiamento uno-a-uno, preferendo la data piu' vicina, come in
+    drop_internal_transfers().
+    """
+    def as_date(value):
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+
+    higher = defaultdict(list)
+    for position, row in enumerate(rows):
+        higher[round(abs(row.get("Importo", 0)), 2)].append(position)
+
+    dropped, used, ambiguous = set(), set(), 0
+    counts = Counter()
+    # Prima le sorgenti piu' basse: cosi' lo storico non "consuma" una riga
+    # bancaria che serviva a coprire una riga condivisa.
+    order = sorted(range(len(rows)),
+                   key=lambda i: -rows[i].get("Rango", RANK_BANK))
+    for position in order:
+        row = rows[position]
+        rank = row.get("Rango", RANK_BANK)
+        if rank == RANK_BANK:
+            continue
+        day = as_date(row.get("Data"))
+        candidates = []
+        for other in higher.get(round(abs(row.get("Importo", 0)), 2), ()):
+            if other == position or other in used or other in dropped:
+                continue
+            if rows[other].get("Rango", RANK_BANK) >= rank:
+                continue
+            when = as_date(rows[other].get("Data"))
+            distance = abs((day - when).days) if day and when else 99
+            if distance > days:
+                continue
+            candidates.append((distance, other))
+        if not candidates:
+            continue
+        if len(candidates) > 1:
+            ambiguous += 1
+        candidates.sort()
+        # Uno-a-uno: la riga che copre non puo' coprirne una seconda.
+        used.add(candidates[0][1])
+        dropped.add(position)
+        counts[row.get("Conto", "?")] += 1
+
+    if dropped:
+        print(f"  {len(dropped)} righe scartate: gia' coperte da una sorgente "
+              "di rango superiore")
+        for conto, count in counts.most_common():
+            print(f"    {count:>5} da {conto}")
+        if ambiguous:
+            print(f"    {ambiguous} avevano piu' di un candidato: se questo "
+                  "numero cresce, serve una coda di revisione")
+    return [row for position, row in enumerate(rows) if position not in dropped]
+
+
 def drop_internal_transfers(rows, days=3, tolerance=0.01):
     """Rimuove le coppie +X / -X fra conti propri, che raddoppiano i totali.
 
     Due righe si annullano se hanno importo opposto, conti diversi e date
     entro pochi giorni. Senza questo passo un giroconto conta due volte.
+
+    Un giroconto e' un movimento fra conti bancari: si appaiano solo righe di
+    Rango RANK_BANK. Ne' Splitwise ne' lo storico migrato sono conti bancari
+    (una spesa Splitwise e un residuo dello storico con importo opposto non
+    sono un giroconto, sono coperti da drop_covered_by).
     """
     def as_date(value):
         try:
@@ -1041,12 +1126,14 @@ def drop_internal_transfers(rows, days=3, tolerance=0.01):
 
     negatives = defaultdict(list)
     for index, row in enumerate(rows):
-        if row["Importo"] < 0:
+        if row["Importo"] < 0 and row.get("Rango", RANK_BANK) == RANK_BANK:
             negatives[round(abs(row["Importo"]), 2)].append(index)
 
     matched = set()
     for index, row in enumerate(rows):
         if row["Importo"] <= 0 or index in matched:
+            continue
+        if row.get("Rango", RANK_BANK) != RANK_BANK:
             continue
         date = as_date(row["Data"])
         for candidate in negatives.get(round(row["Importo"], 2), ()):
@@ -1120,6 +1207,44 @@ def selftest():
         {"Data": "2026-01-15", "Descrizione": "y", "Importo": 50.0, "Conto": "a"},
     ]
     assert len(drop_internal_transfers(same)) == 2, "rimossi movimenti dello stesso conto"
+    # Un giroconto e' fra conti bancari: una spesa Splitwise e il residuo
+    # dello storico con importo opposto non vanno appaiati qui, li tratta
+    # drop_covered_by (rango superiore).
+    banca_e_condiviso = [
+        {"Data": "2024-09-15", "Descrizione": "Rossetto", "Importo": -203.03,
+         "Conto": "Koala", "Rango": RANK_SHARED},
+        {"Data": "2024-09-15", "Descrizione": "Rossetto", "Importo": 203.03,
+         "Conto": "Storico", "Rango": RANK_BANK},
+    ]
+    assert len(drop_internal_transfers(banca_e_condiviso)) == 2, \
+        "una riga condivisa non e' un giroconto, non va accoppiata alla banca"
+
+    # Fra sorgenti che descrivono lo stesso acquisto vince l'estratto conto:
+    # se Fabio paga Esselunga con la carta, l'uscita e' gia' li'.
+    righe = [
+        {"Data": "2026-01-12", "Descrizione": "PAGAMENTO POS ESSELUNGA",
+         "Importo": -60.0, "Conto": "Intesa", "Rango": 0},
+        {"Data": "2026-01-13", "Descrizione": "Eurospin",
+         "Importo": -60.0, "Conto": "Splitwise", "Rango": 1},
+        {"Data": "2026-01-12", "Descrizione": "Spesa di Michela",
+         "Importo": -25.0, "Conto": "Splitwise", "Rango": 1},
+    ]
+    resto = drop_covered_by(righe)
+    assert len(resto) == 2, f"attese 2 righe, trovate {len(resto)}"
+    assert not any(r["Descrizione"] == "Eurospin" for r in resto), \
+        "la riga condivisa coperta dalla banca doveva sparire"
+    assert any(r["Descrizione"] == "Spesa di Michela" for r in resto), \
+        "cio' che la banca non vede va tenuto: e' il motivo per cui Splitwise serve"
+
+    # La banca non viene mai scartata da una sorgente piu' bassa.
+    solo_banca = [
+        {"Data": "2026-01-12", "Descrizione": "A", "Importo": -60.0,
+         "Conto": "Intesa", "Rango": 0},
+        {"Data": "2026-01-12", "Descrizione": "B", "Importo": -60.0,
+         "Conto": "Intesa", "Rango": 0},
+    ]
+    assert len(drop_covered_by(solo_banca)) == 2, \
+        "due movimenti bancari uguali sono due spese, non un doppione"
 
     # Grafie diverse dello stesso negozio devono dare lo stesso merchant,
     # altrimenti la classifica di spesa li conta come negozi distinti.
@@ -1446,6 +1571,7 @@ def run(folder, use_llm=True, output="consolidato.csv",
     assign_ids(rows)
     apply_corrections(rows, config["corrections"])
     rows = drop_cross_file_duplicates(rows)
+    rows = drop_covered_by(rows)
     rows = drop_internal_transfers(rows)
 
     print("")
