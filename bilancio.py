@@ -1065,15 +1065,18 @@ def drop_covered_by(rows, days=3):
 
     dropped, used, ambiguous, contese = set(), set(), 0, 0
     counts = Counter()
-    # Si elaborano prima le sorgenti di rango piu' basso (storico, poi
-    # Splitwise). Quando la stessa spesa esiste in tutte e tre le sorgenti
-    # (banca, Splitwise, storico) l'accoppiamento uno-a-uno lascia comunque
-    # un doppione residuo, qualunque sia l'ordine: cambia solo quale riga
-    # sopravvive. Con questo ordine sopravvive quella con la descrizione
-    # migliore (Splitwise batte lo storico, che spesso e' un
-    # "DISPOSIZIONE DI BONIFICO SEPA A:" invece del nome del negozio). Oggi
-    # il caso e' inerte: senza estratti conto (rango 0) in export/ non c'e'
-    # ancora una terza sorgente con cui contendersi la riga di copertura.
+    # Si scorre partendo dal numero di rango piu' alto, cioe' dalla sorgente
+    # meno affidabile: RANK_HISTORY (2), poi RANK_SHARED (1). Le righe
+    # RANK_BANK (0) non vengono mai scartate.
+    #
+    # Quando la stessa spesa esiste in tutte e tre le sorgenti, l'accoppiamento
+    # uno-a-uno ne lascia comunque una di troppo: la copertura bancaria viene
+    # consumata da una sola. Con quest'ordine a sopravvivere e' la riga
+    # condivisa, che porta la descrizione migliore ("Camminamento Borgo
+    # Mangano" invece di "DISPOSIZIONE DI BONIFICO SEPA A:").
+    #
+    # Oggi il caso e' inerte: senza estratti conto in export/ il rango 0 non
+    # esiste proprio.
     order = sorted(range(len(rows)),
                    key=lambda i: -rows[i].get("Rango", RANK_BANK))
     for position in order:
