@@ -44,9 +44,10 @@ niente dalla rete.
 Serve ancora la riga di comando? C'e':
 
     python bilancio.py                 elabora e rigenera dashboard.html/.xlsx
-    python bilancio.py --da-storico    usa MoneyWiz invece degli export
     python bilancio.py --no-llm        salta Ollama
     python bilancio.py --selfcheck     verifica che il motore non sia rotto
+    python bilancio.py --migra-storico riscrive export/elaborati/storico-
+                                       moneywiz.csv dal backup MoneyWiz
 
 
 LE SCHEDE
@@ -151,6 +152,14 @@ consolidato.csv   E' DERIVATO, non modificarlo: viene riscritto da zero a ogni
                   elaborazione e le modifiche fatte li' andrebbero perse. Tutto
                   quello che correggi finisce nei file qui sotto.
 
+scartate.csv      Anch'esso DERIVATO: le righe che la pipeline ha tolto, con la
+                  colonna "Scartata da" che dice quale passo le ha prese
+                  (saldo, doppione fra file, artefatto di importazione,
+                  coperta da sorgente superiore, giroconto). Serve a
+                  controllare che non stia mangiando transazioni vere: i
+                  conteggi stampati nel log dicono quante, questo file dice
+                  quali.
+
 override.csv      La categoria decisa a mano per una singola transazione.
                   Identificata dall'ID, oppure da data+importo se preferisci
                   scriverla a mano senza cercare l'ID.
@@ -195,9 +204,17 @@ gia' categorizzate a mano, con la gerarchia padre/figlio. Viene usato il backup
 piu' recente. Per aggiornare lo storico basta metterne uno piu' nuovo in
 backup/.
 
-Finche' non ci sono export nella cartella, la dashboard lavora sullo storico
-MoneyWiz, cosi' c'e' subito qualcosa da guardare. Appena arriva un export
-passa a quello.
+Le TRANSAZIONI dello storico sono state migrate una volta sola in
+export/elaborati/storico-moneywiz.csv con:
+
+    python bilancio.py --migra-storico
+
+Da quel file in poi lo storico serve SOLO come maestro delle categorie.
+
+Rilanciare la migrazione e' sicuro: scrive sempre lo stesso percorso, quindi
+sovrascrive e non duplica. Serve rifarla quando metti in backup/ uno zip
+MoneyWiz piu' recente. Per annullarla basta cancellare il file prodotto: il
+backup non viene mai toccato.
 
 
 VERIFICHE
@@ -217,8 +234,19 @@ senza motivo.
 NOTE
 ----
 
-- Solo 2024 e 2025 hanno dati densi (circa 660 transazioni l'anno). Il 2022 ne
-  ha 111 e il 2023 ne ha 166: i trend su quegli anni non valgono.
+- ATTENZIONE al 2022 e al 2023: NON SONO ANNI COMPLETI, e Splitwise non li ha
+  sistemati. Misurato sul consolidato di adesso:
+
+        anno   righe   uscite      entrate
+        2022     101    -6.708            0
+        2023     131   -12.385      19.769
+        2024     462   -48.607      49.796
+        2025     672   -55.980      53.236
+
+  Il 2022 ha ZERO entrate e il 2023 quasi solo spese condivise: di quegli anni
+  non esiste ne' un estratto conto ne' uno stipendio registrato. Ogni grafico
+  pluriennale del risparmio li disegna quindi come una catastrofe che non e'
+  mai avvenuta. I confronti fra anni vanno fatti dal 2024 in poi.
 - transaction_processor.py e' la versione precedente, superata da bilancio.py.
 - HANDOFF.md racconta lo stato del lavoro, le decisioni prese e le trappole
   gia' incontrate. Va letto prima di rimetterci mano, e aggiornato dopo.

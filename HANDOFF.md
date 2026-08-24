@@ -5,6 +5,33 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (24/08/2026) — Splitwise e precedenza fra sorgenti
+
+**Lo storico conteneva gia' Splitwise, dimezzato.** MoneyWiz importava ogni
+spesa condivisa come le due quote: "Eurospin -30,00" due volte per una spesa
+da 60. 1027 righe su 1933. Migrate una volta sola con `--migra-storico`, che
+ha tenuto le 906 superstiti (stipendi, affitti, spese non condivise).
+
+**Splitwise si riconosce dalla firma numerica**, non dal nome del file (il suo
+si chiama `koala_...`) ne' dai nomi delle persone: le colonne quota si
+annullano riga per riga, su 669 righe su 669.
+
+**Precedenza:** estratto conto > export condiviso > storico migrato.
+`drop_covered_by()` copre sia Splitwise contro banca sia storico contro banca,
+e accoppia **a parità di segno**: sul valore assoluto un accredito di +60,00
+cancellava una spesa condivisa di -60,00.
+
+**`drop_import_artifacts()`** toglie i 7 residui positivi (396,93) che
+MoneyWiz si era lasciato dietro col costo pieno invece che con la quota.
+Prima sparivano per effetto collaterale della cecità al segno di
+`drop_covered_by()`; adesso hanno un passo che li toglie per la ragione
+giusta.
+
+**`scartate.csv`** elenca ogni riga tolta con il passo che l'ha presa. I
+conteggi nel log dicono quante, quel file dice quali.
+
+---
+
 ## IN CORSO (24/08/2026) — cartella export/, caricamento esplicito
 
 **La falla piu' grave era in git.** `.gitignore` copriva i derivati ma non un
@@ -82,24 +109,30 @@ un pulsante suo, **"Ultimo mese con dati"**, con un nome che dice quello che fa.
 categorie, tassonomia, regole, merchant, importi. La cartella è sorvegliata:
 appena copi dentro un export, rielabora da sola entro tre secondi.
 
-**Lo stato dei dati.** Non ci sono ancora export bancari veri nella cartella.
-Finché non ci sono, tutto lavora sullo storico MoneyWiz (1933 transazioni,
-2022-01 → 2026-01), così l'interfaccia ha qualcosa da mostrare fin da subito.
-Appena arriva un export, `has_exports()` diventa vera e la sorgente cambia da
-sola. **Non è ancora mai stato provato su un export bancario reale**: i test
-usano file finti nei tre formati (CSV `;`, CSV dare/avere, Excel).
+**Lo stato dei dati.** Lo scambio automatico di sorgente non esiste più: lo
+storico MoneyWiz è stato **migrato una volta sola** in
+`export/elaborati/storico-moneywiz.csv` e da lì in poi è una sorgente come le
+altre, la meno prioritaria (`RANK_HISTORY`). Quello che resta del backup
+alimenta soltanto il motore di categorizzazione.
 
-**Quello che i numeri dicono adesso** (2024-2025, i due soli anni densi):
+Oggi in `export/` ci sono due sorgenti: l'export Splitwise (`RANK_SHARED`) e
+lo storico migrato (`RANK_HISTORY`). **Estratti conto bancari veri
+(`RANK_BANK`) non ce ne sono ancora**: i test usano file finti nei tre formati
+(CSV `;`, CSV dare/avere, Excel). `has_exports()` non distingue più le
+sorgenti — con lo storico migrato lì dentro è di fatto sempre vera.
+
+**Quello che i numeri dicono adesso** (2024-2025, i due soli anni densi,
+ricalcolati sul consolidato post-migrazione — 24 mesi, giroconti esclusi):
 
 ```
-uscite reali      -101.176      -4.216/mese
-spesa ordinaria                 -3.401/mese   (senza le straordinarie)
+uscite reali      -104.587      -4.358/mese
+spesa ordinaria                 -3.569/mese   (senza le straordinarie)
 
-  Discrezionali   -1.103/mese   26%   <- la leva più grande, e la più immediata
-  Vincolate       -1.070/mese   25%
-  Straordinarie     -814/mese   19%
-  Ricorrenti        -632/mese   15%
-  Quotidiane        -549/mese   13%
+  Discrezionali   -1.150/mese   26%   <- la leva più grande, e la più immediata
+  Vincolate       -1.106/mese   25%
+  Straordinarie     -789/mese   18%
+  Ricorrenti        -727/mese   17%
+  Quotidiane        -570/mese   13%
 ```
 
 ---
@@ -109,7 +142,10 @@ spesa ordinaria                 -3.401/mese   (senza le straordinarie)
 ```bash
 python server.py                   # l'applicazione, http://127.0.0.1:8770
 python bilancio.py --selfcheck     # motore di categorizzazione + selftest
-python bilancio.py --da-storico    # elabora da riga di comando, senza export
+python bilancio.py --no-llm        # elabora da riga di comando, senza LLM
+python bilancio.py --migra-storico # riscrive export/elaborati/storico-moneywiz.csv
+                                   # dal backup MoneyWiz. Idempotente: stesso
+                                   # percorso, sovrascrive, non duplica
 
 # l'interfaccia, senza aprire un browser (51 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
@@ -142,8 +178,15 @@ modifica finisce in uno dei CSV di configurazione, che sono il vero database.
 **L'ordine della pipeline conta:**
 
 ```
-leggi export → assegna ID → applica correzioni → togli giroconti → categorizza
+leggi export → assegna ID → applica correzioni → doppioni fra file →
+giroconti → artefatti di importazione → coperture fra sorgenti → categorizza
 ```
+
+**I giroconti vanno tolti PRIMA delle coperture.** Da quando
+`drop_internal_transfers()` tocca solo il rango 0, l'ordine inverso faceva
+sparire spese vere: una spesa condivisa "coperta" da una gamba di giroconto
+che il passo successivo annullava. Tre righe dentro, zero fuori. C'è
+l'asserzione in `selftest()`.
 
 Gli ID si calcolano sui valori **originali**. Al contrario, correggere un
 importo cambierebbe l'ID di quella riga e la correzione si staccherebbe dalla
@@ -164,11 +207,28 @@ quattro ricariche HYPE erano etichettate a mano come `Affitto`, cioè come
 **entrate**. Se lo storico vincesse, il totale delle uscite mentirebbe e non
 ci sarebbe modo di accorgersene.
 
-### 2. Il 2022 e il 2023 non si usano per i trend
+### 2. Il 2022 e il 2023 NON sono coperti: non hanno entrate
 
-111 e 166 transazioni contro le ~660 di 2024 e 2025. Non sono anni con poche
-spese, sono anni registrati male. Qualunque grafico pluriennale che li includa
-disegna una crescita che non è avvenuta.
+Splitwise non li ha sistemati, e su questo mi ero sbagliato. Misurato sul
+consolidato di adesso (giroconti esclusi):
+
+```
+anno   righe   uscite      entrate
+2022     101    -6.708            0
+2023     131   -12.385      19.769
+2024     462   -48.607      49.796
+2025     672   -55.980      53.236
+```
+
+Il 2022 ha oggi **meno righe di prima** (101 contro 111) e **zero entrate**:
+contiene solo spese condivise. Di quegli anni non esiste né un estratto conto
+né uno stipendio registrato.
+
+**La conseguenza decisiva:** un anno senza entrate ma con uscite produce un
+risparmio pari all'intera spesa, col segno meno. Ogni grafico pluriennale di
+risparmio disegna il 2022 e il 2023 come una catastrofe **mai avvenuta**. I
+confronti fra anni vanno fatti dal 2024 in poi, e prima o poi la dashboard
+dovrà rifiutarsi di disegnare un anno senza entrate.
 
 ### 3. Le straordinarie stanno fuori dalla media
 
@@ -287,6 +347,24 @@ roba. Marcandole `IGNORA` le righe restano ma le ricategorizzano le regole.
 - **`dashboard.xlsx` non era nella lista `skip`**: con export veri nella
   cartella, la pipeline avrebbe letto la propria dashboard come estratto conto.
   Ora c'è `GENERATED` che raccoglie tutti i file prodotti.
+
+- **Un saldo Splitwise non si riconosce dall'importo.** Il primo criterio
+  ("il Costo vale una quota intera") colpiva 32 righe, ma 31 erano spese vere
+  pagate al 100% da uno e attribuite al 100% all'altro: `farmacia per Fabio`,
+  `Netflix Michela`, `Colliri post operazione`. Le avrebbe cancellate in
+  silenzio. Si riconosce da `Categorie = Pagamento` piu' la descrizione
+  (`ha pagato`, `pareggia i bilanci`), perche' Splitwise non marca tutto.
+
+- **`Path.replace()` non sposta i file dentro iCloud Drive su Windows.**
+  L'archiviazione degli export in `server.py` dice "archiviati" e i file
+  restano dove sono; un `mv` di shell funziona. Riguarda `archive_exports()`,
+  gia' presente su master, fuori dallo scopo di questo lavoro. Da sistemare.
+
+- **`drop_covered_by()` puo' lasciare un doppione residuo.** Quando la stessa
+  spesa esiste in tutte e tre le sorgenti, l'accoppiamento uno-a-uno consuma
+  la copertura bancaria una volta sola e una riga di troppo sopravvive. Il log
+  ora lo conta: nei dati veri e' 1 caso su 1572. Se quel numero cresce, serve
+  una coda di revisione manuale.
 
 ---
 

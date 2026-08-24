@@ -193,10 +193,13 @@ class State:
         self.again = False        # una modifica e' arrivata durante un giro
 
     def has_exports(self):
-        """Ci sono estratti conto GIA' CARICATI, o si lavora sullo storico?
+        """C'e' almeno una sorgente gia' caricata sotto export/elaborati/?
 
-        Quelli in attesa non contano: finche' non premi "Carica dati" la
-        dashboard deve mostrare quello che c'era prima.
+        Dopo la migrazione dello storico e' di fatto sempre vera: quel file
+        vive li' dentro. Non distingue piu' "ci sono estratti conto veri" da
+        "c'e' solo lo storico" - resta solo per dire all'interfaccia che il
+        consolidato ha una sorgente, e per distinguerla dal caso a cartella
+        vuota (prima migrazione mai fatta).
         """
         return bool(bilancio.archived_exports(self.folder))
 
@@ -229,12 +232,9 @@ class State:
             self.running, self.error = True, None
             self.log.reset()
             try:
-                # Senza export si lavora sullo storico MoneyWiz, cosi'
-                # l'interfaccia ha qualcosa da mostrare fin dal primo avvio.
                 with redirect_stdout(self.log), redirect_stderr(self.log):
                     self.frame = bilancio.run(
                         self.folder, use_llm=use_llm,
-                        from_history=not (self.has_exports() or include_pending),
                         make_dashboard=False,
                         include_pending=include_pending)
             except Exception as exc:                      # noqa: BLE001
@@ -487,7 +487,8 @@ def archive_exports(names):
         # export che non e' stato letto verrebbe archiviato lo stesso e
         # sparirebbe dalla vista senza essere mai entrato nei conti.
         if bilancio.write_anonymous_copy(FOLDER, source, accounts) is None:
-            skipped.append(name)
+            skipped.append((name, "non ne e' stata letta nessuna transazione, "
+                                  "controlla il formato del file"))
             continue
         target = root / bilancio.ARCHIVE_DIR / time.strftime("%Y-%m")
         target.mkdir(parents=True, exist_ok=True)
@@ -496,6 +497,15 @@ def archive_exports(names):
             stem, suffix = source.stem, source.suffix
             destination = target / f"{stem}-{time.strftime('%d%H%M%S')}{suffix}"
         source.replace(destination)
+        # Dentro iCloud Drive su Windows replace() puo' tornare senza errore
+        # e senza aver spostato niente. Dichiarare l'archiviazione riuscita
+        # a quel punto e' il danno peggiore: il giro dopo gira con
+        # include_pending=False e quelle transazioni spariscono dal
+        # consolidato dopo essere state viste una volta.
+        if not (destination.exists() and not source.exists()):
+            skipped.append((name, "lo spostamento non e' andato a buon fine "
+                                  "(iCloud Drive?)"))
+            continue
         moved.append(destination.name)
     return moved, skipped
 
@@ -522,10 +532,9 @@ def load_and_archive(use_llm=True):
         say(f"archiviazione fallita ({exc}). I dati sono stati elaborati, "
             f"i file restano in {bilancio.EXPORT_DIR}/")
         return
-    for name in skipped:
-        say(f"{name} NON archiviato: non ne e' stata letta nessuna "
-            f"transazione. Resta in {bilancio.EXPORT_DIR}/, controlla il "
-            f"formato del file")
+    for name, motivo in skipped:
+        say(f"{name} NON archiviato: {motivo}. "
+            f"Resta in {bilancio.EXPORT_DIR}/")
     if moved:
         say(f"archiviati {len(moved)} export in {bilancio.EXPORT_DIR}/"
             f"{bilancio.ARCHIVE_DIR}/: {', '.join(moved)}")

@@ -19,6 +19,7 @@ movimenti*.xls*
 # cronologia di rumore a ogni elaborazione.
 consolidato.csv
 da_rivedere.csv
+scartate.csv
 dashboard.html
 dashboard.xlsx
 
