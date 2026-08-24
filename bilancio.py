@@ -1063,10 +1063,17 @@ def drop_covered_by(rows, days=3):
     for position, row in enumerate(rows):
         higher[round(abs(row.get("Importo", 0)), 2)].append(position)
 
-    dropped, used, ambiguous = set(), set(), 0
+    dropped, used, ambiguous, contese = set(), set(), 0, 0
     counts = Counter()
-    # Prima le sorgenti piu' basse: cosi' lo storico non "consuma" una riga
-    # bancaria che serviva a coprire una riga condivisa.
+    # Si elaborano prima le sorgenti di rango piu' basso (storico, poi
+    # Splitwise). Quando la stessa spesa esiste in tutte e tre le sorgenti
+    # (banca, Splitwise, storico) l'accoppiamento uno-a-uno lascia comunque
+    # un doppione residuo, qualunque sia l'ordine: cambia solo quale riga
+    # sopravvive. Con questo ordine sopravvive quella con la descrizione
+    # migliore (Splitwise batte lo storico, che spesso e' un
+    # "DISPOSIZIONE DI BONIFICO SEPA A:" invece del nome del negozio). Oggi
+    # il caso e' inerte: senza estratti conto (rango 0) in export/ non c'e'
+    # ancora una terza sorgente con cui contendersi la riga di copertura.
     order = sorted(range(len(rows)),
                    key=lambda i: -rows[i].get("Rango", RANK_BANK))
     for position in order:
@@ -1076,8 +1083,9 @@ def drop_covered_by(rows, days=3):
             continue
         day = as_date(row.get("Data"))
         candidates = []
+        consumed = False
         for other in higher.get(round(abs(row.get("Importo", 0)), 2), ()):
-            if other == position or other in used or other in dropped:
+            if other == position:
                 continue
             if rows[other].get("Rango", RANK_BANK) >= rank:
                 continue
@@ -1085,8 +1093,16 @@ def drop_covered_by(rows, days=3):
             distance = abs((day - when).days) if day and when else 99
             if distance > days:
                 continue
+            if other in used or other in dropped:
+                # C'era una copertura valida, ma un'altra sorgente l'ha gia'
+                # presa: e' la contesa che "ambiguous" non vede, perche' qui
+                # candidates puo' restare vuoto.
+                consumed = True
+                continue
             candidates.append((distance, other))
         if not candidates:
+            if consumed:
+                contese += 1
             continue
         if len(candidates) > 1:
             ambiguous += 1
@@ -1104,6 +1120,9 @@ def drop_covered_by(rows, days=3):
         if ambiguous:
             print(f"    {ambiguous} avevano piu' di un candidato: se questo "
                   "numero cresce, serve una coda di revisione")
+    if contese:
+        print(f"    {contese} righe avevano una copertura gia' consumata da "
+              "un'altra sorgente: restano nel consolidato come possibile doppione")
     return [row for position, row in enumerate(rows) if position not in dropped]
 
 
@@ -1245,6 +1264,23 @@ def selftest():
     ]
     assert len(drop_covered_by(solo_banca)) == 2, \
         "due movimenti bancari uguali sono due spese, non un doppione"
+
+    # Contesa: la stessa spesa in tutte e tre le sorgenti. L'uno-a-uno lascia
+    # comunque un doppione (la banca non se ne libera mai), ma la banca puo'
+    # coprire una sola fra Splitwise e storico, non entrambe.
+    contesa = [
+        {"Data": "2026-02-01", "Descrizione": "PAGAMENTO POS FARMACIA",
+         "Importo": -40.0, "Conto": "Intesa", "Rango": RANK_BANK},
+        {"Data": "2026-02-01", "Descrizione": "Farmacia",
+         "Importo": -40.0, "Conto": "Splitwise", "Rango": RANK_SHARED},
+        {"Data": "2026-02-01", "Descrizione": "DISPOSIZIONE BONIFICO",
+         "Importo": -40.0, "Conto": "Storico", "Rango": RANK_HISTORY},
+    ]
+    resto = drop_covered_by(contesa)
+    assert len(resto) == 2, f"attese 2 righe (contesa risolta una volta), trovate {len(resto)}"
+    scartate = {"Splitwise", "Storico"} - {r["Conto"] for r in resto}
+    assert len(scartate) == 1, \
+        f"deve sparire una sola fra Splitwise e Storico, sparite: {scartate}"
 
     # Grafie diverse dello stesso negozio devono dare lo stesso merchant,
     # altrimenti la classifica di spesa li conta come negozi distinti.
