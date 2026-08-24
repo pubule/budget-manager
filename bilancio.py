@@ -808,6 +808,26 @@ def is_shared_export(frame):
     return bool(len(balanced) and balanced.mean() >= 0.95)
 
 
+# Come si riconosce un saldo fra le persone di un export condiviso. Servono
+# entrambi i segnali: Splitwise non marca tutto (2023-12-08 "Pareggia tutti i
+# bilanci" ha categoria "Generali") e la descrizione puo' cambiare formula.
+SETTLEMENT_CATEGORY = "pagamento"
+SETTLEMENT_WORDS = re.compile(r"ha pagato|pareggia.*bilanc", re.IGNORECASE)
+
+
+def is_settlement(description, category=""):
+    """Vero se la riga bilancia debiti fra le persone invece di essere spesa.
+
+    NON si guarda l'importo. Un criterio basato sull'importo ("il costo vale
+    una quota intera") colpirebbe 31 spese vere pagate al 100% da uno e
+    attribuite al 100% all'altro: farmacia per Fabio, Netflix Michela,
+    Colliri post operazione. Uno split 100/0 e' normale.
+    """
+    if str(category or "").strip().lower() == SETTLEMENT_CATEGORY:
+        return True
+    return bool(SETTLEMENT_WORDS.search(str(description or "")))
+
+
 def load_transactions(path, account=None):
     """Righe grezze (data, descrizione, importo) da un singolo export."""
     frame = read_table(path)
@@ -823,10 +843,21 @@ def load_transactions(path, account=None):
     if not date_col:
         date_col = frame.columns[0]
 
-    rows = []
+    # In un export condiviso l'importo e' il costo pieno, sempre positivo nel
+    # file ma sempre un'uscita; le colonne persona sono saldi e non servono.
+    shared = is_shared_export(frame)
+    category_col = next((c for c in frame.columns
+                         if normalize(c) == "categorie"), None)
+
+    rows, settled = [], []
     for _, row in frame.iterrows():
         description = anonymize(row.get(desc_col))
         if not description or normalize(description) in ("nan", "bilancio totale"):
+            continue
+        if shared and is_settlement(description,
+                                    row.get(category_col) if category_col else ""):
+            settled.append((description,
+                            parse_amount(row.get(amount_col)) if amount_col else 0.0))
             continue
         if amount_col:
             amount = parse_amount(row.get(amount_col))
@@ -835,6 +866,8 @@ def load_transactions(path, account=None):
             debit = parse_amount(row.get(debit_col)) if debit_col else 0.0
             credit = parse_amount(row.get(credit_col)) if credit_col else 0.0
             amount = credit - abs(debit)
+        if shared:
+            amount = -abs(amount)
         if amount == 0.0:
             continue
         rows.append({
@@ -846,7 +879,18 @@ def load_transactions(path, account=None):
             # identiche dentro lo stesso file.
             "Origine file": path.name,
         })
+
     print(f"  {path.name}: {len(rows)} transazioni")
+    if settled:
+        totale = sum(a for _, a in settled)
+        print(f"    {len(settled)} saldi scartati per {totale:,.2f}: "
+              f"{', '.join(d[:34] for d, _ in settled[:3])}")
+    # Un estratto conto ha entrambi i segni. Se non li ha, o e' una lista di
+    # spese o il parser ha sbagliato colonna: dirlo evita di scoprirlo dai
+    # totali.
+    if rows and not shared and all(r["Importo"] > 0 for r in rows):
+        print(f"    attenzione: {path.name} ha solo importi positivi. "
+              "Controlla che la colonna dell'importo sia quella giusta")
     return rows
 
 
@@ -1052,6 +1096,21 @@ def selftest():
         "Saldo": ["1250,00"],
     })
     assert not is_shared_export(con_saldo), "colonna saldo scambiata per quote"
+
+    # Un saldo fra le due persone bilancia spese gia' tracciate: non e' una
+    # transazione di questo bilancio.
+    assert is_settlement("Fabio S. ha pagato Mikela b.", "Pagamento")
+    assert is_settlement("Pareggia tutti i bilanci", "Generali"), \
+        "Splitwise non marca tutti i saldi: serve anche la descrizione"
+    assert is_settlement("Eurospin", "Pagamento"), "categoria Pagamento ignorata"
+
+    # E soprattutto: una spesa pagata interamente da uno e attribuita
+    # interamente all'altro NON e' un saldo. Sono 31 righe nel file vero, e
+    # un criterio basato sull'importo le avrebbe cancellate in silenzio.
+    for descrizione in ("farmacia per Fabio", "Netflix Michela",
+                        "Colliri post operazione", "Regalo Mauro Fabio e genitori"):
+        assert not is_settlement(descrizione, "Spese mediche"), \
+            f"{descrizione!r} e' una spesa, non un saldo"
 
     print("selftest: ok")
 
