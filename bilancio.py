@@ -748,12 +748,16 @@ def drop_shared_halves(rows, shares, days=1):
     for position, row in enumerate(rows):
         index[(row.get("Data"), round(abs(row.get("Importo", 0)), 2))].append(position)
 
+    offsets = [0]
+    for distance in range(1, days + 1):
+        offsets.extend((-distance, distance))
+
     removed = set()
     for day, share in shares:
         if not day or not share:
             continue
         taken = 0
-        for offset in (0, -1, 1):
+        for offset in offsets:
             try:
                 near = (datetime.strptime(day, "%Y-%m-%d")
                         + timedelta(days=offset)).strftime("%Y-%m-%d")
@@ -1225,6 +1229,17 @@ def selftest():
         "lo stipendio non deve essere scambiato per meta' Splitwise"
     assert sum(1 for r in resto if r["Descrizione"] == "Eurospin") == 1, \
         "vanno tolte al massimo due meta' per riga condivisa, non tutte"
+
+    # Il parametro "days" deve davvero allargare la finestra di ricerca:
+    # una riga a due giorni di distanza resta con days=1, sparisce con days=2.
+    lontano = [
+        {"Data": "2022-02-14", "Descrizione": "Farmacia", "Importo": -20.0},
+    ]
+    quota_lontana = [("2022-02-12", 20.0)]
+    assert len(drop_shared_halves(lontano, quota_lontana, days=1)) == 1, \
+        "days=1 non deve raggiungere una riga a due giorni di distanza"
+    assert len(drop_shared_halves(lontano, quota_lontana, days=2)) == 0, \
+        "days=2 deve raggiungere una riga a due giorni di distanza"
 
     print("selftest: ok")
 
