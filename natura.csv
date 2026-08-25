@@ -1,38 +1,39 @@
 ﻿categoria;sottocategoria;natura
 Casa;Ipoteca/Affitto;Vincolate
-Casa;Assicurazione Casa;Vincolate
-Trasporto;Assicurazione Auto;Vincolate
-Trasporto;Bollo;Vincolate
-Comunità;Tasse;Vincolate
-Casa;Bollette;Ricorrenti
+Casa;Assicurazione;Vincolate
 Casa;Condominio;Ricorrenti
+Casa;Luce e gas;Ricorrenti
+Casa;Acqua;Ricorrenti
+Casa;Telefono e internet;Ricorrenti
+Casa;Arredamento;Discrezionali
+Casa;Fai da te;Discrezionali
+Casa;Giardino;Discrezionali
 Casa;Sicurezza;Ricorrenti
-Personale;Abbonamenti;Ricorrenti
+Casa;Manutenzione;Straordinarie
+Casa;Ristrutturazione;Straordinarie
+Auto;Bollo;Vincolate
+Auto;Assicurazione;Vincolate
+Auto;Manutenzione;Straordinarie
+Trasporto;Carburante;Quotidiane
 Trasporto;Pedaggi;Ricorrenti
+Trasporto;Parcheggio;Quotidiane
+Trasporto;Mezzi pubblici;Quotidiane
 Cibo & Mangiare;Alimentari;Quotidiane
 Cibo & Mangiare;Pranzo Lavoro;Quotidiane
-Trasporto;Benzina/Carburante;Quotidiane
-Trasporto;Trasporti pubblici;Quotidiane
-Trasporto;Parcheggio;Quotidiane
-Assistenza Sanitaria;Farmacia;Quotidiane
 Cibo & Mangiare;Ristoranti;Discrezionali
 Cibo & Mangiare;Cantina e Specialita;Discrezionali
-Casa;Casalinghi;Discrezionali
+Shopping;Amazon;Discrezionali
 Shopping;Vestiti;Discrezionali
 Shopping;Tecnologia;Discrezionali
-Shopping;Online;Discrezionali
-Personale;Intrattenimento;Discrezionali
+Shopping;Regali;Discrezionali
+Personale;Abbonamenti;Ricorrenti
 Personale;Benessere;Discrezionali
-Casa;Mobili;Straordinarie
-Casa;Manutenzione;Straordinarie
-Casa;Materiali;Straordinarie
-Casa;Ristrutturazione;Straordinarie
-Trasporto;Manutenzione;Straordinarie
-Assistenza Sanitaria;Altro;Straordinarie
+Personale;Intrattenimento;Discrezionali
+Assistenza Sanitaria;Farmacia;Quotidiane
 Assistenza Sanitaria;Medico;Straordinarie
+Viaggi;Vacanze;Discrezionali
 Stipendio;;Entrate
 Affitti incassati;;Entrate
-Da identificare;;Da chiarire
 Giroconto;;Non spesa
-Shopping;Regali;Discrezionali
-Viaggi;Vacanze;Discrezionali
+Da identificare;;Da chiarire
+Comunità;Tasse;Vincolate

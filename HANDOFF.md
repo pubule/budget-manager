@@ -5,6 +5,70 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (25/08/2026) — tassonomia rifatta, e le regole passano avanti
+
+### Prima bisognava sbloccare la cascata
+
+L'ordine era `override → giroconto → storico → regola`. Misurato: **lo storico
+decideva 1463 righe su 1780 (82%)**, e 86 righe Amazon su 89. Una regola nuova
+non spostava quasi niente, quindi **cambiare la tassonomia era impossibile** se
+non scrivendo un override per transazione.
+
+Le regole sono passate **sopra** lo storico. Sono l'unica cosa scritta apposta;
+lo storico è quello che MoneyWiz aveva etichettato negli anni, a volte male.
+
+Lo spostamento tocca 237 righe. Le tre migrazioni che sembravano sbagliate sono
+tutte lo storico che aveva torto:
+
+```
+5274 UCAGRIC BAR VERONA    era Casa > Mobili       (e' un bar, 29 righe)
+EasyPark Italia S.r.l      era Ristoranti          (e' un parcheggio)
+Bolletta gas               era Casa > Ipoteca/Affitto  (29 righe, -6.754 EUR)
+```
+
+**Il prezzo**: una regola larga ora può coprire centinaia di righe già
+etichettate bene. L'anteprima delle regole dice "cambierebbero N" apposta.
+
+`--selfcheck` resta a 58%. Misura quanto il motore riproduce lo storico, quindi
+un calo era atteso; è risalito perché la tassonomia nuova è più coerente.
+
+### La tassonomia
+
+Da 30 a 33 voci, ma le voci sotto le 5 righe scendono da 8 a 6, e nessuna è più
+un cassetto dei rifiuti.
+
+- **Casa si divide per chi fa il lavoro**: `Arredamento` (Mobili + Casalinghi),
+  `Fai da te` (era Materiali), `Manutenzione` (chiami qualcuno). `Giardino` è
+  nuova: erano 25 righe per 3.894 € sparse su cinque voci.
+- **Le utenze si dividono per tipo**: `Luce e gas`, `Acqua`,
+  `Telefono e internet`. Sono tre contratti con tre leve diverse; `Bollette`
+  sparisce.
+- **`Auto` è una categoria nuova** (bollo, assicurazione, manutenzione),
+  separata da `Trasporto` (carburante, pedaggi, parcheggi, mezzi pubblici):
+  possedere l'auto e muoversi sono due decisioni diverse.
+- **`Shopping > Amazon`** è una resa dichiarata: 90 righe, la banca scrive solo
+  `AMZN Mktp IT`. Prima erano spalmate su quattro voci come ipotesi.
+- **`Assistenza Sanitaria > Altro` sparisce**: era per l'80% farmacie.
+- **`Shopping > Online` sparisce**: era un canale, non una categoria.
+
+### Due trappole
+
+**Riscrivere `regole.csv` da capo perde le regole che l'utente aveva
+aggiunto.** Ne ho perse quattro (allarme, tributi, imposta di bollo, bonifici
+senza causale) e le ho ritrovate solo confrontando i FRAMMENTI dei pattern
+vecchi con quelli nuovi, non i pattern interi — li avevo riorganizzati, quindi
+un confronto riga per riga non diceva niente. Il confronto per frammenti è la
+verifica da rifare ogni volta che si tocca quel file.
+
+**`imposta di bollo` non è il bollo dell'auto.** Il rinomino
+`Trasporto > Bollo → Auto > Bollo` si è portato dietro l'imposta di bollo del
+conto corrente, che è una tassa dello Stato. E `pagopa` nella regola delle
+tasse rubava il bollo auto vero, perché PagoPA è il canale di pagamento di
+tutta la pubblica amministrazione. Un canale non è mai una categoria — stesso
+errore di `Shopping > Online`.
+
+---
+
 ## IN CORSO (25/08/2026) — la pagina usa tutta la larghezza
 
 `.wrap` era fermo a `max-width:1060px`. Su uno schermo largo restavano

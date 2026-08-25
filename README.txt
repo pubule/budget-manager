@@ -70,15 +70,40 @@ CATEGORIE A DUE LIVELLI
 -----------------------
 
 Ogni voce di spesa ha una CATEGORIA e una SOTTOCATEGORIA: l'area larga e il
-dettaglio. "Casa" e' l'area, "Casalinghi" il dettaglio.
+dettaglio. "Casa" e' l'area, "Arredamento" il dettaglio.
 
-    Categoria             Sottocategoria
-    Casa                  Bollette, Casalinghi, Condominio, Ipoteca/Affitto,
-                          Manutenzione, Materiali, Mobili, Ristrutturazione,
-                          Assicurazione Casa
+    Casa                  Ipoteca/Affitto, Condominio, Luce e gas, Acqua,
+                          Telefono e internet, Assicurazione, Sicurezza,
+                          Arredamento, Fai da te, Giardino, Manutenzione,
+                          Ristrutturazione
     Cibo & Mangiare       Alimentari, Ristoranti, Pranzo Lavoro,
                           Cantina e Specialita
-    Trasporto             Benzina/Carburante, Pedaggi, Parcheggio, Bollo, ...
+    Auto                  Bollo, Assicurazione, Manutenzione
+    Trasporto             Carburante, Pedaggi, Parcheggio, Mezzi pubblici
+    Shopping              Vestiti, Tecnologia, Regali, Amazon
+    Personale             Abbonamenti, Benessere, Intrattenimento
+    Assistenza Sanitaria  Farmacia, Medico
+    Viaggi                Vacanze
+    Comunita'             Tasse
+
+DENTRO CASA le voci si dividono per CHI FA IL LAVORO: "Arredamento" e' cio'
+che compri e metti dentro, "Fai da te" il materiale che monti tu, e
+"Manutenzione" e' quando chiami qualcuno. "Giardino" e "Sicurezza" sono voci
+loro perche' hanno un ritmo di spesa tutto suo.
+
+LE UTENZE sono divise per tipo (luce e gas, acqua, telefono e internet)
+perche' sono tre contratti che si cambiano in tre modi diversi: tenerle
+insieme direbbe solo "diciottomila euro di bollette" senza dire su quale
+conviene agire.
+
+"AUTO" tiene i costi del possederla (bollo, assicurazione, officina),
+"Trasporto" quelli del muoversi (carburante, pedaggi, parcheggi, mezzi
+pubblici). Sono due decisioni diverse: la prima si affronta cambiando auto,
+la seconda cambiando abitudini.
+
+"SHOPPING > AMAZON" e' una resa dichiarata: la banca scrive solo "AMZN Mktp
+IT" e cosa sia stato comprato non e' scritto da nessuna parte. Tenerlo a
+parte evita di sporcare le altre voci con novanta ipotesi.
 
 Nei file di configurazione sono DUE COLONNE:
 
@@ -229,14 +254,24 @@ Sette livelli in cascata. Il primo che risponde vince.
 
   1. override        la riga e' elencata a mano in override.csv
   2. giroconto       una regola con categoria "Giroconto" riconosce uno
-                     spostamento fra conti propri: non e' una spesa, e va
-                     riconosciuto PRIMA dello storico perche' capita di aver
-                     etichettato a mano un giroconto come spesa vera
-  3. storico-esatto  la descrizione esiste identica nello storico MoneyWiz
-  4. storico-simile  somiglia a una gia' categorizzata (86% corretto)
-  5. regola          combacia con una riga di regole.csv
+                     spostamento fra conti propri: non e' una spesa
+  3. regola          combacia con una riga di regole.csv
+  4. storico-esatto  la descrizione esiste identica nello storico MoneyWiz
+  5. storico-simile  somiglia a una gia' categorizzata
   6. voto-token      le singole parole votano la categoria (65% corretto)
-  7. llm             qwen3:8b via Ollama, solo per cio' che resta
+  7. cache           il modello aveva gia' risposto su questa descrizione
+  8. llm             qwen3:8b via Ollama, solo per cio' che resta
+
+LE REGOLE STANNO SOPRA LO STORICO, ed e' una scelta. Lo storico e' quello che
+MoneyWiz aveva etichettato negli anni, a volte male: ventinove bollette del
+gas erano archiviate come rata del mutuo, e un bar come "Casa > Mobili".
+Con l'ordine inverso lo storico decideva l'82% delle righe e una regola
+scritta apposta non spostava niente, quindi cambiare la tassonomia era
+impossibile se non a colpi di override.
+
+Il prezzo: una regola larga adesso puo' coprire centinaia di righe gia'
+etichettate bene. Se scrivi una regola generica, guarda "cambierebbero N"
+nell'anteprima prima di salvarla.
 
 Il passo LLM costa circa 3 secondi a descrizione (14 il primo, a modello
 freddo). Per questo e' SEPARATO dal caricamento e non parte mai da solo: lo

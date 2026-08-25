@@ -4,50 +4,63 @@
 (?i)a favore di (hype|fideuram|fabio stocco|michela bogoni);Giroconto;
 (?i)(stocco fabio|fabio stocco|bogoni|michela|mikela) +da +\w;Giroconto;
 (?i)giroconto|travaso|trasferimento fondi;Giroconto;
-(?i)condomin[io]|rata condominio;Casa;Condominio
-(?i)borgo mangano|camminamento|mangano per:? *rata;Casa;Ristrutturazione
-(?i)\ballarme\b|vigilanza|antifurto|verisure|sicuritalia;Casa;Sicurezza
-(?i)telepass|pedaggio|autostrad;Trasporto;Pedaggi
+(?i)^transazione senza nome$;Giroconto;
+# Marketplace: la banca scrive solo AMZN Mktp IT, cosa sia non si sa.;;
+(?i)amazon|amzn;Shopping;Amazon
+# Utenze divise per tipo: sono tre contratti con tre leve diverse.;;
+(?i)bolletta acqua|acque veronesi|acquedotto|abbanoa;Casa;Acqua
+(?i)agsm|enel|servizio elettrico|\ba2a\b|\bhera\b|\biren\b|\bacea\b|eni ?gas|edison|sorgenia|illumia|bolletta luce|\bluce\b|\bgas\b|riscaldamento;Casa;Luce e gas
+(?i)\btim\b|telecom italia|vodafone|windtre|wind tre|iliad|fastweb|ho\.?mobile|very mobile|poste ?mobile;Casa;Telefono e internet
 (?i)marca da bollo|imposta di bollo|bollettino.*passaporto|passaporto elettronico;Comunità;Tasse
 (?i)f24|agenzia entrate|\bimu\b|irpef|tributi|contributi inps;Comunità;Tasse
-(?i)bollo auto|tassa automobilistica;Trasporto;Bollo
-(?i)esselunga|coop\b|conad|carrefour|lidl|eurospin|penny ?market|md discount|\bpam\b|bennet|\biper\b|rossetto|tigota|despar|crai\b|famila|in's mercato;Cibo & Mangiare;Alimentari
-(?i)macelleria|panificio|panetteria|pescheria|ortofrutta|salumeria|\bforno\b|molon;Cibo & Mangiare;Alimentari
-(?i)azienda agricola|enoteca|cantina|\bvini\b|caffe|visanto|dischiponte;Cibo & Mangiare;Cantina e Specialita
-(?i)ristorante|trattoria|osteria|pizzeria|hosteria|braceria|sushi|mcdonald|burger king|\bkfc\b|old wild west|roadhouse|burghy|beghini;Cibo & Mangiare;Ristoranti
-(?i)\bbar\b|caffetteria|pasticceria|gelateria|aperitivo|birreria|\bpub\b;Cibo & Mangiare;Ristoranti
-(?i)bomagrill|grotta azzurra|bottega della birra|makako|panzare|anteiko|the public|torcoli|ti amo cioccolato|vinsanto|bastianello;Cibo & Mangiare;Ristoranti
-(?i)\bmensa\b|ticket restaurant|buoni pasto|edenred|pellegrini card|day ristoservice;Cibo & Mangiare;Pranzo Lavoro
-(?i)enel|servizio elettrico|\ba2a\b|\bhera\b|\biren\b|\bacea\b|eni ?gas|edison|sorgenia|illumia|acquedotto|abbanoa;Casa;Bollette
-(?i)\btim\b|telecom italia|vodafone|windtre|wind tre|iliad|fastweb|ho\.?mobile|very mobile|poste ?mobile;Casa;Bollette
-(?i)\btari\b|tarsu|rifiuti|nettezza urbana|canone rai;Casa;Bollette
-(?i)happy casa|tuttostock|\bflover\b|casalinghi|kasanova;Casa;Casalinghi
-(?i)\bikea\b|mondo convenienza|maisons? du monde|arredissima|semeraro;Casa;Mobili
-(?i)leroy merlin|\bbrico|\bobi\b|bricoman|ferramenta|tecnomat|stock ?& ?store|stockstore|idea ferro|dalla piazza;Casa;Materiali
-(?i)idraulic|elettricist|imbianchin|fabbro|caldaia|manutenzione impianto;Casa;Manutenzione
-(?i)floricoltura|quaiato|vivaio|garden center|terriccio;Casa;Manutenzione
+(?i)\btari\b|tarsu|rifiuti|nettezza urbana|canone rai|f24|agenzia entrate;Comunità;Tasse
+# Il condominio prima della manutenzione: gli interventi sulle parti;;
+# comuni arrivano come spese condominiali, non come lavori tuoi.;;
+(?i)condomin|borgo mangano|camminamento;Casa;Condominio
+# Giardino e piscina prima del fai da te: uno svettatoio comprato da OBI;;
+# e' giardino, non ferramenta.;;
+(?i)floricoltura|quaiato|vivaio|garden ?center|terriccio|\bpiante\b|\bsiepe\b|fioriere?|\bflover\b|area verde|piscin|\bcloro\b|svettatoio|\bprato\b;Casa;Giardino
+"# Casa: chi fa il lavoro. Arredamento = cose che compri e metti dentro;";;
+"# fai da te = materiale che monti tu; manutenzione = chiami qualcuno.";;
+(?i)\bikea\b|mondo convenienza|maisons? du monde|arredissima|semeraro|happy casa|tutto ?stock|kasanova|casalinghi|maison mond;Casa;Arredamento
+(?i)leroy ?merlin|\bbrico|\bobi\b|bricoman|ferramenta|tecnomat|stock ?& ?store|stockstore|idea ferro|dalla piazza|impregnante;Casa;Fai da te
+(?i)idraulic|elettricist|imbianchin|fabbro|caldaia|manutenzione impianto|disotturazione|spurgo;Casa;Manutenzione
+(?i)\ballarme\b|vigilanza|antifurto|verisure|sicuritalia;Casa;Sicurezza
 (?i)\bmutuo\b|rata mutuo|canone locazione|locazione;Casa;Ipoteca/Affitto
-(?i)assicurazione casa|polizza (casa|abitazione);Casa;Assicurazione Casa
-(?i)midjourney|moonshot ai|\bollama\b|openai|anthropic|claude\.ai|perplexity|\breplicate\b;Personale;Abbonamenti
-(?i)netflix|spotify|disney ?\+|\bdazn\b|amazon prime|prime video|now ?tv|apple\.?com/bill|apple bill|itunes|icloud|google ?(one|storage)|youtube ?premium|dropbox|microsoft ?365|adobe;Personale;Abbonamenti
-(?i)palestra|fitness|virgin active|mcfit|anytime fitness|piscina|centro sportivo;Personale;Benessere
-(?i)emporio della cosmesi|profumeria|sephora|douglas;Personale;Benessere
-(?i)cinema|the space|uci cinemas|teatro|concerto|ticketone|vivaticket|steam ?games|playstation|nintendo|xbox;Personale;Intrattenimento
-(?i)farmacia|parafarmacia|lloyds ?farmacia|apoteca;Assistenza Sanitaria;Farmacia
-(?i)poliambulator|laboratorio analisi|radiolog|fisioterap|dentist|odontoiatr|ottica|occhiali;Assistenza Sanitaria;Altro
-(?i)\bq8\b|\beni\d*\b|\bip\b ?stazione|tamoil|\besso\b|\bshell\b|\bagip\b|api ?station|distributore|carburant|benzina|rifornimento|noaloil|\bpetroli\b|\bpetrolio\b;Trasporto;Benzina/Carburante
+(?i)assicurazione casa|polizza (casa|abitazione);Casa;Assicurazione
+# Auto: i costi del possederla, separati dal muoversi.;;
+(?i)bollo auto|tassa automobilistica;Auto;Bollo
+(?i)assicurazione auto|polizza auto|rc ?auto|genertel|\blinear\b|prima\.it|quixa;Auto;Assicurazione
+(?i)tagliando|officina|gommista|carrozzeria|revisione auto|norauto|midas;Auto;Manutenzione
+# Muoversi.;;
+(?i)\bq8\b|\beni\d*\b|\bip\b ?stazione|tamoil|\besso\b|\bshell\b|\bagip\b|api ?station|distributore|carburant|benzina|rifornimento|noaloil|\bpetroli\b|\bpetrolio\b;Trasporto;Carburante
+(?i)telepass|pedaggi|autostrad;Trasporto;Pedaggi
 (?i)parcheggio|parking|park ?spa|\bsosta\b|easypark;Trasporto;Parcheggio
-(?i)trenitalia|\bitalo\b|atm milano|\batac\b|\bgtt\b|amtab|autobus|metropolitana|abbonamento trasporto;Trasporto;Trasporti pubblici
-(?i)tagliando|officina|gommista|carrozzeria|revisione auto|norauto|midas;Trasporto;Manutenzione
-(?i)assicurazione auto|polizza auto|rc ?auto|genertel|\blinear\b|prima\.it|quixa;Trasporto;Assicurazione Auto
-(?i)shein|yamamay|outlet noventa|primadonna|pittarosso;Shopping;Vestiti
-(?i)zara\b|h&m|hm\.com|decathlon|\bovs\b|kiabi|primark|calzedonia|intimissimi|scarpe|abbigliamento|\bnike\b|adidas;Shopping;Vestiti
-(?i)mediaworld|unieuro|euronics|trony|apple store|monclick|\bcomet\b|samsung|dyson;Shopping;Tecnologia
-(?i)feltrinelli|mondadori|libreria|fiorista|gift ?card;Shopping;Regali
-(?i)amazon|amzn|\bebay\b|aliexpress|zalando;Shopping;Online
-(?i)paypal.*visa direct;Shopping;Regali
-(?i)\bhotel\b|\balbergo\b|booking\.com|airbnb|\bresort\b|ostello|pernottamento|immigration visa;Viaggi;Vacanze
-(?i)^transazione senza nome$;Giroconto;
+(?i)trenitalia|\bitalo\b|atm milano|\batac\b|\bgtt\b|amtab|autobus|metropolitana|abbonamento trasporto|\btreno\b;Trasporto;Mezzi pubblici
+# Mangiare.;;
+(?i)esselunga|coop\b|conad|carrefour|lidl|eurospin|penny ?market|md discount|\bpam\b|bennet|\biper\b|rossetto|tigota|despar|crai\b|famila|in's mercato|galassia|ipermercato|spaccio;Cibo & Mangiare;Alimentari
+(?i)macelleria|panificio|panetteria|pescheria|ortofrutta|salumeria|\bforno\b|molon|vivafruit|carni equine;Cibo & Mangiare;Alimentari
+(?i)azienda agricola|enoteca|cantina|\bvini\b|\bvino\b|vivino|dischiponte;Cibo & Mangiare;Cantina e Specialita
+(?i)\bmensa\b|ticket restaurant|buoni pasto|edenred|pellegrini card|day ristoservice|ucagric men;Cibo & Mangiare;Pranzo Lavoro
+(?i)ristorante|trattoria|osteria|pizzeria|hosteria|braceria|sushi|mcdonald|burger king|\bkfc\b|old wild west|roadhouse|burghy|beghini|bomagrill|grotta azzurra|bottega della birra|makako|panzare|anteiko|the public|torcoli|ti amo cioccolato|vinsanto|visanto|bastianello|deliveroo|glovo|justeat;Cibo & Mangiare;Ristoranti
+(?i)\bbar\b|caffetteria|pasticceria|gelateria|aperitivo|birreria|\bpub\b|\bcafe\b|caff\we;Cibo & Mangiare;Ristoranti
+# Persona.;;
+(?i)midjourney|moonshot ai|\bollama\b|openai|anthropic|claude\.ai|perplexity|\breplicate\b|cursor\.(com|sh);Personale;Abbonamenti
+(?i)netflix|spotify|disney ?\+|\bdazn\b|amazon prime|prime video|now ?tv|apple\.?com/bill|apple bill|itunes|icloud|google ?(one|storage)|youtube ?premium|dropbox|microsoft ?365|adobe;Personale;Abbonamenti
+(?i)palestra|fitness|virgin active|mcfit|anytime fitness|centro sportivo|emporio della cosmesi|profumeria|sephora|douglas|parrucchier|estetist;Personale;Benessere
+(?i)cinema|the space|uci cinemas|teatro|concerto|ticketone|vivaticket|steam ?games|playstation|nintendo|xbox|blizzard|instant gaming|gardaland|mostra |museo;Personale;Intrattenimento
+# Salute: le farmacie prima dei medici, sono la voce piu' frequente.;;
+(?i)farmacia|parafarmacia|lloyds ?farmacia|apoteca;Assistenza Sanitaria;Farmacia
+(?i)poliambulator|laboratorio analisi|radiolog|fisioterap|dentist|odontoiatr|ottica|occhiali|nutrizionist|dermatolog|ospedale|\basl\b|\bdott{0,3}\.;Assistenza Sanitaria;Medico
+# Viaggi.;;
+(?i)\bhotel\b|\balbergo\b|booking\.com|airbnb|\bresort\b|ostello|pernottamento|immigration visa|agriturismo;Viaggi;Vacanze
+# Acquisti.;;
+(?i)zara\b|h&m|hm\.com|decathlon|\bovs\b|kiabi|primark|calzedonia|intimissimi|scarpe|abbigliamento|\bnike\b|adidas|shein|yamamay|outlet noventa|primadonna|pittarosso;Shopping;Vestiti
+(?i)mediaworld|unieuro|euronics|trony|apple store|monclick|\bcomet\b|samsung|dyson|\biphone\b;Shopping;Tecnologia
+(?i)feltrinelli|mondadori|libreria|fiorista|gift ?card|paypal.*visa direct|tosi gioielli|regalo;Shopping;Regali
+(?i)\bebay\b|aliexpress|zalando|temu;Shopping;Amazon
+# Entrate.;;
 (?i)stipendio|salario|retribuzione|emolumenti|cedolino;Stipendio;
 (?i)affitto attivo|canone attivo|affitti incassati|bonifico inquilino;Affitti incassati;
+# Ultima spiaggia: un bonifico senza causale non si indovina, si segnala.;;
 (?i)bonifico istantaneo del|disposizione di bonifico(?!.*(?:mangano|hype|inquilino));Da identificare;

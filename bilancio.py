@@ -646,6 +646,16 @@ class Categorizer:
                 self.stats["giroconto"] += 1
                 return category, "giroconto", 1.0
 
+        # Le regole PRIMA dello storico. Sono l'unica cosa scritta apposta:
+        # lo storico e' quello che MoneyWiz aveva etichettato negli anni, a
+        # volte male. Con l'ordine inverso una regola nuova non spostava
+        # niente - lo storico decide l'82% delle righe - e cambiare la
+        # tassonomia diventava impossibile se non a colpi di override.
+        for pattern, category in self.rules:
+            if pattern.search(description):
+                self.stats["regola"] += 1
+                return category, "regola", 1.0
+
         if key in self.history:
             self.stats["storico-esatto"] += 1
             return self.history[key], "storico-esatto", 1.0
@@ -654,11 +664,6 @@ class Categorizer:
         if match and score >= JACCARD_MIN:
             self.stats["storico-simile"] += 1
             return self.history[match], "storico-simile", score
-
-        for pattern, category in self.rules:
-            if pattern.search(description):
-                self.stats["regola"] += 1
-                return category, "regola", 1.0
 
         category, margin = self._token_vote(key)
         if category and margin >= MARGIN_MIN:
