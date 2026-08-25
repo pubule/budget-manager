@@ -27,6 +27,16 @@ accanto, in export/anonimi/, compare la copia ripulita. Un file da cui non si
 legge nessuna transazione NON viene archiviato: resta in export/ con l'errore
 nel log.
 
+PREAMBOLI. Diverse banche mettono numero di conto, periodo e filtri PRIMA
+della tabella vera. La pipeline cerca da sola dove comincia l'intestazione,
+entro le prime trenta righe, e lo dice nel log:
+
+    lista_global_20260825.xlsx: intestazione alla riga 19, sopra c'e' un
+    preambolo
+
+Senza questo il file sembra vuoto: le colonne escono tutte "Unnamed" e non si
+legge nessuna transazione, senza che niente lo segnali come errore.
+
 RISCARICHI. Se depositi un file con lo STESSO NOME di uno gia' archiviato, e'
 un riscarico dello stesso conto e dello stesso periodo: vince il piu' recente.
 Il vecchio non si cancella, va in export/sostituiti/ e il log dice quale ha

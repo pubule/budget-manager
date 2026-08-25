@@ -41,3 +41,7 @@
 (?i)paypal.*nordsec|nordvpn;NordVPN
 (?i)gioielleria;Gioielleria
 (?i)dott. rita alberti;Dott.ssa Alberti
+(?i)fastweb;Fastweb
+(?i)rapporti interni;Mutuo Fideuram
+(?i)eni ?[0-9]{3,};Eni
+(?i)blizzard;Blizzard

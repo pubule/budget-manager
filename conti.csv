@@ -2,5 +2,5 @@
 (?i)intesa|isybank;Intesa Sanpaolo
 (?i)fineco;Fineco
 (?i)hype|lista movimenti;Hype
-(?i)fideuram;Fideuram
+(?i)fideuram|lista_?global;Fideuram
 (?i)splitwise;Splitwise

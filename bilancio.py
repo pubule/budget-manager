@@ -960,10 +960,49 @@ def migrate_history(folder, db_path):
 # lettura degli export
 # --------------------------------------------------------------------------
 
+def usable(frame):
+    """Le COLONNE bastano a tirare fuori data, descrizione e importo?
+
+    Guarda solo le intestazioni, non le righe: serve anche per fiutare una
+    riga candidata a fare da intestazione, che di righe sotto non ne ha.
+    """
+    if frame is None:
+        return False
+    date_col, desc_col, amount_col, debit, credit = find_columns(frame)
+    return bool(date_col and desc_col and (amount_col or (debit and credit)))
+
+
+def header_row(raw, limit=30):
+    """In quale riga sta l'intestazione vera.
+
+    Diverse banche premettono un preambolo con numero di conto, periodo e
+    filtri, e solo dopo la tabella. Leggendo con l'intestazione alla riga zero
+    escono colonne senza nome e il file sembra vuoto: succedeva con un export
+    dove la tabella cominciava alla riga 18.
+    """
+    for i in range(min(limit, len(raw))):
+        nomi = [str(x) for x in raw.iloc[i].tolist()]
+        try:
+            if usable(pd.DataFrame(columns=nomi)):
+                return i
+        except ValueError:          # nomi ripetuti nella riga: non e' quella
+            continue
+    return None
+
+
 def read_table(path):
     """Legge un export bancario provando le combinazioni piu' comuni."""
     if path.suffix.lower() in (".xlsx", ".xls"):
-        return pd.read_excel(path)
+        frame = pd.read_excel(path)
+        if usable(frame):
+            return frame
+        raw = pd.read_excel(path, header=None)
+        riga = header_row(raw)
+        if riga is not None:
+            print(f"  {path.name}: intestazione alla riga {riga + 1}, "
+                  f"sopra c'e' un preambolo")
+            return pd.read_excel(path, skiprows=riga)
+        return frame
     attempts = [
         {"sep": ";", "encoding": "utf-8-sig"},
         {"sep": ",", "encoding": "utf-8-sig"},
@@ -979,7 +1018,20 @@ def read_table(path):
             except Exception:
                 continue
             if len(frame.columns) >= 3 and len(frame) > 0:
-                return frame
+                if usable(frame) or skiprows:
+                    return frame
+                # Colonne trovate ma inservibili: puo' esserci un preambolo
+                # piu' lungo di una riga.
+                try:
+                    raw = pd.read_csv(path, header=None, dtype=str, **options)
+                except Exception:
+                    return frame
+                riga = header_row(raw)
+                if riga is None:
+                    return frame
+                print(f"  {path.name}: intestazione alla riga {riga + 1}, "
+                      f"sopra c'e' un preambolo")
+                return pd.read_csv(path, skiprows=riga, dtype=str, **options)
     try:
         return pd.read_csv(path, sep=None, engine="python",
                            encoding="utf-8-sig", dtype=str)
@@ -1741,6 +1793,36 @@ def selftest():
     # isdigit() per via delle barre, quindi passava il filtro del ripiego e
     # nascevano merchant come "29/09/25 Unicredit".
     assert canonical_merchant("Obi del 4/11/24", ()) == "Obi",         canonical_merchant("Obi del 4/11/24", ())
+    # Un export con il preambolo davanti alla tabella. Diverse banche mettono
+    # numero di conto, periodo e filtri prima dell'intestazione vera: leggendo
+    # la riga zero escono colonne senza nome e il file sembra vuoto.
+    with tempfile.TemporaryDirectory() as temporary:
+        percorso = Path(temporary) / "conto.csv"
+        percorso.write_text(
+            "Lista movimenti;;;\n"
+            "Conto corrente:;0064/00380700;;\n"
+            "Periodo:;01/01/2026;25/08/2026;\n"
+            ";;;\n"
+            "Data;Operazione;Valuta;Importo\n"
+            "04/08/2026;BONIFICO DA INQUILINO;EUR;750,00\n"
+            "03/08/2026;ADDEBITO DIRETTO;EUR;-357,24\n", encoding="utf-8")
+        tabella = read_table(percorso)
+        assert usable(tabella), list(tabella.columns)
+        assert len(tabella) == 2, len(tabella)
+        righe = load_transactions(percorso, "Prova")
+        assert len(righe) == 2, righe
+        assert righe[0]["Importo"] == 750.0, righe[0]
+        # E un file normale, senza preambolo, non deve peggiorare.
+        dritto = Path(temporary) / "dritto.csv"
+        dritto.write_text("Data;Descrizione;Importo\n"
+                          "01/02/2026;ESSELUNGA;-12,50\n", encoding="utf-8")
+        assert len(load_transactions(dritto, "Prova")) == 1
+
+    # usable() guarda le colonne, non le righe: una tabella di sole
+    # intestazioni deve poter essere giudicata, e serve a fiutare il preambolo.
+    assert usable(pd.DataFrame(columns=["Data", "Operazione", "Importo"]))
+    assert not usable(pd.DataFrame(columns=["Unnamed: 0", "Unnamed: 1"]))
+
     # Vuoto e' una risposta legittima: in "Spesa 4/11/24" un nome di negozio
     # non c'e'. Quello che non deve mai succedere e' che ci finiscano cifre.
     for grezza in ("PAGAMENTO del 01/05/2025 SUPERMERCATO",
