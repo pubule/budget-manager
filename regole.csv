@@ -7,8 +7,17 @@
 (?i)(stocco fabio|fabio stocco|bogoni|michela|mikela) +da +\w;Giroconto;
 (?i)giroconto|travaso|trasferimento fondi;Giroconto;
 (?i)^transazione senza nome$;Giroconto;
+(?i)^yyw[0-9]+/paypal;Giroconto;
 # Marketplace: la banca scrive solo AMZN Mktp IT, cosa sia non si sa.;;
 (?i)amazon|amzn;Shopping;Amazon
+(?i)^amo$;Cibo & Mangiare;Ristoranti
+(?i)^civico 2;Cibo & Mangiare;Ristoranti
+(?i)alcide poggibonsi;Cibo & Mangiare;Ristoranti
+(?i)corte scaligera;Cibo & Mangiare;Ristoranti
+(?i)bella vista peschiera;Cibo & Mangiare;Ristoranti
+(?i)vive srl;Cibo & Mangiare;Ristoranti
+(?i)berfis;Personale;Intrattenimento
+(?i)geometra|savoia valentino;Casa;Manutenzione
 (?i)sac verona;Trasporto;Carburante
 (?i)aon advisory;Assistenza Sanitaria;Medico
 (?i)blood store;Shopping;Vestiti
