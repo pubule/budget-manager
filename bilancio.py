@@ -493,9 +493,14 @@ def canonical_merchant(description, merchants):
             return name
     # Ripiego: le prime due parole significative. Non unifica le grafie, ma
     # rende visibile un negozio nuovo che vale la pena aggiungere al file.
+    #
+    # Le date vanno scartate insieme ai numeri: "29/09/25" non e' isdigit()
+    # per via delle barre, quindi passava il filtro e diventava il nome del
+    # negozio. Ne sono nati merchant come "29/09/25 Unicredit".
     significant = [
         word for word in normalize(description).split()
-        if len(word) > 2 and word not in STOPWORDS and not word.isdigit()
+        if len(word) > 2 and word not in STOPWORDS
+        and not re.fullmatch(r"[\d/.\-]+", word)
     ]
     return " ".join(significant[:2]).title() if significant else ""
 
@@ -1731,6 +1736,18 @@ def selftest():
     # E i due che al primo estratto conto vero erano stati fusi per sbaglio.
     assert not same_expense("5274 UCAGRIC BAR VERONA", "rossetto del 11/04"),         "un bar non e' il supermercato Rossetto"
     assert not same_expense("VINSANTO CAFE' VERONA VR", "Pannello per tettoia"),         "un pannello per la tettoia non e' un caffe'"
+
+    # Il nome del negozio non puo' essere una data. "29/09/25" non e'
+    # isdigit() per via delle barre, quindi passava il filtro del ripiego e
+    # nascevano merchant come "29/09/25 Unicredit".
+    assert canonical_merchant("Obi del 4/11/24", ()) == "Obi",         canonical_merchant("Obi del 4/11/24", ())
+    # Vuoto e' una risposta legittima: in "Spesa 4/11/24" un nome di negozio
+    # non c'e'. Quello che non deve mai succedere e' che ci finiscano cifre.
+    for grezza in ("PAGAMENTO del 01/05/2025 SUPERMERCATO",
+                   "PRELIEVO MASTERCARD DEL 28/09/25 UNICREDIT ATM",
+                   "Spesa 4/11/24", "12.03.2025 Farmacia Vitalba"):
+        nome = canonical_merchant(grezza, ())
+        assert not re.search(r"\d", nome), f"{grezza!r} -> {nome!r}"
 
     # I due livelli della categoria. Il giro completo deve tornare al punto di
     # partenza, altrimenti una categoria cambia nome passando dai file al

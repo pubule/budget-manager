@@ -1,4 +1,4 @@
-pattern;merchant
+﻿pattern;merchant
 (?i)rossetto;Iper Rossetto
 (?i)amzn|amazon;Amazon
 (?i)telepass;Telepass
@@ -32,3 +32,12 @@ pattern;merchant
 (?i)domiciliazioni e utenze;Utenze domiciliate
 (?i)\bbogoni\b;Michela Bogoni
 (?i)\bgas\b|riscaldamento;Gas
+(?i)dalla bernardina|stazione dalla;Dalla Bernardina
+(?i)prelievo;Prelievo contante
+(?i)paypal.*decathlon;Decathlon
+(?i)paypal.*steam|steam ?games;Steam
+(?i)paypal.*cloudflare;Cloudflare
+(?i)paypal.*myfonts;MyFonts
+(?i)paypal.*nordsec|nordvpn;NordVPN
+(?i)gioielleria;Gioielleria
+(?i)dott. rita alberti;Dott.ssa Alberti
