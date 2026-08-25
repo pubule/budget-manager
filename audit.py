@@ -12,6 +12,7 @@ motore riscrive da capo a ogni giro, e i file di configurazione.
 """
 import csv
 import math
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import date
@@ -269,6 +270,29 @@ def controlla_giroconti(righe, r):
                 f"le manda prima che fosse caricato"])
 
 
+def controlla_entrate_rovesciate(righe, r):
+    """Righe che si DICHIARANO entrate ma hanno il segno di un'uscita.
+
+    Un estratto conto scrive "bonifico a vostro favore DA:" quando i soldi
+    arrivano. Se quella riga e' negativa, o il segno e' sbagliato o la
+    descrizione mente, e in tutti e due i casi il totale della sua categoria
+    e' falso del doppio dell'importo.
+
+    Trovato sui dati veri: otto bonifici in entrata da un familiare, fra
+    dicembre 2023 e giugno 2024, registrati come uscite dallo storico MoneyWiz.
+    Le stesse identiche righe prima e dopo quel periodo erano positive.
+    """
+    dice_entrata = re.compile(r"(?i)a vostro favore|accredito|vs favore")
+    sospette = [x for x in righe
+                if dice_entrata.search(x.get("Descrizione") or "")
+                and importo(x) < 0]
+    r.aggiungi("errore", "entrate col segno di un'uscita", len(sospette),
+               [f"{x.get('Data')} {importo(x):+,.0f} "
+                f"{(x.get('Descrizione') or '')[:44]}" for x in sospette],
+               "la descrizione dice che i soldi sono entrati: il totale della "
+               "categoria sbaglia del doppio")
+
+
 def controlla_merchant(righe, r):
     """Lo stesso negozio scritto in due modi si spezza in due voci."""
     forme = defaultdict(set)
@@ -307,7 +331,8 @@ def main():
     r = Referto()
     for controllo in (controlla_forma, controlla_doppioni, controlla_buchi,
                       controlla_tassonomia, controlla_segni,
-                      controlla_giroconti, controlla_merchant,
+                      controlla_giroconti,
+                      controlla_entrate_rovesciate, controlla_merchant,
                       controlla_estremi):
         controllo(righe, r)
     errori = r.stampa()
