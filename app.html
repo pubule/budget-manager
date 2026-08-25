@@ -45,8 +45,9 @@ padding:6px 10px}
 button{cursor:pointer}
 button:hover{border-color:var(--dim)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button.link{border:none;background:none;color:var(--dim);padding:2px 5px}
-button.link:hover{color:var(--ink)}
+button.link{border:1px solid transparent;background:var(--soft);
+color:var(--dim);padding:3px 9px;border-radius:6px;font-size:12px}
+button.link:hover{color:var(--ink);border-color:var(--line)}
 nav{display:flex;gap:4px;align-items:flex-end;
 border-bottom:1px solid var(--line);margin:0 0 16px}
 #tablist{display:flex;gap:4px}
@@ -98,6 +99,24 @@ font-family:ui-sans-serif,system-ui,sans-serif}
 .kpi span{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
 color:var(--dim);font-family:ui-sans-serif,system-ui,sans-serif}
 .kpi.good b{color:var(--accent)}.kpi.bad b{color:var(--warn)}
+/* Il confronto col periodo prima: senza un metro un numero non e' ne'
+   buono ne' cattivo, e non ci si decide niente. */
+.delta{display:block;margin-top:5px;font-style:normal;font-size:11px;
+font-family:ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.delta.meglio{color:var(--accent)}
+.delta.peggio{color:var(--warn)}
+.delta.pari{color:var(--dim)}
+/* Le leve sotto al grafico delle nature: cosa si puo' fare per abbassare
+   quella barra, e in quanto tempo. */
+.leve{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;
+display:flex;flex-direction:column;gap:7px}
+.leva{display:grid;grid-template-columns:11px minmax(96px,auto) 1fr auto;
+gap:9px;align-items:baseline;
+font:12px/1.5 ui-sans-serif,system-ui,sans-serif}
+.leva i{width:11px;height:11px;border-radius:2px;align-self:center}
+.leva b{font-weight:600}
+.leva span{color:var(--dim)}
+.leva em{font-style:normal;color:var(--dim);font-size:11px;white-space:nowrap}
 text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
 text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
 text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
@@ -347,11 +366,28 @@ const TABS = [
   ["componi", "Componi"],
 ];
 
-const NATURE_COLOR = {
-  "Vincolate":"#7c6a9c", "Ricorrenti":"#4a7fb5", "Quotidiane":"#3f9e8c",
-  "Discrezionali":"#d99442", "Straordinarie":"#b5654a",
-  "Da classificare":"#8a8a8a", "Non spesa":"#6b6560", "Entrate":"#3f9e8c"
+// Ogni natura col suo colore, la LEVA con cui si aggredisce e il tempo che
+// ci vuole. La leva e' il motivo per cui la natura esiste: senza, il grafico
+// mostra sette barre e lascia il lettore a indovinare cosa farne.
+const NATURA = {
+  "Discrezionali":  {colore:"#d99442", leva:"basta decidere di non farlo",
+                     quando:"subito"},
+  "Ricorrenti":     {colore:"#4a7fb5", leva:"disdette e cambio fornitore",
+                     quando:"qualche mese"},
+  "Quotidiane":     {colore:"#3f9e8c", leva:"dove fai la spesa, e quanto spesso",
+                     quando:"settimane"},
+  "Vincolate":      {colore:"#7c6a9c", leva:"surroga del mutuo, cambio polizza",
+                     quando:"una volta l'anno"},
+  "Straordinarie":  {colore:"#b5654a", leva:"non si comprime: va messa da parte",
+                     quando:"—"},
+  "Da chiarire":    {colore:"#8a8a8a", leva:"prima bisogna sapere cosa sono",
+                     quando:"—"},
+  "Da classificare":{colore:"#8a8a8a", leva:"da etichettare", quando:"—"},
+  "Non spesa":      {colore:"#6b6560", leva:"", quando:""},
+  "Entrate":        {colore:"#3f9e8c", leva:"", quando:""},
 };
+const NATURE_COLOR = Object.fromEntries(
+  Object.entries(NATURA).map(([n, v]) => [n, v.colore]));
 
 // --------------------------------------------------------------------------
 // utilita'
@@ -744,19 +780,72 @@ CARDS.indicatori = rows => {
   }
 
   const rate = earned ? saved/earned : 0;
+
+  // Gli stessi numeri sul periodo precedente, per dare un metro.
+  const p = periodoPrecedente();
+  const prima = p ? S.transactions.filter(t =>
+    (t.Data||"") >= p.da && (t.Data||"") <= p.a) : [];
+  const mp = monthsOf(spending(prima)) || 1;
+  const spesoP = sum(outflow(prima)), presoP = sum(inflow(prima));
+  const ordinarioP = sum(outflow(prima).filter(t => t.Natura !== "Straordinarie"));
+  const tassoP = presoP ? (presoP + spesoP)/presoP : 0;
+
   return '<div class="kpis">'
-    + kpi("entrate / mese", euro(earned/m))
-    + kpi("uscite / mese", euro(-spent/m))
-    + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad")
-    + kpi("tasso di risparmio", Math.round(rate*100) + "%")
-    + kpi("spesa ordinaria / mese", euro(-ordinary/m))
+    + kpi("entrate / mese", euro(earned/m), "",
+          confronta(earned/m, presoP/mp, false))
+    + kpi("uscite / mese", euro(-spent/m), "",
+          confronta(-spent/m, -spesoP/mp, true))
+    + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad",
+          confronta(saved/m, (presoP+spesoP)/mp, false))
+    + kpi("tasso di risparmio", Math.round(rate*100) + "%", "",
+          confronta(rate, tassoP, false))
+    + kpi("spesa ordinaria / mese", euro(-ordinary/m), "",
+          confronta(-ordinary/m, -ordinarioP/mp, true))
     + "</div>"
+    + (p ? "" : '<p class="note">Scegli un periodo in alto a sinistra per '
+        + 'vedere accanto a ogni numero quanto e\' cambiato rispetto al '
+        + 'periodo precedente di pari durata.</p>')
     + '<p class="note">La <b>spesa ordinaria</b> esclude le straordinarie: '
     + 'sono episodiche e, lasciate nella media, fanno sembrare cattivo un mese '
     + 'normale.</p>';
 };
-const kpi = (label, value, cls) =>
-  `<div class="kpi ${cls||""}"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+const kpi = (label, value, cls, confronto) =>
+  `<div class="kpi ${cls||""}"><span>${esc(label)}</span><b>${esc(value)}</b>`
+  + (confronto ? `<i class="delta ${confronto.verso}">${esc(confronto.testo)}</i>` : "")
+  + "</div>";
+
+// Il periodo lungo quanto quello scelto, subito prima. Serve a dare un metro:
+// "-181 euro al mese" da solo non e' ne' buono ne' cattivo, e da un numero
+// senza paragone non esce nessuna decisione.
+//
+// Senza filtri il paragone e' fra gli ultimi dodici mesi con dati e i dodici
+// precedenti: la media su tutto lo storico non cambia mai e non direbbe nulla.
+function periodoPrecedente(){
+  // Senza un periodo scelto non c'e' niente con cui confrontare: il riquadro
+  // mostra la media su tutto lo storico, e prima di tutto lo storico non c'e'
+  // nulla. Confrontarla con gli ultimi dodici mesi metterebbe insieme due
+  // misure diverse e darebbe scarti inventati.
+  if(!F.from || !F.to) return null;
+  const giorno = s => new Date(s + "T00:00:00");
+  const iso = d => d.toISOString().slice(0, 10);
+  const da = F.from, a = F.to;
+  const giorni = Math.round((giorno(a) - giorno(da)) / 86400000);
+  const fine = new Date(giorno(da).getTime() - 86400000);
+  return {da: iso(new Date(fine.getTime() - giorni * 86400000)), a: iso(fine),
+          adesso: {da, a}};
+}
+
+// Meglio o peggio? Per le uscite scendere e' un miglioramento, per le entrate
+// e il risparmio e' il contrario: il verso non si puo' dedurre dal segno.
+function confronta(ora, prima, spesaMeglioSeScende){
+  if(!prima || Math.abs(prima) < 0.01) return null;
+  const scarto = (ora - prima) / Math.abs(prima);
+  if(Math.abs(scarto) < 0.005) return {verso:"pari", testo:"come prima"};
+  const meglio = spesaMeglioSeScende ? ora < prima : ora > prima;
+  const segno = scarto > 0 ? "+" : "";
+  return {verso: meglio ? "meglio" : "peggio",
+          testo: `${segno}${Math.round(scarto*100)}% sul periodo prima`};
+}
 
 CARDS.natura = rows => {
   const m = monthsOf(spending(rows));
@@ -766,9 +855,16 @@ CARDS.natura = rows => {
     .filter(g => Math.abs(g.total/m) >= 1)
     .map(g => ({name:g.name, value:g.total/m,
                 color:NATURE_COLOR[g.name]||"#8a8a8a"}));
+  // Sotto a ogni barra la leva: dice cosa si puo' fare per abbassarla, e in
+  // quanto tempo. E' la risposta alla domanda che il riquadro pone.
+  const leve = items.filter(g => (NATURA[g.name]||{}).leva)
+    .map(g => `<div class="leva"><i style="background:${g.color}"></i>`
+      + `<b>${esc(g.name)}</b><span>${esc(NATURA[g.name].leva)}</span>`
+      + `<em>${esc(NATURA[g.name].quando)}</em></div>`).join("");
   return barChart(items, {drill:"nature"})
-    + '<p class="note">Media mensile. Clicca una barra per filtrare tutto il '
-    + 'resto su quella natura.</p>';
+    + '<div class="leve">' + leve + '</div>'
+    + '<p class="note">Media mensile, dalla piu\' facile da tagliare alla '
+    + 'meno. Clicca una barra per filtrare tutto il resto su quella natura.</p>';
 };
 
 CARDS.andamento = rows => {

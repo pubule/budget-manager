@@ -226,6 +226,36 @@ Tre azioni:
     il menu    corregge la categoria di quella riga sola.
 
 
+UN NUMERO SENZA UN METRO NON DECIDE NIENTE
+------------------------------------------
+
+Scegliendo un periodo, ogni indicatore mostra sotto quanto e' cambiato
+rispetto al periodo precedente DI PARI DURATA. "-483 euro al mese" da solo non
+e' ne' buono ne' cattivo.
+
+Il verso non si deduce dal segno: per le uscite scendere e' un miglioramento,
+per le entrate e il risparmio e' il contrario. Il colore dice quale dei due.
+
+SENZA un periodo scelto il confronto NON compare, e non e' una dimenticanza:
+il riquadro mostra la media su tutto lo storico, e prima di tutto lo storico
+non c'e' niente. Confrontarla con gli ultimi dodici mesi metterebbe insieme
+due misure diverse e darebbe scarti inventati.
+
+"DOVE PUOI AGIRE" DICE ANCHE COSA FARE
+--------------------------------------
+
+Sotto al grafico delle nature c'e' la LEVA di ciascuna, che e' il motivo per
+cui la natura esiste:
+
+    Discrezionali   basta decidere di non farlo        subito
+    Ricorrenti      disdette e cambio fornitore        qualche mese
+    Vincolate       surroga del mutuo, cambio polizza  una volta l'anno
+    Quotidiane      dove fai la spesa, e quanto spesso settimane
+    Straordinarie   non si comprime: va messa da parte
+
+Senza, il riquadro mostrava sette barre e lasciava indovinare cosa farne.
+
+
 RIFINITURA DELL'INTERFACCIA
 --------------------------
 
