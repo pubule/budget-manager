@@ -13,15 +13,15 @@ Shopping;Regali;43;Shopping;Regali
 Casa;Manutenzione;41;Casa;Manutenzione
 Shopping;Vestiti;35;Shopping;Vestiti
 Trasporto;Altro;23;IGNORA;
-Salario;;22;Entrate;Stipendio
+Salario;;22;Stipendio;
 Assistenza Sanitaria;Altro;21;Assistenza Sanitaria;Altro
 Trasporto;Benzina/Carburante;20;Trasporto;Benzina/Carburante
 Casa;Materiali;19;Casa;Materiali
 Shopping;Tecnologia;16;Shopping;Tecnologia
-Affitto;;13;Entrate;Affitti incassati
-Affitti incassati;;13;Entrate;Affitti incassati
+Affitto;;13;Affitti incassati;
+Affitti incassati;;13;Affitti incassati;
 Comunità;Tasse;9;Comunità;Tasse
-Stipendio;;8;Entrate;Stipendio
+Stipendio;;8;Stipendio;
 Personale;Intrattenimento;8;Personale;Intrattenimento
 Generali;;6;IGNORA;
 Personale;Benessere;5;Personale;Benessere

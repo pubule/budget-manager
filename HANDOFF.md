@@ -39,23 +39,20 @@ sottocategoria inesistente. C'e' un'asserzione in `selftest()` a guardia.
 Il nome intero resta la **chiave con cui browser e server si parlano**: il
 payload manda `nome`, `categoria` e `sottocategoria` insieme.
 
-### Le quattro orfane
+### Le quattro a un livello solo
 
-`Stipendio`, `Affitti incassati`, `Giroconto` e `Da identificare` non avevano
-un livello sotto. Ora l'area coincide con la natura:
+`Stipendio`, `Affitti incassati`, `Giroconto` e `Da identificare` restano
+senza sottocategoria: non sono spese vere e la natura le descrive gia'.
 
-```
-Entrate > Stipendio          Non spesa > Giroconto
-Entrate > Affitti incassati  Da chiarire > Da identificare
-```
+Erano state promosse a `Entrate > Stipendio`, `Non spesa > Giroconto` e simili.
+Sbagliato: faceva comparire `Entrate`, `Non spesa` e `Da chiarire` come nomi di
+**categoria** oltre che di **natura**, cioe' la stessa parola in due menu
+diversi della barra dei filtri, dove sembra un errore. Il livello sotto non
+aggiungeva niente, ripeteva.
 
-Effetto collaterale accettato: `Entrate`, `Non spesa` e `Da chiarire` sono ora
-nomi di **categoria** oltre che di **natura**. I filtri sono menu separati,
-quindi non si scontrano, ma la stessa parola compare in due colonne.
-
-`TRANSFER` in `bilancio.py` e' passato da `"Giroconto"` a
-`"Non spesa > Giroconto"`: e' load-bearing, ci passa il riconoscimento dei
-giroconti.
+C'e' un controllo in `test_app.js` che presidia entrambe le cose: nessuna
+categoria si chiama come una natura, e nessuna riga di SPESA sta a un livello
+solo (le quattro sopra sono l'elenco chiuso delle eccezioni).
 
 ### La trappola della migrazione
 
@@ -86,7 +83,7 @@ e dopo il cambio avrebbero mostrato le 11 aree duplicando il riquadro sopra.
 
 **Totali invariati**: 1845 righe, entrate 120.095,24 €, uscite −148.688,88 €.
 11 aree, 36 voci, zero righe con categoria ma senza sottocategoria.
-`--selfcheck` 58%, `test_app.js` 63 controlli.
+`--selfcheck` 58%, `test_app.js` 64 controlli.
 
 ---
 
@@ -355,7 +352,7 @@ python bilancio.py --migra-storico # riscrive export/elaborati/storico-moneywiz.
                                    # dal backup MoneyWiz. Idempotente: stesso
                                    # percorso, sovrascrive, non duplica
 
-# l'interfaccia, senza aprire un browser (63 controlli)
+# l'interfaccia, senza aprire un browser (64 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
 node test_app.js "$TEMP/state.json"
 ```

@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el, whole,
+ setStatus, el, whole, uniq,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -261,10 +261,23 @@ check("senza sottocategoria definita non spunta 'undefined'",
       api.whole({Categoria:"Stipendio"}) === "Stipendio");
 check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
 {
-  const orfane = state.transactions.filter(t => t.Categoria && !t.Sottocategoria);
-  check("nei dati veri ogni riga categorizzata ha due livelli",
+  // Un livello solo ce l'hanno le voci che non sono spese vere: la natura le
+  // descrive gia'. Tutte le altre devono avere il dettaglio, altrimenti la
+  // classifica per voce rimette insieme cose che non c'entrano.
+  const UNLIVELLO = new Set(["Stipendio", "Affitti incassati", "Giroconto",
+                             "Da identificare"]);
+  const orfane = state.transactions
+    .filter(t => t.Categoria && !t.Sottocategoria && !UNLIVELLO.has(t.Categoria));
+  check("solo le voci che non sono spese stanno a un livello",
         orfane.length === 0,
-        orfane.length + " righe con categoria ma senza sottocategoria");
+        orfane.length + " righe di spesa senza sottocategoria");
+  // Una categoria non deve chiamarsi come una natura: comparirebbe due volte
+  // nella barra dei filtri, in due menu diversi, e sembrerebbe un errore.
+  const nature = new Set(state.transactions.map(t => t.Natura).filter(Boolean));
+  const scontri = api.uniq(state.transactions.map(t => t.Categoria))
+    .filter(c => c && nature.has(c));
+  check("nessuna categoria si chiama come una natura", scontri.length === 0,
+        scontri.join(", "));
   const conSotto = state.transactions.filter(t => t.Sottocategoria);
   check("il nome intero porta il separatore quando i livelli sono due",
         conSotto.length === 0 || api.whole(conSotto[0]).includes(" > "));

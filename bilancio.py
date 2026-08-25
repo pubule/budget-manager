@@ -64,7 +64,7 @@ IGNORE = "IGNORA"
 # Categoria speciale: spostare soldi fra conti propri o verso familiari non e'
 # una spesa. Le regole che puntano qui vengono valutate PRIMA dello storico,
 # perche' capita di aver etichettato a mano un giroconto come spesa vera.
-TRANSFER = "Non spesa > Giroconto"
+TRANSFER = "Giroconto"
 
 # Le categorie hanno due livelli: "Casa > Casalinghi" e' l'area Casa e la
 # sottocategoria Casalinghi. Dentro al motore viaggiano unite in una stringa

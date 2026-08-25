@@ -30,9 +30,9 @@ Casa;Ristrutturazione;Straordinarie
 Trasporto;Manutenzione;Straordinarie
 Assistenza Sanitaria;Altro;Straordinarie
 Assistenza Sanitaria;Medico;Straordinarie
-Entrate;Stipendio;Entrate
-Entrate;Affitti incassati;Entrate
-Da chiarire;Da identificare;Da chiarire
-Non spesa;Giroconto;Non spesa
+Stipendio;;Entrate
+Affitti incassati;;Entrate
+Da identificare;;Da chiarire
+Giroconto;;Non spesa
 Shopping;Regali;Discrezionali
 Viaggi;Vacanze;Discrezionali

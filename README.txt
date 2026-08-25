@@ -90,11 +90,16 @@ LA NATURA STA SULLA COPPIA, non sull'area. Dentro "Casa" le bollette sono
 Ricorrenti e una ristrutturazione e' Straordinaria: appiattire i due livelli
 perderebbe proprio l'informazione che serve a capire dove si puo' risparmiare.
 
-Quattro voci non hanno un livello sotto perche' non sono spese vere, e per
-loro l'area coincide con la natura:
+Quattro voci restano a UN LIVELLO SOLO perche' non sono spese vere, e la
+natura le descrive gia':
 
-    Entrate > Stipendio          Entrate > Affitti incassati
-    Non spesa > Giroconto        Da chiarire > Da identificare
+    Stipendio          natura Entrate
+    Affitti incassati  natura Entrate
+    Giroconto          natura Non spesa
+    Da identificare    natura Da chiarire
+
+Nessun nome di categoria coincide con un nome di natura: la stessa parola in
+due menu diversi della barra dei filtri sembrerebbe un errore.
 
 Nella dashboard i livelli si navigano in due modi, che restano allineati fra
 loro: i menu "categoria" e "sotto" nella barra dei filtri (il secondo mostra
