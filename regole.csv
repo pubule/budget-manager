@@ -9,6 +9,12 @@
 (?i)^transazione senza nome$;Giroconto;
 # Marketplace: la banca scrive solo AMZN Mktp IT, cosa sia non si sa.;;
 (?i)amazon|amzn;Shopping;Amazon
+(?i)sac verona;Trasporto;Carburante
+(?i)aon advisory;Assistenza Sanitaria;Medico
+(?i)blood store;Shopping;Vestiti
+(?i)santeria;Cibo & Mangiare;Ristoranti
+(?i)puff store;Shopping;Regali
+(?i)adler evento|adler country;Viaggi;Vacanze
 # Utenze divise per tipo: sono tre contratti con tre leve diverse.;;
 (?i)bolletta acqua|acque veronesi|acquedotto|abbanoa;Casa;Acqua
 (?i)agsm|enel|servizio elettrico|\ba2a\b|\bhera\b|\biren\b|\bacea\b|eni ?gas|edison|sorgenia|illumia|bolletta luce|\bluce\b|\bgas\b|riscaldamento;Casa;Luce e gas
