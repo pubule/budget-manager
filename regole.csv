@@ -10,6 +10,12 @@
 (?i)^yyw[0-9]+/paypal;Giroconto;
 # Marketplace: la banca scrive solo AMZN Mktp IT, cosa sia non si sa.;;
 (?i)amazon|amzn;Shopping;Amazon
+(?i)vallese di oppeano;Shopping;Vestiti
+(?i)gruppo negozi;Shopping;Vestiti
+(?i)peschiera del garda;Cibo & Mangiare;Ristoranti
+(?i)castagna f;Shopping;Tecnologia
+(?i)veronafiere|fiera di verona;Personale;Intrattenimento
+(?i)tabacchi|tabaccheria|troiani david|\bheets\b|\biqos\b;Cibo & Mangiare;Alimentari
 (?i)^amo$;Cibo & Mangiare;Ristoranti
 (?i)^civico 2;Cibo & Mangiare;Ristoranti
 (?i)alcide poggibonsi;Cibo & Mangiare;Ristoranti

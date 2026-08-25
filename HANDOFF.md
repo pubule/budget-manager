@@ -5,6 +5,51 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (25/08/2026) — coda di revisione svuotata, e tre difetti nei passi di scarto
+
+**Zero righe senza categoria**, da 90 che erano. La coda scende da 157 a 47, e
+le 47 rimaste hanno tutte una categoria plausibile: ci stanno solo perche' la
+confidenza e' sotto 1 (cache del modello o voto dei token), non perche' siano
+sbagliate.
+
+Ventitre' regole nuove, quasi tutte da chiarimenti dell'utente sui nomi opachi.
+Regole e non override: SAC Verona ricorre gia' sei volte, e valgono anche per
+le prossime.
+
+### Tre difetti trovati mentre si guardavano i dati
+
+**I giroconti si annullavano su importo e data soltanto.** Nessun controllo
+sulla descrizione: un F24 da −452 spariva annullato da una qualunque entrata da
++452 su un altro conto entro tre giorni. Delle 117 righe UniCredit lette ne
+restavano 81, e le 36 mancanti erano esattamente le 36 coppie annullate. Peggio
+di `drop_covered_by`, perche' qui si perdono DUE righe e i soldi svaniscono da
+entrambi i conti. Ora serve che almeno una delle due dica di essere un
+giroconto, secondo le regole con categoria `Giroconto`.
+
+**Gli storni contavano come entrate.** Un bonifico non eseguito lascia due
+righe di segno opposto: l'uscita finiva fra i giroconti ed era esclusa, il
+riaccredito restava e contava come reddito. `drop_reversals()` le toglie in
+coppia.
+
+**Cinque prelievi di contante per 1.130 € stavano in `Shopping > Vestiti`**,
+messi li' dal voto dei token con confidenza fino a 0,88. Ora una regola li
+manda in `Da identificare`, che e' la verita': dove siano finiti quei soldi non
+lo dice nessuno.
+
+### Cose da sapere sulle regole
+
+I nomi corti vanno ANCORATI. `amo` senza `^` e `$` pesca dentro *chiamo*,
+*amore*, *richiamo*; `castagna` pesca le castagne al mercato. Ci sono
+asserzioni che provano proprio le trappole.
+
+Le regole coi nomi precisi dei negozi stanno in cima, subito dopo Amazon,
+perche' devono vincere sulle generiche.
+
+I tabacchi sono 22 € in cinque anni e stanno in `Alimentari`, dove l'utente
+aveva gia' messo gli Heets. Se la spesa cresce, meritano una voce loro.
+
+---
+
 ## IN CORSO (25/08/2026) — tassonomia rifatta, e le regole passano avanti
 
 ### Prima bisognava sbloccare la cascata
