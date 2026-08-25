@@ -320,6 +320,13 @@ Regole e merchant  Con anteprima: "prova" dice quante transazioni colpirebbe
 
 Componi            Quali riquadri mostrare e in che ordine.
 
+Andamento          Una linea per entrate, uscite e uscite ordinarie. Con
+                   POCHI MESI si vedono anche i pallini sui valori: serve
+                   quando il mese e' UNO SOLO, perche' una polilinea di un
+                   punto non disegna niente e il riquadro sembrava vuoto pur
+                   avendo i dati sotto. Con un mese solo il punto e' centrato
+                   e una nota dice perche' non c'e' una curva.
+
 Log                Pannello a destra, si apre col pulsante "Log" e da solo
                    a ogni elaborazione. Mostra la pipeline riga per riga
                    MENTRE gira, non alla fine.

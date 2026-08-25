@@ -191,6 +191,25 @@ check("barChart produce HTML", bars.startsWith('<div class="bars">')
 check("barChart ha una barra per voce",
       (bars.match(/class="bar-track"/g) || []).length === perNatura.length);
 check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'));
+// Una polilinea di un punto solo non disegna NIENTE: filtrando su un mese il
+// riquadro dell'andamento restava vuoto pur avendo i dati sotto.
+{
+  const unMese = api.lineChart(["2026-08"], [{name:"x", values:[100], color:"#000"}]);
+  check("con un punto solo il grafico disegna comunque qualcosa",
+        unMese.includes("<circle"));
+  const tanti = api.lineChart(
+    Array.from({length: 24}, (_, i) => "2025-" + i),
+    [{name:"x", values: Array(24).fill(10), color:"#000"}]);
+  check("con molti punti resta una linea pulita, senza pallini",
+        !tanti.includes("<circle"));
+  const F3 = api.getF();
+  const [da, a] = api.QUICK[0][1]();          // mese in corso
+  F3.from = da; F3.to = a;
+  const reso = api.CARDS.andamento(api.filtered());
+  check("il riquadro dell'andamento non e' muto su un mese solo",
+        reso.includes("<circle") && reso.includes("Un mese solo"));
+  F3.from = ""; F3.to = "";
+}
 check("le barre sono in percentuale, cosi' si adattano al riquadro",
       /width:\d+(\.\d+)?%/.test(bars));
 check("la barra piu' lunga arriva al 100%", bars.includes("width:100.0%"));

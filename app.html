@@ -557,7 +557,10 @@ function lineChart(labels, series){
   const flat = series.flatMap(s => s.values).concat([0]);
   const top = Math.max(...flat) || 1, bottom = Math.min(...flat);
   const span = (top - bottom) || 1;
-  const px = (i,v) => [LEFT + i*(W-LEFT-12)/Math.max(labels.length-1,1),
+  // Con un punto solo si centra: lasciarlo a sinistra con mezzo riquadro
+  // vuoto sembra un grafico troncato invece di un mese solo.
+  const px = (i,v) => [labels.length === 1 ? (LEFT + W - 12)/2
+                         : LEFT + i*(W-LEFT-12)/Math.max(labels.length-1,1),
                        12 + (top-v)/span*(BASE-12)];
   let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
   [0,0.5,1].forEach(f => {
@@ -565,10 +568,19 @@ function lineChart(labels, series){
     out += `<line x1="${LEFT}" y1="${y.toFixed(0)}" x2="${W-12}" y2="${y.toFixed(0)}" class="grid"/>`
         + `<text x="0" y="${(y+4).toFixed(0)}" class="axis">${(v/1000).toFixed(1)}k</text>`;
   });
+  // Con pochi punti si segnano anche i pallini. Serve soprattutto quando il
+  // punto e' UNO: una polilinea di un punto solo non disegna niente, e il
+  // riquadro sembrava vuoto pur avendo i dati sotto.
+  const pallini = labels.length <= 12;
   for(const s of series){
     const pts = s.values.map((v,i) => px(i,v).map(n => n.toFixed(1)).join(",")).join(" ");
     out += `<polyline points="${pts}" fill="none" stroke="${s.color}"`
         + ` stroke-width="2.5" stroke-linejoin="round"/>`;
+    if(pallini) out += s.values.map((v,i) => {
+      const [x,y] = px(i,v);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5"`
+        + ` fill="${s.color}"/>`;
+    }).join("");
   }
   const step = Math.max(1, Math.floor(labels.length/12));
   for(let i=0;i<labels.length;i+=step){
@@ -661,7 +673,12 @@ CARDS.andamento = rows => {
     {name:"uscite ordinarie",
      values:by(out, t => t.Natura!=="Straordinarie").map(v => -v), color:"#d99442"},
   ];
-  return lineChart(labels, series) + legend(series);
+  return lineChart(labels, series) + legend(series)
+    + (labels.length === 1
+       ? '<p class="note">Un mese solo: un andamento ha bisogno di almeno due '
+         + 'punti per essere una linea. Qui sono segnati i valori del mese; '
+         + 'allarga il periodo per vedere la curva.</p>'
+       : "");
 };
 
 CARDS.aree = rows => {
