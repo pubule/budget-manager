@@ -1,4 +1,5 @@
 ﻿pattern;categoria;sottocategoria
+(?i)Dalla Bernardina;Trasporto;Carburante
 # I giroconti verso conti propri o familiari non sono spese: vanno per primi.;;
 (?i)\ba:? *(hype|fideuram|fabio stocco|michela bogoni|mikela bogoni)\b;Giroconto;
 (?i)a favore di (hype|fideuram|fabio stocco|michela bogoni);Giroconto;

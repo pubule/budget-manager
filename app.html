@@ -733,7 +733,8 @@ VIEWS.revisione = rows => {
           euro(t.Importo), esc(whole(t)||"—"),
           (t.Confidenza ?? 0).toFixed(2),
           categorySelect(whole(t), t.ID)
-            + ` <button class="link" data-rule="${esc(t.Merchant||"")}">regola</button>`]),
+            + ` <button class="link" data-rule="${esc(t.Merchant||"")}"`
+            + ` data-id="${esc(t.ID)}">regola</button>`]),
         [3,5])
     + "</div>";
 };
@@ -980,10 +981,31 @@ document.addEventListener("click", async ev => {
     return reload();
   }
   if(d.rule){
-    const value = prompt(`Categoria per tutte le transazioni di "${d.rule}":`);
-    if(!value) return;
-    await post("/api/rules", {tipo:"regola", pattern:"(?i)"+d.rule, valore:value,
-                              posizione:0});
+    // Niente testo libero: la categoria e' gia' scelta nel menu accanto, e
+    // scriverla a mano vorrebbe dire poter sbagliare a digitarla e creare una
+    // categoria fantasma che somiglia a una vera.
+    const sel = document.querySelector(`[data-setcat="${d.id}"]`);
+    const value = sel && sel.value;
+    if(!value) return alert("Scegli prima la categoria nel menu qui accanto: "
+      + "la regola usera' quella.");
+    // Il nome del negozio finisce dentro un'espressione regolare, dove punti
+    // e parentesi hanno un significato: vanno neutralizzati.
+    const pattern = "(?i)" + d.rule.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const r = await post("/api/rules/preview", {pattern, valore:value});
+    if(r.errore) return alert(r.errore);
+    if(!confirm(`Ogni descrizione che contiene "${d.rule}" diventera'`
+      + `
+${value}.
+
+`
+      + `${r.n} transazioni combaciano, di cui ${r.cambierebbero} cambierebbero`
+      + ` categoria.
+In totale ${euro(r.totale)}.
+
+`
+      + `La regola va sopra tutte le altre, quindi vince su di loro.
+La creo?`)) return;
+    await post("/api/rules", {tipo:"regola", pattern, valore:value, posizione:0});
     return reload();
   }
   if(d.ruleSave || d.ruleDel || d.ruleTest || d.newSave){
