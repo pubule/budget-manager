@@ -931,17 +931,21 @@ VIEWS.revisione = rows => {
     + 'con i filtri attuali.</p></div>';
   return '<div class="card"><div class="head"><h2>Da rivedere</h2>'
     + `<span class="mini">${todo.length} righe</span></div>`
-    + '<p class="note">Due strade, e sono alternative. Il <b>menu</b> corregge '
-    + 'solo questa riga e salva subito, quindi la riga esce da qui. '
-    + '<b>"regola"</b> chiede lui la categoria e vale per tutte le transazioni '
-    + 'di quel negozio, anche quelle che devono ancora arrivare: se il negozio '
-    + 'si ripete conviene quella.</p>'
+    + '<p class="note">Queste righe <b>hanno gia\' una categoria</b> e '
+    + 'contano gia\' nei totali: sono qui perche\' il motore non ne e\' '
+    + 'certo, non perche\' manchi qualcosa. Se la proposta e\' giusta, '
+    + '<b>\"confermo\"</b> la fissa e la riga esce dalla coda. Se il negozio '
+    + 'si ripete conviene <b>\"regola\"</b>, che vale anche per le prossime '
+    + 'volte. Se e\' sbagliata, cambiala nel <b>menu</b>. E se non fai niente '
+    + 'non succede nulla: la categoria proposta resta in vigore.</p>'
     + tableHTML(["data","descrizione","merchant","importo","proposta","conf.","correggi"],
         todo.slice(0,300).map(t => [
           esc(t.Data), esc((t.Descrizione||"").slice(0,58)), esc(t.Merchant),
           euro(t.Importo), esc(whole(t)||"—"),
           (t.Confidenza ?? 0).toFixed(2),
           categorySelect(whole(t), t.ID)
+            + ` <button class="link" data-conferma="${esc(t.ID)}"`
+            + ` data-cat="${esc(whole(t))}">confermo</button>`
             + ` <button class="link" data-rule="${esc(t.Merchant||"")}"`
             + ` data-id="${esc(t.ID)}">regola</button>`]),
         [3,5])
@@ -1140,7 +1144,8 @@ function setStatus(){
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
-    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],[data-up]");
+    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],"
+    + "[data-up],[data-conferma]");
   if(!t) return;
   const d = t.dataset;
 
@@ -1187,6 +1192,14 @@ document.addEventListener("click", async ev => {
   }
   if(d.resetTx){
     await post("/api/transaction", {id:d.resetTx, azzera:true});
+    return reload();
+  }
+  if(d.conferma){
+    // "Va bene cosi'": fissa la categoria che c'e' gia'. La riga esce
+    // dalla coda perche' la confidenza sale a 1, e nei totali non cambia
+    // niente: quella categoria era gia' in vigore.
+    if(!d.cat) return avvisa('Questa riga non ha ancora una categoria: scegline una nel menu, oppure usa \"regola\".');
+    await post("/api/transaction", {id:d.conferma, categoria:d.cat});
     return reload();
   }
   if(d.rule){

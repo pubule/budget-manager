@@ -203,24 +203,27 @@ al 125% uno schermo da 1720 pixel veri ne dichiara 1375, quindi una soglia che
 sembra generosa taglia fuori proprio gli schermi larghi.
 
 
-DA RIVEDERE: DUE STRADE, ALTERNATIVE
-------------------------------------
+DA RIVEDERE: NON MANCA NIENTE
+-----------------------------
 
-Il MENU della categoria corregge solo quella riga, salva subito e la riga
-esce dalla coda. Scrive override.csv.
+Le righe qui dentro HANNO GIA' UNA CATEGORIA e contano gia' nei totali. Sono
+in coda perche' la confidenza e' sotto 1, cioe' perche' il motore le ha
+dedotte invece di saperle: non perche' manchi un dato.
 
-"REGOLA" chiede lui la categoria e vale per tutte le transazioni di quel
-negozio, comprese quelle che devono ancora arrivare. Scrive regole.csv, in
-cima, quindi vince sulle altre regole.
+Se non fai niente, non succede niente: la categoria proposta resta in vigore.
+La coda e' una lista di lavoro, non una fila di errori.
 
-Sono alternative: scegliendo prima dal menu la riga sparisce e col essa il
-pulsante. Per questo "regola" non legge piu' il menu accanto ma se la chiede
-da solo, e mentre scegli dice quante transazioni combacia e quante ne
-cambierebbe davvero.
+Tre azioni:
 
-Se la riga non ha ancora una categoria, il menu del riquadro NON preseleziona
-niente: la prima in ordine alfabetico e' "Affitti incassati", e un OK
-distratto archivierebbe una spesa come un incasso.
+    confermo   fissa la categoria che c'e' gia'. La riga esce dalla coda e nei
+               totali non cambia nulla, perche' quella categoria era gia' in
+               vigore. Scrive override.csv.
+
+    regola     vale per tutte le transazioni di quel negozio, comprese quelle
+               che devono ancora arrivare. Se il negozio si ripete conviene
+               questa.
+
+    il menu    corregge la categoria di quella riga sola.
 
 
 I RIQUADRI DI DIALOGO
