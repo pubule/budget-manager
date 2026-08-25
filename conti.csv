@@ -1,4 +1,5 @@
 ﻿pattern;conto
+(?i)unicredit|elenco_?movimenti;UniCredit
 (?i)intesa|isybank;Intesa Sanpaolo
 (?i)fineco;Fineco
 (?i)hype|lista movimenti;Hype
