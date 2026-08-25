@@ -52,7 +52,8 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el, whole, uniq, SPAN, patternNegozio, meseLeggibile,
+ setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
+ indicatori, spesa, scarto, VISTE,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
@@ -455,22 +456,83 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         conSotto.length === 0 || api.whole(conSotto[0]).includes(" > "));
 }
 
-// La griglia della dashboard: ogni riquadro deve dichiarare quante colonne
-// occupa. Un riquadro nuovo dimenticato in SPAN prenderebbe tutta la riga in
-// silenzio, e la disposizione tornerebbe una colonna sola senza che nessuno
-// se ne accorga.
+// Il pannello: il primo riquadro acceso prende la colonna larga, gli altri si
+// impilano a destra. E' la regola che tiene le due colonne alte uguali; se
+// saltasse, tornerebbero i quattrocento pixel di vuoto fra due riquadri
+// affiancati che questa disposizione esiste per togliere.
 {
   const html = api.VIEWS.dashboard(api.filtered());
-  check("i riquadri della dashboard stanno su una griglia",
-        html.startsWith('<div class="grid">'));
-  const senzaSpan = state.layout
-    .filter(c => c.visibile && api.CARDS[c.id] && api.SPAN[c.id] === undefined)
-    .map(c => c.id);
-  check("ogni riquadro visibile dichiara la sua larghezza",
-        senzaSpan.length === 0, senzaSpan.join(", "));
-  const larghezze = Object.values(api.SPAN);
-  check("nessun riquadro chiede piu' di 12 colonne",
-        larghezze.every(n => n >= 1 && n <= 12), larghezze.join(","));
+  check("la dashboard e' un pannello a due colonne",
+        html.startsWith('<div class="pannello">'));
+  check("c'e' una pila a destra", html.includes('<div class="pila">'));
+  const accesi = state.layout.filter(c => c.visibile && api.CARDS[c.id]);
+  const quadri = (html.match(/<div class="card">/g) || []).length;
+  check("ogni riquadro acceso viene disegnato una volta sola",
+        quadri === accesi.length, quadri + " invece di " + accesi.length);
+  // Il primo riquadro sta FUORI dalla pila: e' quello che porta il peso.
+  check("il primo riquadro non finisce nella pila",
+        html.indexOf('<div class="card">') < html.indexOf('<div class="pila">'));
+}
+
+// Cinque riquadri sono diventati uno con tre viste. Le viste devono guardare
+// gli stessi euro da lati diversi, non essere tre tabelle scollegate: se una
+// vista sparisse o cambiasse nome, i pulsanti resterebbero e non farebbero
+// niente.
+{
+  const F5 = api.getF();
+  const righe = api.filtered();
+  for(const [chiave, etichetta] of api.VISTE){
+    F5.vista = chiave;
+    const html = api.CARDS.dove(righe);
+    check(`la vista "${etichetta}" disegna righe`,
+          html.includes("<tbody>") && html.includes("</tr>"));
+    check(`la vista "${etichetta}" e' quella accesa`,
+          html.includes(`data-vista="${chiave}" class="on"`));
+  }
+  F5.vista = "";
+  check("senza scelta si parte dalla vista per area",
+        api.CARDS.dove(righe).includes('data-vista="area" class="on"'));
+  // Una vista inventata non deve svuotare il riquadro.
+  F5.vista = "non esiste";
+  check("una vista sconosciuta ricade su quella per area",
+        api.CARDS.dove(righe).includes('data-vista="area" class="on"'));
+  F5.vista = "";
+}
+
+// Nessun segno meno sulle spese: la colonna dice gia' che sono uscite, e il
+// meno su ogni riga non aggiunge niente da leggere. E nessuna percentuale
+// fuori scala: -943% non e' informazione, "da 110 a 1.152 euro" si'.
+{
+  check("una spesa si scrive senza il meno",
+        api.spesa(-1234) === api.spesa(1234) && !api.spesa(-1234).includes("-"),
+        api.spesa(-1234));
+  const cresciuta = api.scarto(-100, -180);
+  check("una spesa cresciuta si dice a parole",
+        cresciuta.verso === "peggio" && cresciuta.testo.includes("in piu'"),
+        JSON.stringify(cresciuta));
+  const calata = api.scarto(-180, -100);
+  check("una spesa calata si dice a parole",
+        calata.verso === "meglio" && calata.testo.includes("in meno"),
+        JSON.stringify(calata));
+  const fuoriScala = api.scarto(-110, -1152);
+  check("uno scarto fuori scala dice da dove a dove",
+        fuoriScala.testo.includes("da ") && !fuoriScala.testo.includes("%"),
+        fuoriScala.testo);
+  check("due periodi uguali non inventano uno scarto",
+        api.scarto(-100, -100).verso === "pari");
+  check("senza spesa in nessuno dei due periodi non c'e' scarto",
+        api.scarto(0, 0) === null);
+}
+
+// Gli indicatori vivono nella barra: tornano celle, non un riquadro. Se
+// tornassero di nuovo un <div class="kpis"> finirebbero dentro alla barra
+// come un blocco solo e la riga si spezzerebbe.
+{
+  const celle = api.indicatori(api.filtered());
+  check("gli indicatori tornano celle, non un riquadro",
+        celle.startsWith('<div class="kpi') && !celle.includes('class="kpis"'));
+  check("gli indicatori non portano note a pie' di pagina",
+        !celle.includes('class="note"'));
 }
 
 // I campi correggibili sono un contratto fra due file: l'interfaccia scrive

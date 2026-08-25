@@ -14,19 +14,36 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
 font:15px/1.55 "Iowan Old Style",Georgia,serif}
-/* Rotaia a sinistra piu' area di lavoro che prende tutto il resto. Prima la
-   pagina era ferma a 1060px: su uno schermo largo restavano centinaia di
-   pixel vuoti e i riquadri si impilavano in una colonna sola. */
-.wrap{display:flex;align-items:flex-start}
-.rail{position:sticky;top:0;height:100vh;width:252px;flex-shrink:0;
-overflow-y:auto;background:var(--card);border-right:1px solid var(--line);
-padding:20px 18px;display:flex;flex-direction:column;gap:14px}
-.rail header{display:block;margin:0}
-.rail .acts{display:flex;flex-direction:column;gap:6px}
-.rail .acts button{width:100%}
-.railfoot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
-.railfoot .status{display:block;line-height:1.5}
-.main{flex:1 1 auto;min-width:0;padding:20px 26px 80px}
+/* Tre zone che non si mescolano mai: la SPALLA dice dove sono e cosa posso
+   fare ai dati, la BARRA quale periodo sto guardando e cosa ne esce, il resto
+   sono le prove. Prima navigazione, filtri e azioni stavano tutti nella stessa
+   rotaia, e "cambia scheda" somigliava a "ricarica tutto". */
+.telaio{display:grid;grid-template-columns:214px minmax(0,1fr);
+align-items:start}
+.spalla{position:sticky;top:0;height:100vh;overflow-y:auto;
+background:var(--card);border-right:1px solid var(--line);
+padding:16px 12px 12px;display:flex;flex-direction:column;gap:4px}
+.spalla header{display:block;margin:0 0 14px;padding:0 8px}
+.spalla .grow{flex:1;min-height:14px}
+/* Le sezioni: una colonna, non una fila di linguette. */
+#tablist{display:flex;flex-direction:column;gap:1px}
+#tablist button{width:100%;text-align:left;border:1px solid transparent;
+background:none;border-radius:7px;padding:7px 10px;color:var(--dim);
+display:flex;align-items:center;gap:8px}
+#tablist button:hover{background:var(--soft);color:var(--ink)}
+#tablist button.on{background:var(--soft);color:var(--ink);font-weight:600}
+#tablist .conta{margin-left:auto;font:600 11px ui-monospace,monospace;
+background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn);
+border-radius:20px;padding:1px 7px}
+/* Le azioni sui dati, staccate dalla navigazione da un filetto e da un
+   titolo: navigare non e' ricaricare. */
+.acts{display:flex;flex-direction:column;gap:5px;
+border-top:1px solid var(--line);padding-top:12px}
+.acts h3{margin:0 0 3px;font:600 10px/1 ui-sans-serif,system-ui,sans-serif;
+letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.acts button{width:100%;text-align:left}
+.acts .status{display:block;line-height:1.5;margin-top:10px}
+.lato{min-width:0;padding:12px 14px 60px}
 h1{font-size:21px;margin:0;letter-spacing:-.02em}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
 margin:0 0 12px;font-family:ui-sans-serif,system-ui,sans-serif}
@@ -61,13 +78,54 @@ background:var(--card);border:1px solid var(--line);border-radius:10px;
 padding:10px 12px;margin-bottom:14px}
 .bar label{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--dim);
 text-transform:uppercase;letter-spacing:.08em}
-/* Dentro alla rotaia la stessa barra diventa una colonna: niente cornice,
-   perche' la rotaia gliela fa gia' lei. */
-.rail .bar{flex-direction:column;align-items:stretch;gap:4px;border:none;
-background:none;padding:0;margin:0}
-.rail .bar label{margin-top:8px}
-.rail .bar select,.rail .bar input{width:100%;min-width:0}
-.rail .bar .link{align-self:flex-start;margin-top:10px}
+/* La barra: a sinistra il periodo e i filtri, a destra i numeri che ne
+   discendono. Stanno insieme perche' sono la stessa frase: "in questo
+   periodo, questi numeri". */
+/* Il riquadro della scelta: il periodo sopra, i filtri di dettaglio sotto. */
+.barra{background:var(--card);border:1px solid var(--line);border-radius:10px;
+margin-bottom:10px}
+#filters{border-top:1px solid var(--line) !important}
+/* Il riquadro del recap: gli stessi numeri di prima, in un riquadro suo.
+   Erano nella stessa cornice dei filtri e sembravano un filtro anche loro. */
+.kpibar{display:flex;align-items:stretch;flex-wrap:wrap;
+background:var(--card);border:1px solid var(--line);border-radius:10px;
+margin-bottom:12px}
+.barra .bar{border:none;background:none;margin:0;padding:8px 12px;
+row-gap:6px}
+/* I campi si stringono: a larghezza piena i filtri occupavano tre righe e la
+   barra diventava un muro alto quanto un riquadro. */
+.barra .bar select{max-width:132px}
+.barra .bar input[type=date]{max-width:132px}
+.barra .bar input[type=search]{max-width:180px}
+.barra .bar label{opacity:.75}
+.kpibar{display:flex;align-items:stretch}
+.kpibar .kpi{border:none;border-left:1px solid var(--line);border-radius:0;
+padding:11px 20px;flex:1 1 168px;text-align:right;background:none}
+.kpibar .kpi:first-child{border-left:none}
+.kpibar .kpi b{font-size:21px;font-variant-numeric:tabular-nums}
+.kpibar .kpi span{display:block;margin-bottom:2px}
+
+
+/* La tabella si allunga fino a raggiungere la pila accanto -- le due colonne
+   sono alte uguali per costruzione -- e scorre dentro al suo riquadro solo se
+   supererebbe lo schermo. E' il motivo per cui questa disposizione e' stata
+   scelta: prima la dashboard era alta due schermate e mezzo. */
+.pannello>.card{max-height:calc(100vh - 40px)}
+/* Il pannello: a sinistra il riquadro che porta il peso, a destra la pila
+   degli strumenti. Le due colonne sono alte uguali PER COSTRUZIONE, e' la
+   griglia a legarle: prima si sperava che i contenuti si somigliassero, e
+   fra due tabelle affiancate restavano 400px di vuoto. */
+.pannello{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(316px,1fr);
+gap:14px;align-items:stretch}
+.pannello>.card{margin:0;display:flex;flex-direction:column;min-height:0}
+.pannello .pila{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pannello .pila>.card{margin:0;padding:11px 15px}
+.pannello .pila .head{margin-bottom:8px}
+/* Il grafico in colonna stretta non ha bisogno di essere alto: qui serve la
+   forma della curva, non leggerci sopra i valori. */
+.pannello .pila svg{max-height:118px}
+.pannello .pila .note{margin:6px 0 0;font-size:12px}
+@media (max-width:1150px){.pannello{grid-template-columns:1fr}}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .chip{font:12px ui-sans-serif,system-ui,sans-serif;background:var(--soft);
 border:1px solid var(--line);border-radius:20px;padding:3px 10px;cursor:pointer}
@@ -106,17 +164,60 @@ font-family:ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums
 .delta.meglio{color:var(--accent)}
 .delta.peggio{color:var(--warn)}
 .delta.pari{color:var(--dim)}
-/* Le leve sotto al grafico delle nature: cosa si puo' fare per abbassare
-   quella barra, e in quanto tempo. */
-.leve{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;
-display:flex;flex-direction:column;gap:7px}
-.leva{display:grid;grid-template-columns:11px minmax(96px,auto) 1fr auto;
-gap:9px;align-items:baseline;
-font:12px/1.5 ui-sans-serif,system-ui,sans-serif}
-.leva i{width:11px;height:11px;border-radius:2px;align-self:center}
-.leva b{font-weight:600}
-.leva span{color:var(--dim)}
-.leva em{font-style:normal;color:var(--dim);font-size:11px;white-space:nowrap}
+/* Le leve: cosa si puo' fare per abbassare ogni natura, e in quanto tempo.
+   La leva e' il motivo per cui la natura esiste. */
+.leve{display:flex;flex-direction:column}
+.leva{display:grid;grid-template-columns:11px 1fr auto;gap:10px;
+align-items:center;padding:4px 0;border-top:1px solid var(--line);
+font:12px/1.35 ui-sans-serif,system-ui,sans-serif;cursor:default}
+.leva:first-child{border-top:none}
+.leva.hit{cursor:pointer}
+.leva.hit:hover{background:var(--soft)}
+.leva i{width:11px;height:11px;border-radius:2px}
+.leva b{font-weight:600;display:block}
+.leva span{color:var(--dim);display:block;font-size:11px;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leva>div{min-width:0}
+.leva u{text-decoration:none;font:600 14px ui-monospace,monospace;
+font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Le tre viste della tabella unica: lo stesso denaro, guardato da un altro
+   lato. Non sono tre riquadri, e' un riquadro con tre lati. */
+.viste{display:inline-flex;gap:2px;background:var(--soft);border-radius:8px;
+padding:2px;margin-bottom:10px}
+.viste button{border:none;background:none;border-radius:6px;padding:4px 11px;
+color:var(--dim);font-size:12px}
+.viste button.on{background:var(--card);color:var(--ink);font-weight:600;
+box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+/* La tabella di "Dove vanno i soldi". La quota e' un filetto sotto al nome:
+   a piena altezza, dietro al testo, sembrava una riga selezionata invece di
+   una misura. */
+.tab-dove{flex:1;min-height:0;overflow:auto}
+.tab-dove td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tab-dove td:first-child{white-space:normal}
+.tab-dove th.num,.tab-dove td:not(:first-child){text-align:right}
+.tab-dove tr.sub td{font-size:12px;color:var(--dim)}
+.tab-dove tr.sub td:first-child{padding-left:20px}
+.tab-dove .q{position:relative}
+.tab-dove .q i{position:absolute;left:0;bottom:3px;height:2px;border-radius:2px;
+background:color-mix(in srgb,var(--accent) 55%,transparent);width:var(--w)}
+.dove{color:var(--dim);font-size:11.5px;
+font-family:ui-sans-serif,system-ui,sans-serif}
+
+/* Il confronto d'anno ridotto alle voci che si sono mosse. */
+.scarti{display:flex;flex-direction:column}
+.scarti div{display:flex;justify-content:space-between;align-items:baseline;
+gap:12px;padding:5px 0;border-top:1px solid var(--line);
+font:13px ui-sans-serif,system-ui,sans-serif}
+.scarti div:first-child{border-top:none}
+.scarti em{font-style:normal;font-variant-numeric:tabular-nums}
+
+/* L'avviso: una riga, non un riquadro alto centododici pixel per una frase. */
+.avviso{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+font:13px ui-sans-serif,system-ui,sans-serif}
+.avviso b{color:var(--warn)}
+.avviso span{color:var(--dim);font-size:12px;flex:1}
 text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
 text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
 text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
@@ -215,19 +316,23 @@ color:var(--dim)}
 @media (max-width:1100px){
   #log{width:100%;border-left:none}
   body.log-on .wrap{margin-right:0;display:none}
-  /* Sotto questa larghezza la rotaia non ci sta di fianco: torna una fascia
-     in cima, coi filtri di nuovo in orizzontale. Se restasse alta 100vh
+  /* Sotto questa larghezza la spalla non ci sta di fianco: torna una fascia
+     in cima, con sezioni e azioni in orizzontale. Se restasse alta 100vh
      mangerebbe tutto lo schermo. */
-  .wrap{display:block}
-  .rail{position:static;height:auto;width:auto;overflow:visible;
+  .telaio{display:block}
+  .spalla{position:static;height:auto;overflow:visible;flex-direction:row;
+    flex-wrap:wrap;align-items:center;gap:10px;
     border-right:none;border-bottom:1px solid var(--line)}
-  .rail .bar{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
-  .rail .bar label{margin-top:0}
-  .rail .bar select,.rail .bar input{width:auto}
-  .rail .acts{flex-direction:row;flex-wrap:wrap}
-  .rail .acts button{width:auto}
-  .railfoot{margin-top:0}
-  .main{padding:16px 18px 60px}
+  .spalla header{margin:0}
+  .spalla .grow{display:none}
+  #tablist{flex-direction:row;flex-wrap:wrap}
+  #tablist button{width:auto}
+  .acts{flex-direction:row;flex-wrap:wrap;border-top:none;padding-top:0;
+    align-items:center}
+  .acts h3{display:none}
+  .acts button{width:auto}
+  .acts .status{margin-top:0}
+  .lato{padding:12px 14px 60px}
 }
 
 /* --------------------------------------------------------------------------
@@ -271,53 +376,59 @@ button:disabled{opacity:.45;cursor:default}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <!-- I filtri stanno in una rotaia che non scorre via: si cambia periodo
-       senza risalire in cima, ed e' il motivo per cui il resto della pagina
-       puo' allargarsi quanto vuole. -->
-  <aside class="rail ui" id="rail">
+<div class="telaio">
+  <!-- LA SPALLA. Sopra: dove sono. Sotto: cosa posso fare ai dati. In mezzo
+       lo spazio, cosi' le due famiglie non si toccano mai. -->
+  <aside class="spalla ui">
     <header>
       <h1>Bilancio</h1>
       <span class="status" id="status"></span>
     </header>
+
+    <nav id="tablist"></nav>
+
+    <div class="grow"></div>
+
     <div class="acts">
+      <h3>Dati</h3>
       <button id="btn-load" class="hide">Carica dati</button>
       <button id="btn-run">Ricarica</button>
       <button id="btn-llm">Analizza con LLM</button>
-    </div>
-
-    <div class="bar ui" id="filters">
-      <div class="quick" id="f-quick"></div>
-      <label id="f-confronto-eti">confronta con</label>
-      <div class="quick confronto" id="f-confronto"></div>
-      <label>dal</label><input type="date" id="f-from">
-      <label>al</label><input type="date" id="f-to">
-      <label>conto</label><select id="f-account"></select>
-      <label>natura</label><select id="f-nature"></select>
-      <label>categoria</label><select id="f-category"></select>
-      <label>sotto</label><select id="f-sub"></select>
-      <input type="search" id="f-text" placeholder="cerca nella descrizione"
-             class="wide">
-      <button class="link" id="f-reset">azzera</button>
-    </div>
-
-    <div class="railfoot">
+      <button id="btn-export">Esporta HTML + Excel</button>
+      <button id="btn-log">Log</button>
       <div class="status ui" id="source"></div>
     </div>
   </aside>
 
-  <main class="main">
-    <nav id="tabs">
-      <div id="tablist"></div>
-      <div class="grow"></div>
-      <button id="btn-export">Esporta HTML + Excel</button>
-      <button id="btn-log">Log</button>
-    </nav>
+  <div class="lato">
+    <!-- Due riquadri, non uno. Sopra si SCEGLIE cosa guardare, sotto si LEGGE
+         quello che ne esce: sono due gesti diversi, e tenerli nella stessa
+         cornice li faceva sembrare la stessa cosa. -->
+    <div class="barra ui" id="barra">
+      <div class="bar ui" id="periodo">
+        <div class="quick" id="f-quick"></div>
+        <label id="f-confronto-eti">confronta con</label>
+        <div class="quick confronto" id="f-confronto"></div>
+      </div>
+      <div class="bar ui" id="filters">
+        <label>dal</label><input type="date" id="f-from">
+        <label>al</label><input type="date" id="f-to">
+        <label>conto</label><select id="f-account"></select>
+        <label>natura</label><select id="f-nature"></select>
+        <label>categoria</label><select id="f-category"></select>
+        <label>sotto</label><select id="f-sub"></select>
+        <input type="search" id="f-text" placeholder="cerca nella descrizione">
+        <button class="link" id="f-reset">azzera</button>
+      </div>
+    </div>
+
+    <div class="kpibar ui" id="kpibar"></div>
+
     <div id="error" class="err hide"></div>
     <div class="chips" id="crumbs"></div>
 
     <div id="view"></div>
-  </main>
+  </div>
 </div>
 
 <div id="tip" class="ui hide"></div>
@@ -356,7 +467,7 @@ let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
 const F = {from:"", to:"", account:"", nature:"", category:"", sub:"",
-           text:"", confronto:""};
+           text:"", confronto:"", vista:""};
 
 // Le categorie hanno due livelli. Dentro al motore viaggiano unite
 // ("Casa > Casalinghi"), qui arrivano gia' divise in Categoria e
@@ -793,7 +904,11 @@ function tableHTML(headers, rows, right){
 // --------------------------------------------------------------------------
 const CARDS = {};
 
-CARDS.indicatori = rows => {
+// Gli indicatori vivono nella barra, accanto ai pulsanti del periodo:
+// "in questo periodo, questi numeri" e' una frase sola, e spezzarla in un
+// riquadro sotto ai filtri la faceva leggere due volte. Torna solo le celle;
+// e' render() a metterle in #kpibar.
+function indicatori(rows){
   const out = outflow(rows), inc = inflow(rows), m = monthsOf(spending(rows));
   const spent = sum(out), earned = sum(inc), saved = earned + spent;
   const ordinary = sum(out.filter(t => t.Natura !== "Straordinarie"));
@@ -805,17 +920,12 @@ CARDS.indicatori = rows => {
   const partial = !!(F.nature || F.category || F.text);
   if(partial){
     const whole = sum(outflow(S.transactions));
-    return '<div class="kpis">'
-      + kpi("uscite / mese", euro(-spent/m))
-      + kpi("totale nel periodo", euro(spent))
+    return kpi("uscite / mese", spesa(spent/m))
+      + kpi("totale nel periodo", spesa(spent))
       + kpi("quota sulle uscite",
             whole ? Math.round(spent/whole*100) + "%" : "—")
       + kpi("transazioni", String(out.length))
-      + kpi("mesi coperti", String(m))
-      + "</div>"
-      + '<p class="note">Vista filtrata: risparmio e tasso di risparmio non '
-      + 'compaiono perche' + "'" + ' si calcolano sul bilancio intero, non su '
-      + 'una fetta di sole uscite.</p>';
+      + kpi("mesi coperti", String(m));
   }
 
   const rate = earned ? saved/earned : 0;
@@ -829,25 +939,17 @@ CARDS.indicatori = rows => {
   const ordinarioP = sum(outflow(prima).filter(t => t.Natura !== "Straordinarie"));
   const tassoP = presoP ? (presoP + spesoP)/presoP : 0;
 
-  return '<div class="kpis">'
-    + kpi("entrate / mese", euro(earned/m), "",
+  return kpi("entrate / mese", euro(earned/m), "",
           confronta(earned/m, presoP/mp, false, p && p.etichetta))
-    + kpi("uscite / mese", euro(-spent/m), "",
+    + kpi("uscite / mese", spesa(spent/m), "",
           confronta(-spent/m, -spesoP/mp, true, p && p.etichetta))
     + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad",
           confronta(saved/m, (presoP+spesoP)/mp, false, p && p.etichetta))
     + kpi("tasso di risparmio", Math.round(rate*100) + "%", "",
           confronta(rate, tassoP, false, p && p.etichetta))
-    + kpi("spesa ordinaria / mese", euro(-ordinary/m), "",
-          confronta(-ordinary/m, -ordinarioP/mp, true, p && p.etichetta))
-    + "</div>"
-    + (p ? "" : '<p class="note">Scegli un periodo in alto a sinistra per '
-        + 'vedere accanto a ogni numero quanto e\' cambiato rispetto al '
-        + 'periodo precedente di pari durata.</p>')
-    + '<p class="note">La <b>spesa ordinaria</b> esclude le straordinarie: '
-    + 'sono episodiche e, lasciate nella media, fanno sembrare cattivo un mese '
-    + 'normale.</p>';
-};
+    + kpi("spesa ordinaria / mese", spesa(ordinary/m), "",
+          confronta(-ordinary/m, -ordinarioP/mp, true, p && p.etichetta));
+}
 const kpi = (label, value, cls, confronto) =>
   `<div class="kpi ${cls||""}"><span>${esc(label)}</span><b>${esc(value)}</b>`
   + (confronto ? `<i class="delta ${confronto.verso}">${esc(confronto.testo)}</i>` : "")
@@ -1023,24 +1125,195 @@ function confronta(ora, prima, spesaMeglioSeScende, metro){
           testo: `${segno}${Math.round(scarto*100)}% contro ${metro}`};
 }
 
-CARDS.natura = rows => {
+// --------------------------------------------------------------------------
+// dove vanno i soldi: un riquadro solo, tre modi di guardarlo
+// --------------------------------------------------------------------------
+// Prima erano cinque: per natura, per merchant ricorrente, per categoria, per
+// categoria anno su anno, per merchant. Le stesse righe misurate in modi
+// diversi, senza niente che dicesse quale leggere per prima -- "Costi
+// ricorrenti" e "Dove finiscono i soldi" condividevano meta' delle voci con
+// numeri diversi, e "Voci per costo annuo" e "Aree anno su anno" avevano le
+// righe identiche. Adesso la domanda e' una e la risposta pure; a cambiare e'
+// solo da quale lato la si guarda.
+
+const VISTE = [["area", "area"], ["negozio", "negozio"],
+               ["ricorrenti", "solo i ricorrenti"]];
+
+// Una spesa si scrive senza il meno: la colonna dice gia' che sono uscite, e
+// il segno su ogni riga non aggiunge niente da leggere. Resta dove un valore
+// puo' davvero essere positivo -- risparmio, rimborsi, differenze.
+const spesa = v => euro(Math.abs(v));
+
+// Il confronto fra due periodi, a parole. Il segno da solo mentiva: in
+// "differenza -3.996" il meno voleva dire "hai speso di PIU'", l'opposto di
+// quello che chiunque legge, tanto che serviva una nota a pie' di pagina per
+// spiegarlo. E una percentuale come -943% non e' informazione: quando lo
+// scarto e' fuori scala si dice da dove a dove.
+function scarto(prima, dopo){
+  const a = Math.abs(prima), b = Math.abs(dopo);
+  if(a < 1 && b < 1) return null;
+  const d = b - a;
+  if(Math.abs(d) < 1) return {testo:"uguale", verso:"pari"};
+  const verso = d > 0 ? "peggio" : "meglio";
+  if(a < 1) return {testo:`nuova: ${spesa(b)}`, verso};
+  if(Math.abs(d / a) > 2)
+    return {testo:`da ${spesa(a)} a ${spesa(b)}`, verso};
+  return {testo:`${spesa(d)} in ${d > 0 ? "piu'" : "meno"}`, verso};
+}
+
+// Gli stessi mesi dei due anni. L'anno in corso e' quasi sempre incompleto:
+// confrontarlo intero contro un anno pieno direbbe "hai speso il 97% in
+// meno", che e' falso -- mancano undici mesi.
+function anniAConfronto(out){
+  const anni = uniq(out.map(t => (t.Data||"").slice(0,4))).sort().slice(-2);
+  if(anni.length < 2) return null;
+  const ultimo = out.filter(t => (t.Data||"").startsWith(anni[1]))
+    .reduce((m,t) => Math.max(m, +(t.Data||"").slice(5,7) || 0), 0);
+  const dentro = (t, y) => (t.Data||"").startsWith(y)
+    && +(t.Data||"").slice(5,7) <= ultimo;
+  return {anni, ultimo, dentro, parziale: ultimo < 12};
+}
+
+CARDS.dove = rows => {
+  const vista = VISTE.some(v => v[0] === F.vista) ? F.vista : "area";
   const m = monthsOf(spending(rows));
-  // Una barra da zero euro e' solo rumore: capita quando una categoria di
-  // entrate contiene una riga negativa isolata.
+  const out = outflow(rows);
+  const conf = anniAConfronto(out);
+  const totale = Math.abs(sum(out)) || 1;
+
+  const scelta = '<div class="viste">' + VISTE.map(([k, eti]) =>
+    `<button data-vista="${k}" class="${k === vista ? "on" : ""}">`
+    + `${esc(eti)}</button>`).join("") + "</div>";
+
+  // Ogni riga sa dire il suo scarto d'anno: e' la colonna che prima viveva
+  // in un riquadro tutto suo con le stesse identiche voci.
+  const scartoDi = filtro => {
+    if(!conf) return null;
+    const a = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
+    const b = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
+    return scarto(a, b);
+  };
+
+  const riga = (nome, tot, n, opzioni) => {
+    const o = opzioni || {};
+    const s = o.scarto;
+    const quota = Math.round(Math.abs(tot) / totale * 100);
+    return `<tr class="${o.sub ? "sub" : "area"}">`
+      + `<td class="q" style="--w:${Math.min(quota, 100)}%"><i></i>`
+      + `<button class="link" data-drill="${o.drill}" `
+      + `data-value="${esc(nome)}">${esc(nome)}</button>`
+      + (o.nota ? ` <span class="dove">${esc(o.nota)}</span>` : "")
+      + `</td>`
+      + `<td>${spesa(tot/m)}</td><td>${spesa(tot/m*12)}</td>`
+      + `<td class="dove">${quota}%</td>`
+      + `<td class="${s ? "delta " + s.verso : "dove"}">`
+      + `${s ? esc(s.testo) : "—"}</td>`
+      + `<td class="dove">${n}</td></tr>`;
+  };
+
+  let corpo = "", intestazioni;
+  if(vista === "area"){
+    intestazioni = ["voce", "al mese", "all'anno", "quota",
+                    conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
+    // Due livelli in una tabella sola: l'area, e sotto le sue voci. Prima
+    // "dentro Casa, cosa?" era un altro riquadro; qui e' la riga seguente.
+    const aree = groupSum(out, "Categoria");
+    for(const a of aree.slice(0, 12)){
+      corpo += riga(a.name, a.total, a.n, {
+        drill:"category", scarto:scartoDi(t => (t.Categoria||"") === a.name)});
+      const figlie = groupSum(out.filter(t => (t.Categoria||"") === a.name),
+                              "Sottocategoria")
+        .filter(g => g.name && g.name !== "Senza categoria").slice(0, 5);
+      for(const f of figlie)
+        corpo += riga(f.name, f.total, f.n, {sub:true, drill:"sub",
+          scarto: scartoDi(t => (t.Categoria||"") === a.name
+                              && (t.Sottocategoria||"") === f.name)});
+    }
+  } else {
+    intestazioni = ["negozio", "al mese", "all'anno", "quota",
+                    conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
+    const mappa = new Map();
+    for(const r of out){
+      const k = r.Merchant; if(!k) continue;
+      const cur = mappa.get(k) || {total:0, n:0, mesi:new Set()};
+      cur.total += r.Importo; cur.n++; cur.mesi.add(month(r));
+      mappa.set(k, cur);
+    }
+    let elenco = [...mappa.entries()]
+      .map(([name, v]) => ({name, ...v, mesi:v.mesi.size}));
+    if(vista === "ricorrenti"){
+      // Presenti in almeno sei mesi distinti: e' la lista da cui si parte per
+      // disdette e cambi fornitore, non un negozio visto una volta sola.
+      elenco = elenco.filter(v => v.mesi >= 6)
+        .sort((a,b) => a.total/a.mesi - b.total/b.mesi);
+    } else {
+      elenco.sort((a,b) => a.total - b.total);
+    }
+    for(const v of elenco.slice(0, 22))
+      corpo += riga(v.name, v.total, v.n, {
+        drill:"text", nota: vista === "ricorrenti" ? `${v.mesi}/${m} mesi` : "",
+        scarto: scartoDi(r => r.Merchant === v.name)});
+    if(!elenco.length)
+      corpo = `<tr><td colspan="6" class="dove">nessuna voce nel periodo `
+            + `scelto</td></tr>`;
+  }
+
+  return scelta + '<div class="scroll tab-dove"><table><thead><tr>'
+    + intestazioni.map((h, i) =>
+        `<th class="${i ? "num" : ""}">${esc(h)}</th>`).join("")
+    + "</tr></thead><tbody>" + corpo + "</tbody></table></div>";
+};
+
+// Le leve: cosa si puo' fare per abbassare ogni natura, e in quanto tempo.
+// La leva e' il motivo per cui la natura esiste; senza, restano sei parole e
+// il lettore indovina cosa farne.
+CARDS.leve = rows => {
+  const m = monthsOf(spending(rows));
   const items = groupSum(outflow(rows), "Natura")
-    .filter(g => Math.abs(g.total/m) >= 1)
-    .map(g => ({name:g.name, value:g.total/m,
-                color:NATURE_COLOR[g.name]||"#8a8a8a"}));
-  // Sotto a ogni barra la leva: dice cosa si puo' fare per abbassarla, e in
-  // quanto tempo. E' la risposta alla domanda che il riquadro pone.
-  const leve = items.filter(g => (NATURA[g.name]||{}).leva)
-    .map(g => `<div class="leva"><i style="background:${g.color}"></i>`
-      + `<b>${esc(g.name)}</b><span>${esc(NATURA[g.name].leva)}</span>`
-      + `<em>${esc(NATURA[g.name].quando)}</em></div>`).join("");
-  return barChart(items, {drill:"nature"})
-    + '<div class="leve">' + leve + '</div>'
-    + '<p class="note">Media mensile, dalla piu\' facile da tagliare alla '
-    + 'meno. Clicca una barra per filtrare tutto il resto su quella natura.</p>';
+    .filter(g => Math.abs(g.total/m) >= 1);
+  return '<div class="leve">' + items.map(g => {
+    const info = NATURA[g.name] || {};
+    return `<div class="leva hit" data-drill="nature" data-value="${esc(g.name)}">`
+      + `<i style="background:${NATURE_COLOR[g.name]||"#8a8a8a"}"></i>`
+      // Nome e leva stanno in un figlio solo: erano due, e con tre colonne
+      // il quarto figlio -- la cifra -- finiva su una riga tutta sua.
+      + `<div><b>${esc(g.name)}</b>`
+      // Leva e tempo sono la stessa frase: su tre righe la pila di destra
+      // superava di quattrocento pixel la tabella accanto.
+      + `<span>${esc(info.leva || "")}`
+      + (info.quando && info.quando !== "—"
+         ? ` &middot; ${esc(info.quando)}` : "") + `</span></div>`
+      + `<u>${spesa(g.total/m)}</u></div>`;
+  }).join("") + "</div>";
+};
+
+// Il confronto d'anno, ridotto alle voci che si sono davvero mosse. La
+// tabella intera non serve piu': ogni riga di "Dove vanno i soldi" porta gia'
+// il suo scarto. Qui restano solo i primi cinque, che sono la notizia.
+CARDS.anno = rows => {
+  const out = outflow(rows);
+  const conf = anniAConfronto(out);
+  if(!conf) return '<p class="note">serve piu\' di un anno di dati</p>';
+  const MESI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set","ott",
+                "nov","dic"];
+  const aree = uniq(out.map(t => t.Categoria || "Senza categoria"));
+  const mosse = aree.map(n => {
+    const filtro = t => (t.Categoria || "Senza categoria") === n;
+    const a = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
+    const b = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
+    return {n, d: Math.abs(b) - Math.abs(a), s: scarto(a, b)};
+  }).filter(r => r.s && r.s.verso !== "pari")
+    .sort((x,y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 5);
+  const totale = mosse.reduce((s,r) => s + r.d, 0);
+  const finestra = conf.parziale ? `gen–${MESI[conf.ultimo]}` : "anno intero";
+  return `<p class="note">${esc(finestra)}, ${esc(conf.anni[1])} contro `
+    + `${esc(conf.anni[0])}: <b class="${totale > 0 ? "peggio" : "meglio"}">`
+    + `${spesa(totale)} in ${totale > 0 ? "piu'" : "meno"}</b>.</p>`
+    + '<div class="scarti">' + mosse.map(r =>
+      `<div><button class="link" data-drill="category" `
+      + `data-value="${esc(r.n)}">${esc(r.n)}</button>`
+      + `<em class="delta ${r.s.verso}">${esc(r.s.testo)}</em></div>`).join("")
+    + "</div>";
 };
 
 // L'andamento ignora il periodo e guarda tutto lo storico: e' l'unico
@@ -1069,103 +1342,14 @@ CARDS.andamento = () => {
        : "");
 };
 
-CARDS.aree = rows => {
-  const out = outflow(rows);
-  const years = uniq(out.map(t => (t.Data||"").slice(0,4))).slice(-2);
-  if(years.length < 2) return '<p class="note">serve piu\' di un anno di dati</p>';
-
-  // L'anno in corso e' quasi sempre incompleto. Confrontarlo tutto intero
-  // contro un anno pieno direbbe "hai speso il 97% in meno", che e' falso:
-  // mancano undici mesi. Si confrontano gli stessi mesi dei due anni.
-  const lastMonth = out.filter(t => (t.Data||"").startsWith(years[1]))
-    .reduce((m,t) => Math.max(m, +(t.Data||"").slice(5,7) || 0), 0);
-  const inWindow = (t, y) => (t.Data||"").startsWith(y)
-    && +(t.Data||"").slice(5,7) <= lastMonth;
-  const partial = lastMonth < 12;
-  const MESI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set","ott",
-                "nov","dic"];
-
-  const area = t => t.Categoria || "Senza categoria";
-  const names = uniq(out.map(area));
-  const body = names.map(n => {
-    const a = sum(out.filter(t => area(t)===n && inWindow(t, years[0])));
-    const b = sum(out.filter(t => area(t)===n && inWindow(t, years[1])));
-    return {n, a, b, d:b-a};
-  }).filter(r => r.a || r.b).sort((x,y) => x.b - y.b);
-
-  const span = partial ? ` (gen–${MESI[lastMonth]})` : "";
-  return tableHTML(["area", years[0]+span, years[1]+span, "differenza", "%"],
-    body.map(r => [esc(r.n), euro(r.a), euro(r.b),
-      `<span style="color:${r.d<0?"var(--warn)":"inherit"}">${euro(r.d)}</span>`,
-      r.a ? ((r.d/Math.abs(r.a))*100).toFixed(0)+"%" : "—"]),
-    [1,2,3,4])
-    + `<p class="note">Differenza negativa = quest'anno hai speso di piu'.`
-    + (partial ? ` Il ${years[1]} arriva a ${MESI[lastMonth]}, quindi il `
-        + `confronto usa solo gen–${MESI[lastMonth]} di entrambi gli anni.` : "")
-    + "</p>";
-};
-
-CARDS.voci = rows => {
-  const m = monthsOf(spending(rows));
-  // Due livelli, un riquadro solo: finche' non hai scelto una categoria si
-  // vedono le 12 aree; scegliendone una si scende nelle sue sottocategorie.
-  // Cosi' la classifica resta leggibile invece di elencare 37 voci sempre.
-  const giu = !!F.category;
-  const groups = groupSum(outflow(rows), giu ? "Sottocategoria" : "Categoria")
-    .slice(0, 20);
-  const risali = giu
-    ? `<p class="note"><button class="link" data-up="1">&lt; tutte le `
-      + `categorie</button> &middot; stai guardando ${esc(F.category)}</p>`
-    : "";
-  return risali + tableHTML(
-    [giu ? "sottocategoria" : "categoria", "all'anno", "al mese", "tx"],
-    groups.map(g => [
-      `<button class="link" data-drill="${giu ? "sub" : "category"}" `
-      + `data-value="${esc(g.name)}">${esc(g.name)}</button>`,
-      euro(g.total/m*12), euro(g.total/m), g.n]), [1,2,3]);
-};
-
-CARDS.ricorrenti = rows => {
-  const m = monthsOf(spending(rows));
-  const out = outflow(rows), map = new Map();
-  for(const t of out){
-    const k = t.Merchant; if(!k) continue;
-    const cur = map.get(k) || {total:0, n:0, months:new Set(), cats:{}};
-    cur.total += t.Importo; cur.n++; cur.months.add(month(t));
-    // Il nome intero: qui interessa la voce, e "Casa" da sola non dice se
-    // sono bollette o mobili.
-    const nome = whole(t);
-    cur.cats[nome] = (cur.cats[nome]||0)+1;
-    map.set(k, cur);
-  }
-  const rec = [...map.entries()].filter(([,v]) => v.months.size >= 6)
-    .map(([name,v]) => ({name, ...v, months:v.months.size,
-      yearly: v.total/v.months.size*12,
-      cat: Object.entries(v.cats).sort((a,b)=>b[1]-a[1])[0][0]}))
-    .sort((a,b) => a.yearly - b.yearly).slice(0,20);
-  if(!rec.length) return '<p class="note">nessun costo ricorrente nel periodo scelto</p>';
-  return tableHTML(["merchant", "categoria", "mesi attivi", "costo annuo", "al mese"],
-    rec.map(r => [
-      `<button class="link" data-drill="text" data-value="${esc(r.name)}">${esc(r.name)}</button>`,
-      esc(r.cat), `${r.months}/${m}`, euro(r.yearly), euro(r.total/r.months)]),
-    [2,3,4])
-    + '<p class="note">Presenti in almeno 6 mesi distinti. E\' la lista da cui '
-    + 'partire per disdette e cambi fornitore.</p>';
-};
-
-CARDS.merchant = rows => {
-  const m = monthsOf(spending(rows));
-  const items = groupSum(outflow(rows).filter(t => t.Merchant), "Merchant")
-    .slice(0,18).map(g => ({name:g.name, value:g.total/m, color:"#4a7fb5"}));
-  return barChart(items, {drill:"text"})
-    + '<p class="note">Media mensile per negozio. Se lo stesso posto compare '
-    + 'due volte con nomi diversi, aggiungilo in Regole e merchant.</p>';
-};
-
 CARDS.revisione = rows => {
   const todo = rows.filter(t => (t.Confidenza ?? 1) < 1);
-  return `<p class="note">${todo.length} righe con confidenza sotto 1. `
-    + `Aprile nella scheda <b>Da rivedere</b>.</p>`;
+  if(!todo.length)
+    return '<p class="note">Niente da rivedere: ogni riga ha una categoria '
+      + 'di cui il motore e\' sicuro.</p>';
+  return '<div class="avviso"><b>' + todo.length + ' righe da guardare</b>'
+    + '<span>nessuna regola le ha classificate</span>'
+    + '<button class="link" data-tab="revisione">Apri &rarr;</button></div>';
 };
 
 // --------------------------------------------------------------------------
@@ -1173,18 +1357,23 @@ CARDS.revisione = rows => {
 // --------------------------------------------------------------------------
 const VIEWS = {};
 
-// Quante delle 12 colonne occupa ogni riquadro. Chi ha bisogno di larghezza
-// la chiede: gli indicatori e le tabelle larghe prendono tutto, i due grafici
-// si dividono la riga, le tre classifiche stanno in fila.
-const SPAN = {indicatori:12, natura:5, andamento:7, aree:6, voci:6,
-              ricorrenti:6, merchant:6, revisione:12};
-
-VIEWS.dashboard = rows => '<div class="grid">'
-  + S.layout.filter(c => c.visibile && CARDS[c.id])
-    .map(c => `<div class="card sp${SPAN[c.id] || 12}">`
-              + `<div class="head"><h2>${esc(c.titolo)}</h2></div>`
-              + CARDS[c.id](rows) + "</div>").join("")
-  + "</div>";
+// Il pannello: il PRIMO riquadro visibile prende la colonna larga a sinistra
+// e ne porta il peso; gli altri si impilano a destra. Le due colonne sono alte
+// uguali perche' le lega la griglia, non perche' i contenuti si somiglino:
+// prima, fra due tabelle affiancate, restavano quattrocento pixel di vuoto.
+// L'ordine si cambia in Componi, e mettere un riquadro per primo vuol dire
+// dargli la colonna grande.
+VIEWS.dashboard = rows => {
+  const visibili = S.layout.filter(c => c.visibile && CARDS[c.id]);
+  if(!visibili.length)
+    return '<p class="note">Nessun riquadro acceso. Riaccendine uno in '
+      + '<b>Componi</b>.</p>';
+  const scatola = c => `<div class="card"><div class="head">`
+    + `<h2>${esc(c.titolo)}</h2></div>` + CARDS[c.id](rows) + "</div>";
+  return '<div class="pannello">' + scatola(visibili[0])
+    + '<div class="pila">' + visibili.slice(1).map(scatola).join("")
+    + "</div></div>";
+};
 
 // Il conto e' un insieme chiuso: un menu evita di scriverlo con una grafia
 // diversa e creare un conto fantasma.
@@ -1375,13 +1564,20 @@ VIEWS.componi = () => '<div class="card"><div class="head">'
 // --------------------------------------------------------------------------
 function render(){
   if(!S) return;
-  // Solo l'elenco delle schede: "Esporta" e "Log" vivono nella stessa barra
-  // ma sono HTML fisso, e riscrivere tutto il <nav> li cancellerebbe.
+  // Le sezioni, con il lavoro arretrato scritto sopra a "Da rivedere": una
+  // scheda che nasconde il proprio arretrato non viene mai aperta.
+  const arretrato = ((S && S.transactions) || [])
+    .filter(x => (x.Confidenza ?? 1) < 1).length;
   el("tablist").innerHTML = TABS.map(([id,label]) =>
-    `<button data-tab="${id}" class="${TAB===id?"on":""}">${esc(label)}</button>`).join("");
+    `<button data-tab="${id}" class="${TAB===id?"on":""}">${esc(label)}`
+    + (id === "revisione" && arretrato
+       ? `<span class="conta">${arretrato}</span>` : "")
+    + "</button>").join("");
 
-  el("filters").classList.toggle("hide",
-    TAB==="categorie" || TAB==="regole" || TAB==="componi");
+  const senzaFiltri = TAB==="categorie" || TAB==="regole" || TAB==="componi";
+  el("filters").classList.toggle("hide", senzaFiltri);
+  el("periodo").classList.toggle("hide", senzaFiltri);
+  el("barra").classList.toggle("hide", senzaFiltri);
 
   renderQuick();
   renderConfronti();
@@ -1412,12 +1608,19 @@ function render(){
   const attesa = S.pending || [];
   el("source").textContent =
     (S.has_exports ? "sorgente: export/"
-                   : "nessun export caricato: metti i file in export/ e premi Carica")
+       : S.derivato ? "sorgente: consolidato.csv (gli export non ci sono piu')"
+       : "nessun export caricato: metti i file in export/ e premi Carica")
     + coverage(rows, months)
     // Il sorvegliante avvisa e basta: se non lo dicesse qui, un export
     // depositato e mai caricato resterebbe invisibile.
     + (attesa.length ? `  ·  ${attesa.length} export in attesa: `
                        + `${attesa.slice(0,3).join(", ")}` : "");
+
+  // Gli indicatori stanno nella barra, e solo sulla dashboard: sulle altre
+  // schede parlerebbero di numeri che non si stanno guardando.
+  const mostraKpi = TAB === "dashboard" && !senzaFiltri;
+  el("kpibar").classList.toggle("hide", !mostraKpi);
+  el("kpibar").innerHTML = mostraKpi ? indicatori(rows) : "";
 
   el("view").innerHTML = VIEWS[TAB](rows);
 }
@@ -1465,13 +1668,14 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],"
-    + "[data-up],[data-conferma],[data-confronto]");
+    + "[data-up],[data-conferma],[data-confronto],[data-vista]");
   if(!t) return;
   const d = t.dataset;
 
   if(d.tab){ TAB = d.tab; render(); return; }
   if(d.clear){ F[d.clear] = ""; render(); return; }
   if(d.confronto !== undefined){ F.confronto = d.confronto; render(); return; }
+  if(d.vista !== undefined){ F.vista = d.vista; render(); return; }
   if(d.quick !== undefined){
     const [from, to] = QUICK[+d.quick][1]();
     if(!from) return;

@@ -674,6 +674,77 @@ nel 2025 non ha un buco, ha smesso di essere il conto principale); e le due
 direzioni di un giroconto spaiato non pesano uguale — l'uscita e' un errore,
 l'entrata e' innocua.
 
+### 4sexies. La dashboard: un riquadro con tre viste (25/08/2026)
+
+Cinque riquadri rispondevano tutti a **"dove vanno i soldi"** con le stesse
+righe misurate in modi diversi. `Costi ricorrenti` e `Dove finiscono i soldi`
+condividevano metà delle voci con numeri diversi; `Voci per costo annuo` e
+`Aree anno su anno` avevano le righe identiche. Niente diceva quale leggere per
+prima, e fra due tabelle affiancate restavano **400 px di vuoto**.
+
+Ora c'è `CARDS.dove`, una tabella sola con tre viste — **area / negozio /
+ricorrenti** — che condividono colonne e ordine. Nella vista per area ogni
+categoria si apre sulle sue sottocategorie: è il secondo livello che la
+tassonomia già ha, e risponde a "dentro Casa, cosa?" senza cambiare riquadro.
+
+Tre regole di scrittura dei numeri, che valgono ovunque:
+
+- **Niente segno meno sulle spese** (`spesa()`): la colonna dice già che sono
+  uscite. Il meno resta dove un valore può davvero essere positivo.
+- **Le differenze si dicono a parole** (`scarto()`): `3.996 € in più` invece di
+  `-3.996 €` con una nota che spiegava che il meno voleva dire "di più". Una
+  nota che spiega un segno è un difetto di disegno.
+- **Le percentuali oltre ±200% diventano `da 111 a 1.153 €`.** `-943%` non è
+  informazione.
+
+Il resto della disposizione:
+
+- **La spalla** a sinistra: sopra le sezioni (con il conteggio dell'arretrato
+  su "Da rivedere"), sotto le azioni sui dati, separate da un filetto. Navigare
+  non è ricaricare.
+- **Due riquadri in cima**: sopra si *sceglie* (periodo, confronto, filtri),
+  sotto si *legge* (il recap). Erano nella stessa cornice e i numeri
+  sembravano un filtro anche loro.
+- **Il pannello**: il PRIMO riquadro acceso prende la colonna larga, gli altri
+  si impilano a destra. Le due colonne sono alte uguali perché le lega la
+  griglia. In Componi, mettere un riquadro per primo vuol dire dargli la
+  colonna grande.
+
+Da 2462 px a 1271 px su una finestra da 990.
+
+Trappola pagata: `nav{flex-direction:column}` per la spalla colpiva anche il
+`<nav>` dei filtri e impilava i pulsanti del periodo. I selettori di elemento
+in un foglio unico raggiungono più di quel che si guarda mentre li si scrive.
+
+### 4septies. Il ripiego su consolidato.csv (25/08/2026)
+
+Caricare un estratto conto e poi cancellarlo è la cosa giusta da fare con un
+file pieno di IBAN. Ma la pipeline ricostruisce sempre tutto dalla sorgente, e
+al riavvio l'app apriva vuota con dentro 56 mesi di lavoro.
+
+`read_consolidato()` riparte dal derivato quando gli export non ci sono più.
+`consolidato.csv` **resta un derivato** — nessuno lo modifica a mano, ogni giro
+lo riscrive da capo — ma quando la sorgente è sparita è l'unica copia rimasta
+di ciò che la sorgente diceva.
+
+Due dettagli che non sono opzionali:
+
+- **Gli ID vengono dal file e non si ricalcolano.** Sui valori già corretti
+  darebbero id diversi, e ogni correzione si staccherebbe dalla sua
+  transazione al primo riavvio.
+- **I passi di pulizia non si rifanno.** Doppioni, storni, giroconti e
+  coperture li ha tolti il giro che ha scritto il file; rifarli non
+  toglierebbe niente di nuovo ma potrebbe togliere di troppo — un giroconto
+  rimasto spaiato si appaierebbe con una spesa qualsiasi di pari importo. La
+  categorizzazione invece si rifà sempre, così una regola aggiunta oggi vale
+  anche qui.
+
+Verificato: il giro dal ripiego riscrive un `consolidato.csv` **byte per byte
+identico** a quello prodotto dagli export.
+
+L'interfaccia lo dichiara (`derivato` nel payload): *"sorgente: consolidato.csv
+(gli export non ci sono più)"*.
+
 ### 5. Gli indicatori cambiano quando filtri
 
 Filtrando su una natura, "tasso di risparmio" mostrava `-760%`. Il risparmio

@@ -23,6 +23,7 @@ import json
 import math
 import os
 import re
+import tempfile
 import sqlite3
 import sys
 import tempfile
@@ -93,6 +94,10 @@ def transfer_out(category, amount, source):
 # Il livello che conta per la natura e' il SECONDO: "Casa" da sola contiene
 # quattro nature diverse, perche' le bollette sono ricorrenti e una
 # ristrutturazione e' straordinaria.
+# Scritto cosi' perche' \n dentro a una heredoc di shell
+# diventa un a capo vero prima ancora che Python lo veda.
+NEWLINE = chr(10)
+
 LEVEL_SEP = " > "
 
 
@@ -1605,6 +1610,29 @@ def selftest():
         got = parse_amount(raw)
         assert abs(got - expected) < 0.005, f"{raw!r}: atteso {expected}, ottenuto {got}"
 
+    # Il ripiego su consolidato.csv deve tornare le righe con gli STESSI ID.
+    # Ricalcolarli sui valori gia' corretti li staccherebbe dalle correzioni,
+    # e al riavvio l'importo sistemato a mano tornerebbe quello sbagliato
+    # senza che niente lo dica.
+    with tempfile.TemporaryDirectory() as cartella:
+        righe = [
+            "ID;Data;Descrizione;Merchant;Importo;Conto;Natura;Categoria;"
+            "Sottocategoria;Origine;Confidenza",
+            "abc123#1;2026-01-15;spesa al mercato;Mercato;-12,50;Koala;"
+            "Quotidiane;Cibo & Mangiare;Alimentari;regola;1.0",
+            "def456#1;2026-01-16;;;-3,00;Koala;;;;;",
+            ";;riga senza data;;-1,00;Koala;;;;;",
+        ]
+        (Path(cartella) / "consolidato.csv").write_text(
+            NEWLINE.join(righe) + NEWLINE, encoding="utf-8-sig")
+        ripescate = read_consolidato(cartella, "consolidato.csv")
+        assert read_consolidato(cartella, "non-esiste.csv") == [], \
+            "un file che non c'e' deve dare zero righe, non esplodere"
+    assert len(ripescate) == 2, f"ripescate {len(ripescate)} righe invece di 2"
+    assert ripescate[0]["ID"] == "abc123#1", "l'ID non e' quello del file"
+    assert abs(ripescate[0]["Importo"] + 12.50) < 0.005, "importo non letto"
+    assert ripescate[0]["Conto"] == "Koala", "conto perso"
+
     # Un giroconto in uscita che nessuno riceve e' una spesa, non uno
     # spostamento: la coppia vera l'ha gia' tolta drop_internal_transfers, e
     # quel che resta e' denaro uscito dal quadro. Le entrate no: sono l'altra
@@ -2256,6 +2284,52 @@ def read_sources(folder, config, output, include_pending=False, discarded=None):
     return rows
 
 
+def read_consolidato(folder, output):
+    """Le transazioni gia' elaborate, quando la sorgente non c'e' piu'.
+
+    Chi carica un estratto conto e poi lo cancella fa la cosa giusta: quel
+    file contiene IBAN, numeri di carta e ogni movimento. Ma la pipeline
+    ricostruisce sempre tutto dalla sorgente, e al riavvio successivo l'app
+    apriva vuota con dentro cinquantasei mesi di lavoro.
+
+    consolidato.csv resta un DERIVATO: nessuno lo modifica a mano, e ogni giro
+    lo riscrive da capo. Solo che, quando la sorgente e' sparita, e' l'unica
+    copia rimasta di cio' che la sorgente diceva.
+
+    Le righe tornano gia' ripulite: doppioni, storni, giroconti e coperture li
+    ha tolti il giro che le ha scritte. Rifare quei passi su di loro non
+    toglierebbe niente di nuovo, ma potrebbe togliere di troppo: un giroconto
+    rimasto spaiato si appaierebbe con una spesa qualsiasi di pari importo. La
+    categorizzazione invece si rifa' sempre, cosi' una regola aggiunta oggi
+    vale anche su questi dati.
+    """
+    path = Path(folder) / output
+    if not path.exists():
+        return []
+    frame = pd.read_csv(path, sep=";", encoding="utf-8-sig", dtype=str)
+    if not usable(frame):
+        return []
+    rows = []
+    for _, riga in frame.iterrows():
+        if not _text(riga.get("Data")):
+            continue
+        rows.append({
+            # L'ID viene dal file e non si ricalcola: sui valori gia' corretti
+            # darebbe un id diverso, e ogni correzione si staccherebbe dalla
+            # sua transazione al primo riavvio.
+            "ID": _text(riga.get("ID")),
+            "Data": _text(riga.get("Data")),
+            "Descrizione": _text(riga.get("Descrizione")),
+            "Importo": parse_amount(_text(riga.get("Importo"))),
+            "Conto": _text(riga.get("Conto")),
+            "Rango": RANK_BANK,
+        })
+    if rows:
+        print(f"  export non trovati: riparto da {output}, "
+              f"{len(rows)} transazioni gia' elaborate")
+    return rows
+
+
 def run(folder, use_llm=True, output="consolidato.csv",
         make_dashboard=True, config=None, include_pending=False):
     """L'intera pipeline, chiamabile da codice. Ritorna il DataFrame finale.
@@ -2273,6 +2347,12 @@ def run(folder, use_llm=True, output="consolidato.csv",
 
     scartate = []
     rows = read_sources(folder, config, output, include_pending, scartate)
+    # Il ripiego: gli export cancellati non devono svuotare l'app. In
+    # read_consolidato() il perche' i passi di pulizia non si rifanno.
+    gia_pulite = False
+    if not rows:
+        rows = read_consolidato(folder, output)
+        gia_pulite = bool(rows)
     if not rows:
         raise RuntimeError(
             f"nessuna transazione: metti gli export in {EXPORT_DIR}/ e premi "
@@ -2282,26 +2362,28 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # L'ordine conta: prima gli ID sui valori originali, poi le correzioni.
     # Al contrario, correggere un importo cambierebbe l'ID della sua riga e
     # la correzione si staccherebbe dalla transazione al giro successivo.
-    assign_ids(rows)
+    if not gia_pulite:
+        assign_ids(rows)
     apply_corrections(rows, config["corrections"])
-    rows = drop_cross_file_duplicates(rows, scartate)
-    # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
-    # tocca solo il rango 0, anticiparlo non cambia niente per la banca e
-    # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
-    # una spesa condivisa "coperta" da una gamba poi annullata spariva del
-    # tutto: tre righe dentro, zero fuori.
-    # Prima dei giroconti: un bonifico annullato somiglia a uno spostamento
-    # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
-    # giroconti lasciando il riaccredito a contare come entrata.
-    rows = drop_reversals(rows, discarded=scartate)
-    # Le regole con categoria Giroconto sono gia' il posto dove vive la
-    # conoscenza di quali conti e quali persone sono "in famiglia".
-    giroconti = [p for p, c in config["rules"] if c == TRANSFER]
-    rows = drop_internal_transfers(rows, discarded=scartate,
-                                   transfers=giroconti)
-    rows = drop_import_artifacts(rows, scartate)
-    rows = drop_covered_by(rows, discarded=scartate,
-                           merchants=config["merchants"])
+    if not gia_pulite:
+        rows = drop_cross_file_duplicates(rows, scartate)
+        # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
+        # tocca solo il rango 0, anticiparlo non cambia niente per la banca e
+        # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
+        # una spesa condivisa "coperta" da una gamba poi annullata spariva del
+        # tutto: tre righe dentro, zero fuori.
+        # Prima dei giroconti: un bonifico annullato somiglia a uno spostamento
+        # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
+        # giroconti lasciando il riaccredito a contare come entrata.
+        rows = drop_reversals(rows, discarded=scartate)
+        # Le regole con categoria Giroconto sono gia' il posto dove vive la
+        # conoscenza di quali conti e quali persone sono "in famiglia".
+        giroconti = [p for p, c in config["rules"] if c == TRANSFER]
+        rows = drop_internal_transfers(rows, discarded=scartate,
+                                       transfers=giroconti)
+        rows = drop_import_artifacts(rows, scartate)
+        rows = drop_covered_by(rows, discarded=scartate,
+                               merchants=config["merchants"])
 
     print("")
     print("categorizzazione")

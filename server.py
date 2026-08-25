@@ -53,14 +53,17 @@ SCHEMA = {
                             "sottocategoria_finale"],
 }
 
+# Il PRIMO riquadro acceso prende la colonna larga della dashboard e ne porta
+# il peso; gli altri si impilano a destra. Cinque riquadri di prima -- natura,
+# ricorrenti, voci, aree, merchant -- rispondevano tutti a "dove vanno i
+# soldi" con le stesse righe misurate in modi diversi: adesso sono le tre
+# viste di "dove". I loro id restano nei layout gia' salvati e vengono
+# ignorati, perche' l'interfaccia disegna solo i riquadri che conosce.
 DEFAULT_LAYOUT = [
-    {"id": "indicatori", "titolo": "Indicatori", "visibile": True},
-    {"id": "natura", "titolo": "Dove puoi agire", "visibile": True},
-    {"id": "andamento", "titolo": "Andamento", "visibile": True},
-    {"id": "ricorrenti", "titolo": "Costi ricorrenti", "visibile": True},
-    {"id": "voci", "titolo": "Voci per costo annuo", "visibile": True},
-    {"id": "aree", "titolo": "Aree, anno su anno", "visibile": True},
-    {"id": "merchant", "titolo": "Dove finiscono i soldi", "visibile": True},
+    {"id": "dove", "titolo": "Dove vanno i soldi", "visibile": True},
+    {"id": "leve", "titolo": "Le leve, dalla piu' facile", "visibile": True},
+    {"id": "anno", "titolo": "Anno su anno", "visibile": True},
+    {"id": "andamento", "titolo": "Uscite mese per mese", "visibile": True},
     {"id": "revisione", "titolo": "Da rivedere", "visibile": True},
 ]
 
@@ -309,6 +312,10 @@ class State:
             "corrections": read_rows("correzioni.csv"),
             "layout": read_layout(),
             "has_exports": self.has_exports(),
+            # Se i dati vengono dal derivato invece che dagli export,
+            # l'interfaccia deve dirlo: non e' un errore, ma neanche
+            # una cosa da scoprire per caso.
+            "derivato": not self.has_exports() and not self.frame.empty,
             "pending": self.pending(),
         }
 
