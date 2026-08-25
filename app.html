@@ -754,6 +754,29 @@ const uncategorized = rows => rows.filter(t => !t.Categoria);
 const sum = rows => rows.reduce((a,t) => a + (t.Importo||0), 0);
 const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
 
+// I mesi CONTATI COME SONO DAVVERO: l'ultimo vale per la parte trascorsa.
+//
+// monthsOf() conta i mesi distinti, quindi un agosto fermo al 25 pesa come un
+// mese intero e tutte le medie "al mese" scendono. Sul mutuo faceva 733 euro
+// invece dei 786 veri, e per capire perche' bisognava aprire il consolidato.
+// E' lo stesso errore che gli indicatori avevano gia' imparato a evitare col
+// ritaglio: qui arriva anche alle tabelle.
+//
+// Solo l'ULTIMO mese si ritaglia. Un mese vuoto in mezzo e' un mese in cui non
+// hai speso, e vale uno: toglierlo alzerebbe la media di un dato che non c'e'.
+function mesiEffettivi(rows){
+  const mesi = uniq(rows.map(month)).sort();
+  if(!mesi.length) return 1;
+  const ultimo = mesi[mesi.length - 1];
+  const fino = rows.map(t => t.Data || "").filter(d => d.slice(0, 7) === ultimo)
+    .reduce((a, b) => a > b ? a : b, "");
+  if(!fino) return mesi.length;
+  const giorniDelMese = new Date(Date.UTC(+ultimo.slice(0, 4),
+                                          +ultimo.slice(5, 7), 0)).getUTCDate();
+  const trascorsi = +fino.slice(8, 10);
+  return mesi.length - 1 + trascorsi / giorniDelMese;
+}
+
 // Il periodo si puo' escludere. Serve all'andamento, che vive sullo storico:
 // ritagliato al mese scelto si riduceva a un punto solo, cioe' a niente. Gli
 // altri filtri restano, perche' quelli dicono DI COSA si sta parlando.
@@ -934,7 +957,10 @@ function indicatori(rows){
   const p = finestraConfronto();
   const prima = p ? S.transactions.filter(t =>
     dentroFinestra(p, t.Data || "")) : [];
-  const mp = monthsOf(spending(prima)) || 1;
+  // Stesso metro dei due lati: la finestra di confronto e' gia' ritagliata
+  // al giorno in cui si fermano i dati, quindi anche il suo ultimo mese e'
+  // parziale e va contato per la parte trascorsa.
+  const mp = mesiEffettivi(spending(prima)) || 1;
   const spesoP = sum(outflow(prima)), presoP = sum(inflow(prima));
   const ordinarioP = sum(outflow(prima).filter(t => t.Natura !== "Straordinarie"));
   const tassoP = presoP ? (presoP + spesoP)/presoP : 0;
@@ -1176,7 +1202,7 @@ function anniAConfronto(out){
 
 CARDS.dove = rows => {
   const vista = VISTE.some(v => v[0] === F.vista) ? F.vista : "area";
-  const m = monthsOf(spending(rows));
+  const m = mesiEffettivi(spending(rows));
   const out = outflow(rows);
   const conf = anniAConfronto(out);
   const totale = Math.abs(sum(out)) || 1;
@@ -1268,7 +1294,7 @@ CARDS.dove = rows => {
 // La leva e' il motivo per cui la natura esiste; senza, restano sei parole e
 // il lettore indovina cosa farne.
 CARDS.leve = rows => {
-  const m = monthsOf(spending(rows));
+  const m = mesiEffettivi(spending(rows));
   const items = groupSum(outflow(rows), "Natura")
     .filter(g => Math.abs(g.total/m) >= 1);
   return '<div class="leve">' + items.map(g => {

@@ -53,7 +53,7 @@ ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
- indicatori, spesa, scarto, VISTE,
+ indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
@@ -94,6 +94,33 @@ console.log("=== entrate contro uscite ===");
   check("i rimborsi stanno fra le uscite, dove riducono la voce",
         rimborsi.every(t => t.Natura !== "Entrate"),
         `${rimborsi.length} rimborsi`);
+}
+
+console.log("=== i mesi contati come sono davvero ===");
+{
+  // Un agosto fermo al 25 non e' un mese intero. Contandolo per uno, ogni
+  // media "al mese" scende: sul mutuo diceva 733 euro invece dei 786 veri, e
+  // per capire perche' bisognava aprire il consolidato.
+  const mese = r => ({Data: r});
+  check("un mese intero vale uno",
+        Math.abs(api.mesiEffettivi([mese("2026-01-31")]) - 1) < 0.001,
+        String(api.mesiEffettivi([mese("2026-01-31")])));
+  const meta = api.mesiEffettivi([mese("2026-08-01"), mese("2026-08-25")]);
+  check("un mese fermo al 25 vale 25/31", Math.abs(meta - 25/31) < 0.001,
+        String(meta));
+  const due = api.mesiEffettivi([mese("2026-07-10"), mese("2026-08-25")]);
+  check("solo l'ULTIMO mese si ritaglia", Math.abs(due - (1 + 25/31)) < 0.001,
+        String(due));
+  // Un mese vuoto in mezzo e' un mese in cui non hai speso, e vale uno:
+  // toglierlo alzerebbe la media di un dato che non esiste.
+  const buco = api.mesiEffettivi([mese("2026-01-15"), mese("2026-03-31")]);
+  check("un mese vuoto in mezzo non si toglie", Math.abs(buco - 2) < 0.001,
+        String(buco));
+  check("senza righe non si divide per zero", api.mesiEffettivi([]) === 1);
+  // Su febbraio il denominatore deve seguire i giorni veri del mese.
+  const feb = api.mesiEffettivi([mese("2024-02-14")]);
+  check("febbraio bisestile ha 29 giorni", Math.abs(feb - 14/29) < 0.001,
+        String(feb));
 }
 
 console.log("=== il metro del confronto ===");
