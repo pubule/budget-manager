@@ -1,0 +1,27 @@
+﻿[
+ {
+  "id": "dove",
+  "titolo": "Dove vanno i soldi",
+  "visibile": true
+ },
+ {
+  "id": "andamento",
+  "titolo": "Uscite mese per mese",
+  "visibile": true
+ },
+ {
+  "id": "leve",
+  "titolo": "Le leve, dalla piu' facile",
+  "visibile": true
+ },
+ {
+  "id": "anno",
+  "titolo": "Anno su anno",
+  "visibile": true
+ },
+ {
+  "id": "revisione",
+  "titolo": "Da rivedere",
+  "visibile": true
+ }
+]

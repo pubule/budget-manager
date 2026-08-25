@@ -701,8 +701,6 @@ In `run()`, nel blocco che chiama `transfer_out`, sostituisci la condizione:
                 and transfer_out(category, row["Importo"], source) != category):
 ```
 
-Attenzione all'ordine: `apply_shares` deve girare **prima** del ciclo di categorizzazione perche' questa guardia funzioni. Sposta la chiamata di conseguenza, subito dopo `rows = drop_covered_by(...)`.
-
 Aggiungi il controllo in `selftest()`:
 
 ```python
@@ -761,6 +759,12 @@ git commit -m "feat: quote.csv, due colonne nel consolidato e il travaso nella c
 **Interfaces:**
 - Consumes: le colonne `Pagato da` e `Quota` (Task 4)
 - Produces: `quotaDi(t) -> number` (il moltiplicatore, 1 o 0.5); `F.lettura` (`""` = tutto, `"mia"` = la mia quota)
+
+- [ ] **Step 0: Esponi le funzioni nuove al collaudo**
+
+In `test_app.js`, nella lista che `eval()` ritorna, aggiungi `quotaDi` e
+`registro` accanto a `indicatori, spesa, scarto, VISTE`. Senza, i controlli dei
+passi seguenti non hanno niente da chiamare.
 
 - [ ] **Step 1: Scrivi i controlli che falliscono**
 
