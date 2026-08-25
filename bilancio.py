@@ -2330,6 +2330,19 @@ def run(folder, use_llm=True, output="consolidato.csv",
 
     print("")
     print(f"{len(frame)} transazioni -> {output}")
+    # Quante righe ogni conto ha perso per strada, e in quale passo. Senza
+    # questo prospetto un file che entra con 117 movimenti e ne lascia 80 nel
+    # consolidato non dice DOVE sono finiti gli altri 37, e per scoprirlo
+    # tocca rifare il giro a mano confrontando i conteggi.
+    if scartate:
+        persi = defaultdict(Counter)
+        for riga in scartate:
+            persi[riga.get("Conto") or "?"][riga.get("Scartata da", "?")] += 1
+        print("  righe perse per strada, per conto:")
+        for conto in sorted(persi):
+            dettaglio = ", ".join(f"{n} {passo}"
+                                  for passo, n in persi[conto].most_common())
+            print(f"    {conto:<14} {sum(persi[conto].values()):>4}  ({dettaglio})")
     print(f"{len(review)} da controllare -> da_rivedere.csv")
     print(f"{len(scartate)} scartate -> scartate.csv")
     print(f"entrate   {income:>12,.2f}")
