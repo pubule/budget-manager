@@ -44,6 +44,7 @@
 (?i)macelleria|panificio|panetteria|pescheria|ortofrutta|salumeria|\bforno\b|molon|vivafruit|carni equine;Cibo & Mangiare;Alimentari
 (?i)azienda agricola|enoteca|cantina|\bvini\b|\bvino\b|vivino|dischiponte;Cibo & Mangiare;Cantina e Specialita
 (?i)\bmensa\b|ticket restaurant|buoni pasto|edenred|pellegrini card|day ristoservice|ucagric men;Cibo & Mangiare;Pranzo Lavoro
+(?i)^prelievo|prelievo (smart|mastercard|bancomat);Da identificare;
 (?i)ristorante|trattoria|osteria|pizzeria|hosteria|braceria|sushi|mcdonald|burger king|\bkfc\b|old wild west|roadhouse|burghy|beghini|bomagrill|grotta azzurra|bottega della birra|makako|panzare|anteiko|the public|torcoli|ti amo cioccolato|vinsanto|visanto|bastianello|deliveroo|glovo|justeat;Cibo & Mangiare;Ristoranti
 (?i)\bbar\b|caffetteria|pasticceria|gelateria|aperitivo|birreria|\bpub\b|\bcafe\b|caff\we;Cibo & Mangiare;Ristoranti
 # Persona.;;
