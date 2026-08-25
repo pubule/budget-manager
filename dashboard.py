@@ -163,8 +163,11 @@ def build(frame):
     return {
         "all": frame,
         "real": real,
-        "out": real[real.Importo < 0],
-        "income": real[real.Importo > 0],
+        # Il reddito vero e' quello di natura "Entrate". I positivi che
+        # stanno altrove sono rimborsi e storni: scalano dalla spesa a cui
+        # appartengono invece di contare come guadagno.
+        "out": real[real.Natura != "Entrate"],
+        "income": real[real.Natura == "Entrate"],
         "moves": frame[frame["Natura"] == NOT_SPENDING],
         "months": max(real["Mese"].nunique(), 1),
     }

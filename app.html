@@ -528,8 +528,15 @@ function post(route, body){
 
 // Solo le uscite vere: i giroconti non impoveriscono, includerli falsa tutto.
 const spending = rows => rows.filter(t => t.Natura !== "Non spesa");
-const outflow = rows => spending(rows).filter(t => t.Importo < 0);
-const inflow  = rows => spending(rows).filter(t => t.Importo > 0);
+// Il reddito vero e' quello di natura "Entrate": stipendio e affitti. Tutto
+// il resto col segno positivo e' un rimborso o uno storno, e non e' guadagno:
+// scala dalla spesa a cui appartiene, dove riduce quella voce.
+//
+// Dividere per segno diceva che guadagni 155.067 quando ne guadagni 143.671 e
+// 11.396 ti tornano indietro. Il risparmio non cambia di un centesimo: le due
+// funzioni continuano a spartirsi le stesse righe.
+const inflow  = rows => spending(rows).filter(t => t.Natura === "Entrate");
+const outflow = rows => spending(rows).filter(t => t.Natura !== "Entrate");
 // Le righe che nessun livello deterministico ha saputo classificare: sono le
 // uniche su cui l'LLM abbia qualcosa da dire, quindi sono la misura che dice
 // se vale la pena aspettare i minuti che ci mette.

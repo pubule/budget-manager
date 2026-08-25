@@ -69,6 +69,31 @@ console.log("=== formattazione ===");
 check("euro negativo", api.euro(-1234.6) === "-1.235 €", api.euro(-1234.6));
 check("euro positivo", api.euro(2500) === "2.500 €", api.euro(2500));
 
+console.log("=== entrate contro uscite ===");
+{
+  // inflow e outflow devono SPARTIRSI le righe di spesa, senza sovrapporsi e
+  // senza perderne: e' quello che tiene il risparmio uguale comunque si
+  // decida cosa sia reddito. Se una riga finisse in tutte e due, o in
+  // nessuna, il risparmio mentirebbe senza che niente lo dica.
+  const tutte = api.spending(state.transactions);
+  const dentro = api.inflow(tutte), fuori = api.outflow(tutte);
+  check("entrate e uscite si spartiscono ogni riga",
+        dentro.length + fuori.length === tutte.length,
+        `${dentro.length} + ${fuori.length} != ${tutte.length}`);
+  const ids = new Set(dentro.map(t => t.ID));
+  check("nessuna riga sta in tutte e due", !fuori.some(t => ids.has(t.ID)));
+  check("il risparmio e' la somma di tutto",
+        Math.abs((api.sum(dentro) + api.sum(fuori)) - api.sum(tutte)) < 0.01);
+  // Il reddito e' solo quello di natura "Entrate": un rimborso col segno
+  // positivo dentro una categoria di spesa non e' guadagno.
+  check("il reddito e' solo la natura Entrate",
+        dentro.every(t => t.Natura === "Entrate"));
+  const rimborsi = fuori.filter(t => t.Importo > 0);
+  check("i rimborsi stanno fra le uscite, dove riducono la voce",
+        rimborsi.every(t => t.Natura !== "Entrate"),
+        `${rimborsi.length} rimborsi`);
+}
+
 console.log("=== filtri ===");
 const all = api.filtered();
 check("nessun filtro restituisce tutto", all.length === state.transactions.length,

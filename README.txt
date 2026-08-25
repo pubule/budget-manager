@@ -367,6 +367,22 @@ Log                Pannello a destra, si apre col pulsante "Log" e da solo
                    fondo lo riattiva.
 
 
+ENTRATE CONTRO USCITE
+---------------------
+
+Il REDDITO e' solo quello di natura "Entrate": stipendio e affitti incassati.
+Tutto il resto col segno positivo - rimborsi, storni, resi Amazon - non e'
+guadagno: scala dalla spesa a cui appartiene, dove riduce quella voce.
+
+Sono 11.396 euro su 38 righe. Dividendo per segno i due numeri in cima
+dicevano che guadagni 155.067 quando ne guadagni 143.649.
+
+IL RISPARMIO NON CAMBIA di un centesimo: inflow() e outflow() si spartiscono
+le stesse righe, senza sovrapporsi e senza perderne. C'e' un controllo in
+test_app.js che lo verifica, perche' se una riga finisse in tutte e due, o in
+nessuna, il risparmio mentirebbe senza che niente lo dica.
+
+
 COME DECIDE LA CATEGORIA
 ------------------------
 
