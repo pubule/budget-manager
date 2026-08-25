@@ -4,7 +4,7 @@
 (?i)telepass;Telepass
 (?i)apple\.?com/bill|apple bill|itunes|icloud;Apple
 (?i)happy casa;Happy Casa
-(?i)tuttostock;TuttoStock
+(?i)tutto ?stock;TuttoStock
 (?i)\bflover\b;Flover
 (?i)eurospin;Eurospin
 (?i)\bmolon\b;Molon
@@ -16,7 +16,7 @@
 (?i)mediaworld;MediaWorld
 (?i)maisons? du monde;Maisons du Monde
 (?i)\bikea\b;IKEA
-(?i)leroy merlin;Leroy Merlin
+(?i)leroy ?merlin;Leroy Merlin
 (?i)condomin|borgo mangano|camminamento;Borgo Mangano
 (?i)netflix;Netflix
 (?i)spotify;Spotify
