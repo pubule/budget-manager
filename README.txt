@@ -27,6 +27,21 @@ accanto, in export/anonimi/, compare la copia ripulita. Un file da cui non si
 legge nessuna transazione NON viene archiviato: resta in export/ con l'errore
 nel log.
 
+GIROCONTI. Due righe di importo opposto su conti diversi entro pochi giorni
+si annullano SOLO SE almeno una delle due dice di essere un giroconto, cioe'
+combacia con una regola di regole.csv che ha categoria Giroconto.
+
+Senza quella condizione bastavano importo e data, e le collisioni casuali
+arrivavano subito: quattro pagamenti F24 dello stesso giorno (-12, -114,
+-116, -452) sparivano annullati da entrate qualsiasi di pari importo su un
+altro conto. E qui non si scarta una riga sola: se ne perdono DUE, una per
+parte, e i soldi svaniscono da entrambi i conti.
+
+Le coppie che combaciano per importo e data ma che nessuna regola riconosce
+NON vengono annullate, e il log le elenca. Se fra quelle c'e' un giroconto
+vero, gli manca una regola: aggiungila in regole.csv con categoria Giroconto,
+nominando il conto o la persona.
+
 QUALE COLONNA. Un estratto conto puo' avere PIU' colonne buone per lo stesso
 ruolo, e la scelta va per preferenza, non per ordine nel file:
 

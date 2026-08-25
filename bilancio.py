@@ -1379,17 +1379,32 @@ def drop_covered_by(rows, days=3, discarded=None, merchants=()):
     return [row for position, row in enumerate(rows) if position not in dropped]
 
 
-def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None):
+def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None,
+                            transfers=()):
     """Rimuove le coppie +X / -X fra conti propri, che raddoppiano i totali.
 
-    Due righe si annullano se hanno importo opposto, conti diversi e date
-    entro pochi giorni. Senza questo passo un giroconto conta due volte.
+    Due righe si annullano se hanno importo opposto, conti diversi, date entro
+    pochi giorni E ALMENO UNA DELLE DUE DICE di essere un giroconto.
+
+    L'ultima condizione e' la piu' importante. Con il solo importo e la sola
+    data le collisioni casuali arrivano subito: quattro pagamenti F24 dello
+    stesso giorno (-12, -114, -116, -452) sparivano annullati da entrate
+    qualsiasi di pari importo su un altro conto. E qui non si scarta una riga
+    sola: se ne perdono DUE, una per parte, e i soldi svaniscono da entrambi i
+    conti senza che niente lo segnali.
+
+    Cosa "dice di essere un giroconto" lo decidono le regole con categoria
+    Giroconto in regole.csv, che sono gia' il posto dove questa conoscenza
+    vive: nominano i conti propri e i familiari.
 
     Un giroconto e' un movimento fra conti bancari: si appaiano solo righe di
     Rango RANK_BANK. Ne' Splitwise ne' lo storico migrato sono conti bancari
     (una spesa Splitwise e un residuo dello storico con importo opposto non
     sono un giroconto, sono coperti da drop_covered_by).
     """
+    def dichiarato(row):
+        descrizione = str(row.get("Descrizione", ""))
+        return any(p.search(descrizione) for p in transfers)
     def as_date(value):
         try:
             return datetime.strptime(value, "%Y-%m-%d")
@@ -1401,7 +1416,7 @@ def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None):
         if row["Importo"] < 0 and row.get("Rango", RANK_BANK) == RANK_BANK:
             negatives[round(abs(row["Importo"]), 2)].append(index)
 
-    matched = set()
+    matched, mute = set(), []
     for index, row in enumerate(rows):
         if row["Importo"] <= 0 or index in matched:
             continue
@@ -1414,8 +1429,21 @@ def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None):
             other = as_date(rows[candidate]["Data"])
             if date and other and abs((date - other).days) > days:
                 continue
+            if not (dichiarato(row) or dichiarato(rows[candidate])):
+                mute.append((row, rows[candidate]))
+                continue
             matched.update({index, candidate})
             break
+
+    if mute:
+        # Vederle serve: se qui finisce un giroconto vero, gli manca una regola
+        # in regole.csv. Se ci finisce altro, il filtro sta lavorando.
+        print(f"  {len(mute)} coppie NON annullate: importo e data combaciano "
+              f"ma nessuna delle due dice di essere un giroconto")
+        for entrata, uscita in mute[:6]:
+            print(f"    {entrata['Importo']:>9.2f}  "
+                  f"{str(entrata.get('Descrizione'))[:30]:<30} <-> "
+                  f"{str(uscita.get('Descrizione'))[:30]}")
 
     if matched:
         print(f"  {len(matched)} righe rimosse: giroconti fra conti propri "
@@ -1566,7 +1594,11 @@ def selftest():
         {"Data": "2026-01-16", "Descrizione": "ricarica", "Importo": 200.0, "Conto": "b"},
         {"Data": "2026-01-16", "Descrizione": "spesa", "Importo": -200.0, "Conto": "a"},
     ]
-    assert len(drop_internal_transfers(pair)) == 1, "giroconti non rimossi"
+    # Le regole vanno passate: senza, nessuna riga "dice" di essere un
+    # giroconto e non si annulla piu' niente. E' voluto.
+    GIRO = [re.compile(r"(?i)giroconto|ricarica")]
+    assert len(drop_internal_transfers(pair, transfers=GIRO)) == 1,         "giroconti non rimossi"
+    assert len(drop_internal_transfers(pair)) == 3,         "senza regole non deve annullare niente"
     # Due movimenti opposti sullo STESSO conto non sono un giroconto.
     same = [
         {"Data": "2026-01-15", "Descrizione": "x", "Importo": -50.0, "Conto": "a"},
@@ -1788,7 +1820,7 @@ def selftest():
         {"Data": "2026-03-10", "Descrizione": "Affitto marzo", "Importo": -300.0,
          "Conto": "Koala", "Rango": RANK_SHARED},
     ]
-    resto = drop_covered_by(drop_internal_transfers(ordine))
+    resto = drop_covered_by(drop_internal_transfers(ordine, transfers=GIRO))
     assert len(resto) == 1 and resto[0]["Descrizione"] == "Affitto marzo",         f"la spesa condivisa non deve sparire con i giroconti: {resto}"
 
     # Un saldo fra le due persone bilancia spese gia' tracciate: non e' una
@@ -1886,6 +1918,34 @@ def selftest():
         dritto.write_text("Data;Descrizione;Importo\n"
                           "01/02/2026;ESSELUNGA;-12,50\n", encoding="utf-8")
         assert len(load_transactions(dritto, "Prova")) == 1
+
+    # Un giroconto si annulla solo se ALMENO UNA delle due righe dice di
+    # esserlo. Con il solo importo e la sola data quattro pagamenti F24 dello
+    # stesso giorno sparivano annullati da entrate qualsiasi di pari importo su
+    # un altro conto - e qui non si perde una riga, se ne perdono due.
+    regole_giro = [re.compile(r"(?i)\ba:? *(hype|fideuram)\b"),
+                   re.compile(r"(?i)giroconto|ricarica")]
+    f24 = [
+        {"Data": "2026-06-16", "Importo": -452.0, "Conto": "UniCredit",
+         "Descrizione": "PAGAMENTO DELEGHE F23/F24 PRENOTATE FISCO/INPS"},
+        {"Data": "2026-06-15", "Importo": 452.0, "Conto": "Hype",
+         "Descrizione": "BONIFICO DA CLIENTE PER FATTURA"},
+    ]
+    resto = drop_internal_transfers([dict(r) for r in f24], transfers=regole_giro)
+    assert len(resto) == 2,         "un F24 e un incasso di pari importo sono stati presi per un giroconto"
+    # Ma un giroconto vero, che lo dichiara, si annulla ancora.
+    vero = [
+        {"Data": "2026-06-16", "Importo": -200.0, "Conto": "UniCredit",
+         "Descrizione": "DISPOSIZIONE DI BONIFICO A HYPE"},
+        {"Data": "2026-06-16", "Importo": 200.0, "Conto": "Hype",
+         "Descrizione": "RICARICA CONTO"},
+    ]
+    assert drop_internal_transfers([dict(r) for r in vero],
+                                   transfers=regole_giro) == [],         "un giroconto dichiarato non viene piu' annullato"
+    # E basta che lo dica UNA delle due: l'altra gamba spesso non lo dice.
+    meta = [dict(vero[0]), dict(vero[1])]
+    meta[1]["Descrizione"] = "ACCREDITO"
+    assert drop_internal_transfers(meta, transfers=regole_giro) == [],         "serve che lo dicano tutte e due, invece ne basta una"
 
     # Uno storno e l'operazione che annulla se ne vanno insieme. Se restasse
     # solo il riaccredito verrebbe contato come entrata, mentre l'uscita
@@ -2208,7 +2268,11 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
     # giroconti lasciando il riaccredito a contare come entrata.
     rows = drop_reversals(rows, discarded=scartate)
-    rows = drop_internal_transfers(rows, discarded=scartate)
+    # Le regole con categoria Giroconto sono gia' il posto dove vive la
+    # conoscenza di quali conti e quali persone sono "in famiglia".
+    giroconti = [p for p, c in config["rules"] if c == TRANSFER]
+    rows = drop_internal_transfers(rows, discarded=scartate,
+                                   transfers=giroconti)
     rows = drop_import_artifacts(rows, scartate)
     rows = drop_covered_by(rows, discarded=scartate,
                            merchants=config["merchants"])
