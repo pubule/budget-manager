@@ -792,6 +792,12 @@ VIEWS.categorie = () => {
 };
 
 VIEWS.regole = () => {
+  // Il valore di una regola e' il nome INTERO della categoria: nel file sta
+  // su due colonne, ma qui si scrive e si legge unito, ed e' il server a
+  // dividerlo. Mostrare la sola area faceva sparire la sottocategoria al
+  // primo salvataggio.
+  const valore = (r, kind) => kind === "merchant" ? (r.merchant || "")
+    : whole({Categoria: r.categoria, Sottocategoria: r.sottocategoria});
   const block = (title, list, kind, valueField, note) =>
     '<div class="card"><div class="head">' + `<h2>${esc(title)}</h2>`
     + `<span class="mini">${list.length}</span></div>`
@@ -800,18 +806,20 @@ VIEWS.regole = () => {
         list.map((r,i) => [
           `<span class="mini">${i+1}</span>`,
           `<input class="wide" value="${esc(r.pattern)}" data-rule-pattern="${kind}" data-i="${i}">`,
-          `<input value="${esc(r[valueField]||"")}" data-rule-value="${kind}" data-i="${i}">`,
+          `<input value="${esc(valore(r, kind))}" data-rule-value="${kind}" data-i="${i}">`,
           `<button class="link" data-rule-save="${kind}" data-i="${i}">salva</button>`
           + `<button class="link" data-rule-test="${kind}" data-i="${i}">prova</button>`
           + `<button class="link" data-rule-del="${kind}" data-i="${i}">elimina</button>`]),
         [0])
     + `<div style="margin-top:10px">`
     + `<input class="wide" placeholder="nuovo pattern" data-new-pattern="${kind}"> `
-    + `<input placeholder="${esc(valueField)}" data-new-value="${kind}"> `
+    + `<input placeholder="${esc(valueField)}" data-new-value="${kind}"`
+    + ` style="min-width:230px"> `
     + `<button data-new-save="${kind}">aggiungi</button></div>`
     + `<div id="preview-${kind}"></div></div>`;
 
-  return block("Regole di categorizzazione", S.rules, "rule", "categoria",
+  return block("Regole di categorizzazione", S.rules, "rule",
+      "Categoria > Sottocategoria",
       "Vince la prima riga che combacia: le regole specifiche devono stare "
       + "sopra le generiche. \"prova\" dice quante transazioni colpirebbe "
       + "prima di salvare.")
@@ -1008,7 +1016,8 @@ async function handleRule(d){
         + `cambierebbero categoria, ${euro(r.totale)} in totale.</p>`
         + tableHTML(["data","descrizione","importo","categoria attuale"],
             (r.esempi||[]).map(e => [esc(e.Data), esc((e.Descrizione||"").slice(0,60)),
-              euro(e.Importo), esc(e.Categoria)]), [2]);
+              euro(e.Importo),
+              esc(e["Categoria intera"] || e.Categoria || "—")]), [2]);
     return;
   }
   await post("/api/rules", {tipo:type, pattern:p, valore:v,

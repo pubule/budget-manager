@@ -328,5 +328,30 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         !motore.includes("Natura") && !usati.includes("Natura"));
 }
 
+// La scheda Regole scrive il nome INTERO della categoria: nel file sta su due
+// colonne ed e' il server a dividerlo. Mostrare la sola area faceva sparire la
+// sottocategoria al primo salvataggio, senza nessun errore.
+{
+  const conSotto = state.rules.find(r => r.sottocategoria);
+  const reso = api.VIEWS.regole();
+  if (conSotto) {
+    // Il nome finisce dentro un attributo HTML, quindi passa da esc():
+    // il confronto va fatto sulla forma sfuggita, non su quella grezza.
+    const intero = conSotto.categoria + " > " + conSotto.sottocategoria;
+    const atteso = intero.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    check("la scheda Regole mostra la categoria intera",
+          reso.includes('value="' + atteso + '"'), "cercavo " + atteso);
+  } else {
+    check("la scheda Regole mostra la categoria intera", true, "nessuna regola a due livelli");
+  }
+  check("nessuna regola perde la sottocategoria",
+        state.rules.every(r => !r.categoria
+          || ["Giroconto","Stipendio","Affitti incassati","Da identificare"]
+             .includes(r.categoria) || r.sottocategoria),
+        state.rules.filter(r => r.categoria && !r.sottocategoria)
+          .map(r => r.categoria).join(", "));
+}
+
 console.log(failures ? `\n${failures} controlli falliti` : "\nTutti i controlli passati");
 process.exit(failures ? 1 : 0);
