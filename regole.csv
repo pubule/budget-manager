@@ -46,6 +46,7 @@
 (?i)\bbar\b|caffetteria|pasticceria|gelateria|aperitivo|birreria|\bpub\b|\bcafe\b|caff\we;Cibo & Mangiare;Ristoranti
 # Persona.;;
 (?i)midjourney|moonshot ai|\bollama\b|openai|anthropic|claude\.ai|perplexity|\breplicate\b|cursor\.(com|sh);Personale;Abbonamenti
+(?i)canone hype;Personale;Abbonamenti
 (?i)netflix|spotify|disney ?\+|\bdazn\b|amazon prime|prime video|now ?tv|apple\.?com/bill|apple bill|itunes|icloud|google ?(one|storage)|youtube ?premium|dropbox|microsoft ?365|adobe;Personale;Abbonamenti
 (?i)palestra|fitness|virgin active|mcfit|anytime fitness|centro sportivo|emporio della cosmesi|profumeria|sephora|douglas|parrucchier|estetist;Personale;Benessere
 (?i)cinema|the space|uci cinemas|teatro|concerto|ticketone|vivaticket|steam ?games|playstation|nintendo|xbox|blizzard|instant gaming|gardaland|mostra |museo;Personale;Intrattenimento
