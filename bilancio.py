@@ -1703,6 +1703,17 @@ def selftest():
     assign_ids(mano)
     assert mano[0]["ID"] == "man-20260825-01", "l'ID e' cambiato con l'importo"
 
+    # consolidato.csv puo' gia' contenere la riga scritta a mano (il giro
+    # precedente l'ha scritta lui): merge_manual() deve toglierla da "rows"
+    # prima di riaggiungere le manuali, non sommarle.
+    ferma = {"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
+             "Importo": -84.0, "Conto": "Contanti", "Rango": RANK_BANK}
+    corretta = {"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
+                "Importo": -90.0, "Conto": "Contanti", "Rango": RANK_BANK}
+    fuso = merge_manual([ferma], [corretta])
+    assert len(fuso) == 1, "la riga scritta a mano si e' duplicata"
+    assert fuso[0]["Importo"] == -90.0,         "transazioni.csv non ha vinto sulla copia ferma nel derivato"
+
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
               "Conto": "Koala"}]
@@ -2383,6 +2394,21 @@ def read_manual(folder):
     return rows
 
 
+def merge_manual(rows, manuali):
+    """Fonde le righe scritte a mano con le altre, senza doppioni.
+
+    Il tranello: quando le manuali sono passate da "rows" in un giro con
+    export, finiscono scritte anche loro dentro consolidato.csv. Al giro
+    successivo senza export, read_consolidato() le rilegge da li' - e
+    sommare "manuali" sopra le raddoppierebbe. transazioni.csv resta la
+    fonte autorevole delle SUE righe: si toglie da rows ogni ID che compare
+    fra le manuali, poi si aggiungono le manuali. Cosi' anche una riga
+    corretta a mano nel file vince sulla copia ferma nel derivato.
+    """
+    manuali_ids = {r["ID"] for r in manuali}
+    return [r for r in rows if r["ID"] not in manuali_ids] + manuali
+
+
 def read_consolidato(folder, output):
     """Le transazioni gia' elaborate, quando la sorgente non c'e' piu'.
 
@@ -2468,7 +2494,9 @@ def run(folder, use_llm=True, output="consolidato.csv",
     apply_corrections(rows, config["corrections"])
     # Le manuali entrano dopo l'assegnazione degli ID: il loro ID viene dal
     # file e assign_ids lo rispetta, ma non c'e' motivo di farle passare di li'.
-    rows = rows + manuali
+    # merge_manual() toglie prima l'eventuale copia gia' ferma in "rows": vedi
+    # li' il perche' (consolidato.csv puo' averla scritta il giro precedente).
+    rows = merge_manual(rows, manuali)
     # Prima di ogni altro scarto: una riga esclusa non deve nemmeno partecipare
     # agli appaiamenti, o consumerebbe la copertura di una riga buona.
     rows = apply_exclusions(rows, config["exclusions"], scartate)
