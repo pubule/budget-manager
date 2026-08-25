@@ -401,9 +401,12 @@ check("nessuna riga categorizzata finisce nel conteggio per l'LLM",
 // deve spegnersi invece di sparire.
 const aperte = api.uncategorized(state.transactions).length;
 api.setStatus();
+// A zero il numero sparisce dall'etichetta ma il pulsante resta: "(0)" e'
+// rumore, e il pulsante che se ne va confonderebbe.
 check("il pulsante dell'LLM porta il conteggio vero",
-      api.el("btn-llm").textContent === `Analizza con LLM (${aperte})`,
-      api.el("btn-llm").textContent);
+      api.el("btn-llm").textContent === (aperte
+        ? `Analizza con LLM (${aperte})` : "Analizza con LLM"),
+      api.el("btn-llm").textContent + " con " + aperte + " aperte");
 check("il pulsante dell'LLM e' acceso se c'e' da lavorare",
       api.el("btn-llm").disabled === !aperte);
 api.setState({...state, transactions: state.transactions.filter(t => t.Categoria)});

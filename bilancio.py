@@ -66,6 +66,23 @@ IGNORE = "IGNORA"
 # perche' capita di aver etichettato a mano un giroconto come spesa vera.
 TRANSFER = "Giroconto"
 
+# Dove finisce un giroconto in uscita che nessuno riceve. drop_internal_
+# transfers() ha gia' tolto le coppie vere: quel che resta marcato Giroconto e'
+# denaro che esce e non torna, perche' il conto che riceve non e' caricato o
+# perche' non e' un conto ma una persona. Lasciarlo "non spesa" vuol dire non
+# contarlo da nessuna parte, e sul bilancio di casa erano 3.634 euro spariti
+# dal quadro. Le gambe IN ENTRATA restano giroconti: sono l'altra meta' di
+# bonifici partiti da conti caricati piu' tardi, e contarle come reddito
+# gonfierebbe le entrate senza che nessuno abbia guadagnato niente.
+TRANSFER_OUT = "Da identificare"
+
+
+def transfer_out(category, amount, source):
+    """La categoria di un giroconto in uscita rimasto senza chi lo riceve."""
+    if category == TRANSFER and amount < 0 and source != "override":
+        return TRANSFER_OUT
+    return category
+
 # Le categorie hanno due livelli: "Casa > Casalinghi" e' l'area Casa e la
 # sottocategoria Casalinghi. Dentro al motore viaggiano unite in una stringa
 # sola - lo storico, il voto per token e la cache sono tutti indicizzati cosi',
@@ -1588,6 +1605,15 @@ def selftest():
         got = parse_amount(raw)
         assert abs(got - expected) < 0.005, f"{raw!r}: atteso {expected}, ottenuto {got}"
 
+    # Un giroconto in uscita che nessuno riceve e' una spesa, non uno
+    # spostamento: la coppia vera l'ha gia' tolta drop_internal_transfers, e
+    # quel che resta e' denaro uscito dal quadro. Le entrate no: sono l'altra
+    # meta' di bonifici partiti da conti caricati piu' tardi.
+    assert transfer_out(TRANSFER, -3829.0, "regola") == TRANSFER_OUT,         "l'uscita scoperta resta non spesa"
+    assert transfer_out(TRANSFER, 200.0, "regola") == TRANSFER,         "l'entrata scoperta e' diventata spesa"
+    assert transfer_out(TRANSFER, -3829.0, "override") == TRANSFER,         "l'override non ha retto"
+    assert transfer_out("Casa > Luce e gas", -50.0, "regola") == "Casa > Luce e gas",         "una spesa qualsiasi e' stata scambiata per un giroconto"
+
     # Un giroconto fra conti propri non deve contare due volte.
     pair = [
         {"Data": "2026-01-15", "Descrizione": "giroconto", "Importo": -200.0, "Conto": "a"},
@@ -2289,6 +2315,16 @@ def run(folder, use_llm=True, output="consolidato.csv",
             categorizer.stats["override"] += 1
         else:
             category, source, score = categorizer.categorize(row["Descrizione"])
+        # Un giroconto in uscita sopravvissuto all'appaiamento e' una spesa,
+        # non uno spostamento: si veda TRANSFER_OUT. Un override no: quello
+        # l'ha deciso una persona guardando la riga.
+        if transfer_out(category, row["Importo"], source) != category:
+            category, source = TRANSFER_OUT, "giroconto senza ritorno"
+            # Confidenza sotto 1: la riga va in da_rivedere. "Da identificare"
+            # e' un parcheggio, non una risposta -- solo tu sai se quel
+            # bonifico era l'affitto, un prestito o la ricarica di una carta.
+            score = 0.5
+            categorizer.stats["giroconto senza ritorno"] += 1
         # La natura si cerca sulla coppia intera, prima di dividerla: e' li'
         # che natura.csv la tiene.
         row["Natura"] = config["natura"].get(category, "Da classificare")

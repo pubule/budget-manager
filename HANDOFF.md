@@ -641,6 +641,39 @@ riduceva a un punto solo, cioè a niente. Ora `filtered(false)` salta `F.from`
 e `F.to` — gli altri filtri restano, perché quelli dicono *di cosa* si sta
 parlando — e il periodo scelto si vede come **fascia in chiaro** sulla linea.
 
+### 4quater. Un giroconto in uscita che nessuno riceve e' una spesa (25/08/2026)
+
+`drop_internal_transfers()` toglie le coppie vere, +X e −X sui due conti. Quel
+che sopravvive marcato Giroconto e' denaro che esce e non torna: il conto che
+riceve non e' caricato (Hype e Fideuram partono da gennaio 2026, i bonifici
+verso di loro sono del 2025) o non e' un conto ma una persona.
+
+Lasciarlo "non spesa" voleva dire non contarlo da nessuna parte: **9.471 € ne'
+spesi ne' risparmiati**, spariti dal quadro. Ora `transfer_out()` li manda in
+`Da identificare` con confidenza 0,5, cosi' contano fra le uscite e finiscono
+in *Da rivedere* per essere nominati.
+
+Le gambe **in entrata** restano giroconti: sono l'altra meta' di bonifici
+partiti da conti caricati piu' tardi (i +200 ricorrenti da UniCredit), e
+contarle come reddito gonfierebbe le entrate senza che nessuno abbia
+guadagnato niente. Un `override` manuale vince comunque: quello l'ha deciso
+una persona guardando la riga.
+
+### 4quinquies. audit.py (25/08/2026)
+
+`python audit.py` controlla che l'INSIEME dei dati abbia senso, cosa che il
+caricamento non puo' vedere riga per riga. Otto controlli: campi impossibili e
+ID ripetuti, doppioni fra export sovrapposti, mesi vuoti dentro al periodo
+attivo di un conto, voci con due nature diverse, categorie col segno
+rovesciato, giroconti senza la gamba opposta, negozi scritti in piu' modi,
+importi fuori scala. Torna 1 se trova almeno un errore.
+
+Due tarature imparate sui dati veri: i buchi mensili si giudicano sui mesi
+**vicini**, non sulla media di sempre (un conto molto usato nel 2022 e fermo
+nel 2025 non ha un buco, ha smesso di essere il conto principale); e le due
+direzioni di un giroconto spaiato non pesano uguale — l'uscita e' un errore,
+l'entrata e' innocua.
+
 ### 5. Gli indicatori cambiano quando filtri
 
 Filtrando su una natura, "tasso di risparmio" mostrava `-760%`. Il risparmio

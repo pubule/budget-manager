@@ -250,15 +250,23 @@ def controlla_giroconti(righe, r):
             usati.add(id(gemella))
     if not spaiati:
         return
-    saldo = sum(importo(x) for x in spaiati if not math.isnan(importo(x)))
-    esce = [x for x in spaiati if importo(x) < 0]
-    r.aggiungi("errore" if abs(saldo) > 500 else "sospetto",
-               "giroconti senza la gamba opposta", len(spaiati),
+    # Le due direzioni non pesano uguale. Un'USCITA spaiata e' denaro che se
+    # ne va senza comparire da nessuna parte: e' un errore. Un'ENTRATA spaiata
+    # e' l'altra meta' di un bonifico partito da un conto caricato piu' tardi:
+    # e' innocua, purche' resti fuori dal reddito.
+    esce = sorted([x for x in spaiati if importo(x) < 0], key=importo)
+    entra = [x for x in spaiati if importo(x) > 0]
+    uscito = sum(importo(x) for x in esce)
+    r.aggiungi("errore", "uscite marcate giroconto che nessuno riceve",
+               len(esce),
                [f"{x.get('Data')} {x.get('Conto')} {importo(x):+,.0f}: "
-                f"{(x.get('Descrizione') or '')[:44]}"
-                for x in sorted(esce, key=lambda x: importo(x))],
-               f"saldo scoperto {saldo:+,.0f} EUR. Il conto che riceve non e' "
-               f"caricato, oppure non e' un giroconto ma una spesa")
+                f"{(x.get('Descrizione') or '')[:44]}" for x in esce],
+               f"{uscito:+,.0f} EUR fuori dal quadro: ne' spesi ne' "
+               f"risparmiati")
+    r.aggiungi("nota", "entrate marcate giroconto senza la gamba che parte",
+               len(entra),
+               [f"{sum(importo(x) for x in entra):+,.0f} EUR, dal conto che "
+                f"le manda prima che fosse caricato"])
 
 
 def controlla_merchant(righe, r):
