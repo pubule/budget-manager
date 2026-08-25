@@ -602,6 +602,45 @@ Confrontare il 2025 intero contro un 2026 di un mese produceva
 `Casa +20.900 € (97%)`, che si legge come un crollo delle spese. Ora confronta
 gennaio con gennaio e lo dichiara nell'intestazione della tabella.
 
+### 4bis. Il metro del confronto si sceglie, e si ritaglia (25/08/2026)
+
+Sotto ai filtri rapidi del periodo c'è una seconda riga, **"confronta con"**.
+Le opzioni dipendono dalla forma del periodo scelto: un mese offre `mese
+prima`, `<mese> <anno-1>` e `media 12 mesi`; un anno offre `anno prima` e
+`media 3 anni`; un intervallo qualsiasi solo `periodo prima`. Senza periodo
+non c'è nessun confronto — il riquadro mostra la media su tutto lo storico, e
+prima di tutto lo storico non c'è niente.
+
+Il riferimento viene **ritagliato allo stesso punto** in cui si fermano i
+dati: agosto fino al 25 si confronta con luglio fino al 25, e l'etichetta lo
+dichiara (`+50% contro mese prima (1–25)`). Senza, le entrate di agosto
+sembravano crollate dell'80%: manca solo lo stipendio, che arriva dopo il 25.
+
+Due trappole già pagate:
+
+- **Il ritaglio si fa sul calendario, non contando i giorni.** Il 2025 intero
+  (365 giorni) misurato sul 2024 bisestile (366) finiva il 30 dicembre e si
+  dichiarava parziale. Ora la finestra si ferma allo stesso mese e allo stesso
+  giorno del mese.
+- **Il confine è l'ultimo movimento IN ASSOLUTO**, non l'ultimo dentro al
+  periodo. Se a dicembre 2025 l'ultima spesa è del 28, l'anno è comunque
+  chiuso: ritagliare lì vorrebbe dire chiamare "parziale" un periodo finito
+  solo perché gli ultimi giorni sono stati tranquilli.
+
+Le medie si ritagliano in un altro modo: la finestra resta lunga dodici (o
+trentasei) mesi, ma di ogni mese si tiene solo la parte già trascorsa
+(`p.taglio`, che confronta la coda della data — `"25"` per un mese, `"08-25"`
+per un anno). Accorciarla non servirebbe: nessuno dei dodici mesi è il
+colpevole, lo sono i sei giorni che ad agosto mancano.
+
+### 4ter. L'andamento vive sullo storico (25/08/2026)
+
+È l'unico riquadro che ignora il periodo: risponde a "come siamo arrivati fin
+qui", e la risposta non sta dentro al mese scelto. Ritagliato al periodo si
+riduceva a un punto solo, cioè a niente. Ora `filtered(false)` salta `F.from`
+e `F.to` — gli altri filtri restano, perché quelli dicono *di cosa* si sta
+parlando — e il periodo scelto si vede come **fascia in chiaro** sulla linea.
+
 ### 5. Gli indicatori cambiano quando filtri
 
 Filtrando su una natura, "tasso di risparmio" mostrava `-760%`. Il risparmio

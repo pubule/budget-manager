@@ -121,6 +121,7 @@ text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
 text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
 text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
 line.grid{stroke:var(--line);stroke-width:1}
+rect.fascia{fill:#ffffff0f}
 /* La riga verticale sotto al mouse: dice che il tooltip legge tutta la
    colonna del mese, non il singolo punto piu' vicino. */
 line.guida{stroke:var(--dim);stroke-width:1;stroke-dasharray:4 4;opacity:.75}
@@ -185,6 +186,11 @@ font:14px/1.55 ui-sans-serif,system-ui,sans-serif}
 padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
 .rail .quick{padding-bottom:0;margin-bottom:0;border-bottom:none}
 .rail .quick .anchor{margin-left:0;width:100%}
+/* I pulsanti del metro sono fratelli di quelli del periodo, ma piu'
+   sottovoce: scelgono come leggere i dati, non quali dati. */
+.quick.confronto{border-bottom:none;padding-bottom:0;margin-bottom:0}
+.quick.confronto button{font-size:11px;padding:3px 9px}
+#f-confronto-eti{margin-top:6px}
 .quick button{padding:4px 11px;border-radius:20px;font-size:12px}
 .quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .quick .anchor{font-size:11px;color:var(--dim);margin-left:auto}
@@ -282,6 +288,8 @@ button:disabled{opacity:.45;cursor:default}
 
     <div class="bar ui" id="filters">
       <div class="quick" id="f-quick"></div>
+      <label id="f-confronto-eti">confronta con</label>
+      <div class="quick confronto" id="f-confronto"></div>
       <label>dal</label><input type="date" id="f-from">
       <label>al</label><input type="date" id="f-to">
       <label>conto</label><select id="f-account"></select>
@@ -347,7 +355,8 @@ button:disabled{opacity:.45;cursor:default}
 let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
-const F = {from:"", to:"", account:"", nature:"", category:"", sub:"", text:""};
+const F = {from:"", to:"", account:"", nature:"", category:"", sub:"",
+           text:"", confronto:""};
 
 // Le categorie hanno due livelli. Dentro al motore viaggiano unite
 // ("Casa > Casalinghi"), qui arrivano gia' divise in Categoria e
@@ -450,6 +459,20 @@ const QUICK = [
                                    return a ? monthRange(a.y, a.m, 0)
                                             : ["", ""]; }],
 ];
+
+// I pulsanti del metro. Spariscono senza un periodo scelto, insieme al
+// confronto stesso: senza periodo non c'e' niente da paragonare.
+function renderConfronti(){
+  const opzioni = confronti();
+  const scelto = confrontoScelto();
+  const vuoto = !opzioni.length;
+  el("f-confronto").classList.toggle("hide", vuoto);
+  el("f-confronto-eti").classList.toggle("hide", vuoto);
+  el("f-confronto").innerHTML = opzioni.map(o =>
+    `<button data-confronto="${esc(o.chiave)}"`
+    + ` class="${scelto && scelto.chiave === o.chiave ? "on" : ""}">`
+    + `${esc(o.etichetta)}</button>`).join("");
+}
 
 function renderQuick(){
   const ultimo = lastDataMonth();
@@ -620,11 +643,15 @@ const uncategorized = rows => rows.filter(t => !t.Categoria);
 const sum = rows => rows.reduce((a,t) => a + (t.Importo||0), 0);
 const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
 
-function filtered(){
+// Il periodo si puo' escludere. Serve all'andamento, che vive sullo storico:
+// ritagliato al mese scelto si riduceva a un punto solo, cioe' a niente. Gli
+// altri filtri restano, perche' quelli dicono DI COSA si sta parlando.
+function filtered(conPeriodo){
   if(!S) return [];
+  const periodo = conPeriodo !== false;
   return S.transactions.filter(t => {
-    if(F.from && (t.Data||"") < F.from) return false;
-    if(F.to && (t.Data||"") > F.to) return false;
+    if(periodo && F.from && (t.Data||"") < F.from) return false;
+    if(periodo && F.to && (t.Data||"") > F.to) return false;
     if(F.account && t.Conto !== F.account) return false;
     if(F.nature && t.Natura !== F.nature) return false;
     if(F.category && t.Categoria !== F.category) return false;
@@ -683,7 +710,7 @@ function meseLeggibile(etichetta){
   return m ? `${NOMI_MESI[+m[2]-1]} ${m[1]}` : String(etichetta || "");
 }
 
-function lineChart(labels, series){
+function lineChart(labels, series, dentro){
   if(!labels.length) return '<p class="note">nessun dato</p>';
   const W = 760, H = 230, LEFT = 56, BASE = H - 26;
   const flat = series.flatMap(s => s.values).concat([0]);
@@ -694,7 +721,20 @@ function lineChart(labels, series){
   const px = (i,v) => [labels.length === 1 ? (LEFT + W - 12)/2
                          : LEFT + i*(W-LEFT-12)/Math.max(labels.length-1,1),
                        12 + (top-v)/span*(BASE-12)];
+  const passo = (W-LEFT-12)/Math.max(labels.length-1,1);
   let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  // La fascia del periodo scelto. La linea resta intera: si vede dove cade il
+  // periodo di cui parlano gli indicatori, e insieme da dove viene.
+  if(dentro && dentro.length && dentro.length < labels.length){
+    const a = labels.indexOf(dentro[0]);
+    const b = labels.indexOf(dentro[dentro.length-1]);
+    if(a >= 0 && b >= a){
+      const x1 = px(a, top)[0] - passo/2, x2 = px(b, top)[0] + passo/2;
+      out += `<rect class="fascia" x="${Math.max(x1, LEFT).toFixed(1)}" y="6"`
+          + ` width="${(Math.min(x2, W-12) - Math.max(x1, LEFT)).toFixed(1)}"`
+          + ` height="${(BASE-6).toFixed(0)}"/>`;
+    }
+  }
   [0,0.5,1].forEach(f => {
     const y = 12 + f*(BASE-12), v = top - f*span;
     out += `<line x1="${LEFT}" y1="${y.toFixed(0)}" x2="${W-12}" y2="${y.toFixed(0)}" class="grid"/>`
@@ -718,7 +758,6 @@ function lineChart(labels, series){
   // Una fascia invisibile per mese: e' lei a rispondere al mouse. Larga
   // quanto il passo, cosi' basta AVVICINARSI al punto invece di centrarlo, e
   // funziona anche a cinquantasei mesi dove i pallini non ci sono.
-  const passo = (W-LEFT-12)/Math.max(labels.length-1,1);
   labels.forEach((etichetta,i) => {
     const [x] = px(i, top);
     const testo = [meseLeggibile(etichetta)].concat(series.map(s =>
@@ -782,9 +821,9 @@ CARDS.indicatori = rows => {
   const rate = earned ? saved/earned : 0;
 
   // Gli stessi numeri sul periodo precedente, per dare un metro.
-  const p = periodoPrecedente();
+  const p = finestraConfronto();
   const prima = p ? S.transactions.filter(t =>
-    (t.Data||"") >= p.da && (t.Data||"") <= p.a) : [];
+    dentroFinestra(p, t.Data || "")) : [];
   const mp = monthsOf(spending(prima)) || 1;
   const spesoP = sum(outflow(prima)), presoP = sum(inflow(prima));
   const ordinarioP = sum(outflow(prima).filter(t => t.Natura !== "Straordinarie"));
@@ -792,15 +831,15 @@ CARDS.indicatori = rows => {
 
   return '<div class="kpis">'
     + kpi("entrate / mese", euro(earned/m), "",
-          confronta(earned/m, presoP/mp, false))
+          confronta(earned/m, presoP/mp, false, p && p.etichetta))
     + kpi("uscite / mese", euro(-spent/m), "",
-          confronta(-spent/m, -spesoP/mp, true))
+          confronta(-spent/m, -spesoP/mp, true, p && p.etichetta))
     + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad",
-          confronta(saved/m, (presoP+spesoP)/mp, false))
+          confronta(saved/m, (presoP+spesoP)/mp, false, p && p.etichetta))
     + kpi("tasso di risparmio", Math.round(rate*100) + "%", "",
-          confronta(rate, tassoP, false))
+          confronta(rate, tassoP, false, p && p.etichetta))
     + kpi("spesa ordinaria / mese", euro(-ordinary/m), "",
-          confronta(-ordinary/m, -ordinarioP/mp, true))
+          confronta(-ordinary/m, -ordinarioP/mp, true, p && p.etichetta))
     + "</div>"
     + (p ? "" : '<p class="note">Scegli un periodo in alto a sinistra per '
         + 'vedere accanto a ogni numero quanto e\' cambiato rispetto al '
@@ -814,37 +853,174 @@ const kpi = (label, value, cls, confronto) =>
   + (confronto ? `<i class="delta ${confronto.verso}">${esc(confronto.testo)}</i>` : "")
   + "</div>";
 
-// Il periodo lungo quanto quello scelto, subito prima. Serve a dare un metro:
-// "-181 euro al mese" da solo non e' ne' buono ne' cattivo, e da un numero
-// senza paragone non esce nessuna decisione.
-//
-// Senza filtri il paragone e' fra gli ultimi dodici mesi con dati e i dodici
-// precedenti: la media su tutto lo storico non cambia mai e non direbbe nulla.
-function periodoPrecedente(){
-  // Senza un periodo scelto non c'e' niente con cui confrontare: il riquadro
-  // mostra la media su tutto lo storico, e prima di tutto lo storico non c'e'
-  // nulla. Confrontarla con gli ultimi dodici mesi metterebbe insieme due
-  // misure diverse e darebbe scarti inventati.
+// --------------------------------------------------------------------------
+// il metro del confronto
+// --------------------------------------------------------------------------
+// Un numero senza paragone non decide niente, ma il paragone sbagliato decide
+// male. Il periodo precedente non e' sempre il metro giusto, e soprattutto va
+// RITAGLIATO: agosto con i dati fino al 25 confrontato con luglio intero
+// diceva "-80% di entrate", che non e' un crollo, e' un mese a meta'.
+
+const MESI_BREVI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set",
+                    "ott","nov","dic"];
+
+// Che forma ha il periodo scelto: un mese di calendario, un anno, o altro.
+function formaDelPeriodo(){
   if(!F.from || !F.to) return null;
-  const giorno = s => new Date(s + "T00:00:00");
-  const iso = d => d.toISOString().slice(0, 10);
-  const da = F.from, a = F.to;
-  const giorni = Math.round((giorno(a) - giorno(da)) / 86400000);
-  const fine = new Date(giorno(da).getTime() - 86400000);
-  return {da: iso(new Date(fine.getTime() - giorni * 86400000)), a: iso(fine),
-          adesso: {da, a}};
+  const y = +F.from.slice(0,4), m = +F.from.slice(5,7);
+  const [ma, mb] = monthRange(y, m, 0);
+  if(F.from === ma && F.to === mb) return {tipo:"mese", y, m};
+  if(F.from === `${y}-01-01` && F.to === `${y}-12-31`) return {tipo:"anno", y};
+  return {tipo:"intervallo"};
 }
 
-// Meglio o peggio? Per le uscite scendere e' un miglioramento, per le entrate
-// e il risparmio e' il contrario: il verso non si puo' dedurre dal segno.
-function confronta(ora, prima, spesaMeglioSeScende){
+// Le opzioni di confronto disponibili, che dipendono dalla forma del periodo.
+// Senza un periodo scelto non ce n'e' nessuna: il riquadro mostra la media su
+// tutto lo storico, e prima di tutto lo storico non c'e' niente.
+function confronti(){
+  const f = formaDelPeriodo();
+  if(!f) return [];
+  if(f.tipo === "mese") return [
+    {chiave:"precedente", etichetta:"mese prima"},
+    {chiave:"annoPrima",  etichetta:`${MESI_BREVI[f.m]} ${f.y-1}`},
+    {chiave:"media12",    etichetta:"media 12 mesi"},
+  ];
+  if(f.tipo === "anno") return [
+    {chiave:"annoPrima", etichetta:`${f.y-1}`},
+    {chiave:"media3",    etichetta:"media 3 anni"},
+  ];
+  return [{chiave:"precedente", etichetta:"periodo prima"}];
+}
+
+// Quale opzione e' attiva. Cambiando periodo le opzioni cambiano, e una
+// scelta non piu' valida ricade sulla prima invece di restare appesa.
+function confrontoScelto(){
+  const opzioni = confronti();
+  if(!opzioni.length) return null;
+  return opzioni.find(o => o.chiave === F.confronto) || opzioni[0];
+}
+
+// Le date si costruiscono in UTC perche' isoData() le rilegge con
+// toISOString(), che e' UTC: mescolando i due fusi si perde un giorno
+// intero, e il ritaglio diceva "1-24" dove i dati arrivano al 25.
+const giorno = s => new Date(s + "T00:00:00Z");
+const isoData = d => d.toISOString().slice(0, 10);
+const piuGiorni = (s, n) => isoData(new Date(giorno(s).getTime() + n*86400000));
+
+// Fin dove arrivano i DATI dentro al periodo scelto. Non la fine del periodo:
+// agosto finisce il 31, ma i movimenti si fermano al 25.
+//
+// Il confine e' l'ultimo movimento IN ASSOLUTO, non l'ultimo dentro al
+// periodo: se in dicembre 2025 l'ultima spesa e' del 28, l'anno e' comunque
+// finito e non va ritagliato. Ritagliare li' vorrebbe dire chiamare "parziale"
+// un periodo chiuso solo perche' gli ultimi giorni sono stati tranquilli.
+function ultimoGiornoUtile(){
+  const tutte = S.transactions.map(t => t.Data || "").filter(Boolean);
+  if(!tutte.length) return F.to;
+  const ultimo = tutte.reduce((a, b) => a > b ? a : b);
+  return ultimo < F.to ? ultimo : F.to;
+}
+
+function giorniConDati(){
+  const fino = ultimoGiornoUtile();
+  if(fino < F.from) return 0;
+  return Math.round((giorno(fino) - giorno(F.from)) / 86400000) + 1;
+}
+
+// La finestra con cui confrontare, gia' ritagliata, e come si chiama.
+function finestraConfronto(){
+  const scelto = confrontoScelto();
+  if(!scelto) return null;
+  const f = formaDelPeriodo();
+  const durata = giorniConDati();
+  if(!durata) return null;
+
+  // Il ritaglio: la finestra si ferma allo stesso punto del calendario a cui
+  // si fermano i dati. Per un mese o un anno il punto sono lo stesso mese e lo
+  // stesso giorno del mese, non un numero di giorni: contando i giorni, il
+  // 2025 intero (365) misurato sul 2024 bisestile (366) finiva il 30 dicembre
+  // e si dichiarava parziale. Per un intervallo qualsiasi, dove non c'e' un
+  // calendario a cui agganciarsi, i giorni restano l'unica misura.
+  const fino = ultimoGiornoUtile();
+  const ritaglia = (inizio, fineIntera) => {
+    let fine;
+    if(f && f.tipo !== "intervallo"){
+      const salto = (+fino.slice(0,4)*12 + +fino.slice(5,7))
+                  - (+F.from.slice(0,4)*12 + +F.from.slice(5,7));
+      const [primo, ultimo] = monthRange(+inizio.slice(0,4),
+                                         +inizio.slice(5,7), salto);
+      const stessoGiorno = primo.slice(0, 8) + fino.slice(8, 10);
+      fine = stessoGiorno < ultimo ? stessoGiorno : ultimo;  // febbraio non ha il 30
+    } else {
+      fine = piuGiorni(inizio, durata - 1);
+    }
+    return {da: inizio, a: fine < fineIntera ? fine : fineIntera,
+            parziale: fine < fineIntera};
+  };
+
+  if(scelto.chiave === "precedente"){
+    const fineIntera = piuGiorni(F.from, -1);
+    const inizio = f && f.tipo === "mese"
+      ? monthRange(f.y, f.m, -1)[0]                 // il mese prima, intero
+      : piuGiorni(fineIntera, -(Math.round(
+          (giorno(F.to) - giorno(F.from)) / 86400000)));
+    const w = ritaglia(inizio, fineIntera);
+    return {...w, etichetta: nomeFinestra(w, f, "precedente", scelto)};
+  }
+  if(scelto.chiave === "annoPrima"){
+    const inizio = f.tipo === "mese" ? monthRange(f.y-1, f.m, 0)[0]
+                                     : `${f.y-1}-01-01`;
+    const fineIntera = f.tipo === "mese" ? monthRange(f.y-1, f.m, 0)[1]
+                                         : `${f.y-1}-12-31`;
+    const w = ritaglia(inizio, fineIntera);
+    return {...w, etichetta: nomeFinestra(w, f, "annoPrima", scelto)};
+  }
+  // Anche le medie si ritagliano, ma in un altro modo: la finestra resta
+  // lunga, e di OGNI mese (o di ogni anno) si tiene solo la parte gia'
+  // trascorsa. Accorciarla non servirebbe: 25 giorni di agosto misurati su
+  // dodici mesi interi dicevano "-81% di entrate", ma nessuno dei dodici mesi
+  // e' il colpevole, lo sono i sei giorni che ad agosto mancano.
+  const quanti = scelto.chiave === "media12" ? 12 : 36;
+  // I mesi si contano con monthRange, non a mano: sottraendo mesi da una data
+  // veniva fuori una finestra di undici mesi chiamata "media 12 mesi".
+  const fine = piuGiorni(F.from, -1);
+  const inizio = monthRange(+fine.slice(0,4), +fine.slice(5,7), -(quanti-1))[0];
+  if(fino >= F.to)
+    return {da: inizio, a: fine, parziale: false, etichetta: scelto.etichetta};
+  // Il taglio confronta la CODA della data: per un mese il giorno ("25"), per
+  // un anno il mese e il giorno ("08-25").
+  const taglio = f.tipo === "mese" ? {da: 8, fino: fino.slice(8)}
+                                   : {da: 5, fino: fino.slice(5)};
+  return {da: inizio, a: fine, parziale: true, taglio,
+          etichetta: nomeFinestra({parziale: true, a: fino}, f, scelto.chiave,
+                                  scelto)};
+}
+
+// Le righe dentro a una finestra, taglio compreso.
+function dentroFinestra(p, data){
+  if(data < p.da || data > p.a) return false;
+  return !p.taglio || data.slice(p.taglio.da) <= p.taglio.fino;
+}
+
+// Come si chiama la finestra, col ritaglio dichiarato: un numero di cui non si
+// sa la provenienza non serve a niente.
+function nomeFinestra(w, f, chiave, scelto){
+  if(!w.parziale) return scelto.etichetta;
+  const meseFine = +w.a.slice(5,7);
+  if(f && f.tipo === "anno")
+    return `${scelto.etichetta} (gen\u2013${MESI_BREVI[meseFine]})`;
+  return `${scelto.etichetta} (1\u2013${+w.a.slice(8,10)})`;
+}
+
+function confronta(ora, prima, spesaMeglioSeScende, metro){
   if(!prima || Math.abs(prima) < 0.01) return null;
   const scarto = (ora - prima) / Math.abs(prima);
-  if(Math.abs(scarto) < 0.005) return {verso:"pari", testo:"come prima"};
+  if(Math.abs(scarto) < 0.005)
+    return {verso:"pari", testo:`come ${metro}`};
   const meglio = spesaMeglioSeScende ? ora < prima : ora > prima;
   const segno = scarto > 0 ? "+" : "";
   return {verso: meglio ? "meglio" : "peggio",
-          testo: `${segno}${Math.round(scarto*100)}% sul periodo prima`};
+          testo: `${segno}${Math.round(scarto*100)}% contro ${metro}`};
 }
 
 CARDS.natura = rows => {
@@ -867,9 +1043,17 @@ CARDS.natura = rows => {
     + 'meno. Clicca una barra per filtrare tutto il resto su quella natura.</p>';
 };
 
-CARDS.andamento = rows => {
+// L'andamento ignora il periodo e guarda tutto lo storico: e' l'unico
+// riquadro che risponde a "come siamo arrivati fin qui", e la risposta non sta
+// dentro al mese scelto. Il periodo si vede come fascia.
+CARDS.andamento = () => {
+  const rows = filtered(false);
   const out = outflow(rows), inc = inflow(rows);
   const labels = uniq(spending(rows).map(month));
+  const dentro = F.from || F.to
+    ? labels.filter(l => (!F.from || l >= F.from.slice(0,7))
+                      && (!F.to || l <= F.to.slice(0,7)))
+    : [];
   const by = (set, pred) => labels.map(l =>
     sum(set.filter(t => month(t)===l && (!pred || pred(t)))));
   const series = [
@@ -878,11 +1062,10 @@ CARDS.andamento = rows => {
     {name:"uscite ordinarie",
      values:by(out, t => t.Natura!=="Straordinarie").map(v => -v), color:"#d99442"},
   ];
-  return lineChart(labels, series) + legend(series)
-    + (labels.length === 1
-       ? '<p class="note">Un mese solo: un andamento ha bisogno di almeno due '
-         + 'punti per essere una linea. Qui sono segnati i valori del mese; '
-         + 'allarga il periodo per vedere la curva.</p>'
+  return lineChart(labels, series, dentro) + legend(series)
+    + (dentro.length
+       ? '<p class="note">La linea copre tutto lo storico: il periodo scelto e' + "'"
+         + ' la parte in chiaro. Un mese da solo non fa un andamento.</p>'
        : "");
 };
 
@@ -1201,6 +1384,7 @@ function render(){
     TAB==="categorie" || TAB==="regole" || TAB==="componi");
 
   renderQuick();
+  renderConfronti();
   fillSelect("f-account", S.accounts, F.account, "tutti");
   fillSelect("f-nature", S.nature, F.nature, "tutte");
   const aree = uniq(S.categories.map(c => c.categoria)).filter(Boolean).sort();
@@ -1281,12 +1465,13 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],"
-    + "[data-up],[data-conferma]");
+    + "[data-up],[data-conferma],[data-confronto]");
   if(!t) return;
   const d = t.dataset;
 
   if(d.tab){ TAB = d.tab; render(); return; }
   if(d.clear){ F[d.clear] = ""; render(); return; }
+  if(d.confronto !== undefined){ F.confronto = d.confronto; render(); return; }
   if(d.quick !== undefined){
     const [from, to] = QUICK[+d.quick][1]();
     if(!from) return;

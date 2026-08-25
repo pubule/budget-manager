@@ -53,6 +53,7 @@ ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, SPAN, patternNegozio, meseLeggibile,
+ confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -92,6 +93,87 @@ console.log("=== entrate contro uscite ===");
   check("i rimborsi stanno fra le uscite, dove riducono la voce",
         rimborsi.every(t => t.Natura !== "Entrate"),
         `${rimborsi.length} rimborsi`);
+}
+
+console.log("=== il metro del confronto ===");
+{
+  const F0 = api.getF();
+  const mettiPeriodo = (da, a, confronto) => {
+    F0.from = da; F0.to = a; F0.confronto = confronto || "";
+  };
+  const ultimo = state.transactions.map(t => t.Data).filter(Boolean)
+    .reduce((x, y) => x > y ? x : y);
+  const mese = ultimo.slice(0, 7);
+  const giorno = +ultimo.slice(8, 10);
+
+  // Senza un periodo scelto non c'e' niente con cui confrontare: il riquadro
+  // mostra la media su tutto lo storico, e prima di tutto lo storico non c'e'
+  // nulla. Nessuna opzione, nessun confronto.
+  mettiPeriodo("", "");
+  check("senza periodo non ci sono metri", api.confronti().length === 0);
+  check("senza periodo non c'e' finestra", api.finestraConfronto() === null);
+
+  // Un mese di calendario: tre metri.
+  mettiPeriodo(mese + "-01", mese + "-31");
+  const perMese = api.confronti();
+  check("per un mese ci sono tre metri", perMese.length === 3,
+        perMese.map(o => o.etichetta).join(", "));
+  check("il primo e' il mese prima", perMese[0].chiave === "precedente");
+
+  // IL RITAGLIO, che e' il motivo per cui tutto questo esiste. Il periodo ha
+  // dati fino al giorno N, quindi il metro dura N giorni dal SUO inizio:
+  // agosto fino al 25 si confronta con luglio fino al 25, non con luglio
+  // intero. Senza, un mese a meta' sembrava un crollo.
+  const durata = api.giorniConDati();
+  check("i giorni con dati arrivano all'ultimo movimento", durata === giorno,
+        durata + " invece di " + giorno);
+  const w = api.finestraConfronto();
+  const giorni = Math.round(
+    (new Date(w.a + "T00:00:00Z") - new Date(w.da + "T00:00:00Z")) / 86400000) + 1;
+  check("il metro dura quanto i dati del periodo", giorni === durata,
+        giorni + " giorni invece di " + durata);
+  check("il ritaglio viene dichiarato nell'etichetta",
+        !w.parziale || /\(1.\d+\)/.test(w.etichetta), w.etichetta);
+
+  // Un periodo COMPLETO non si ritaglia: il caso normale non cambia.
+  mettiPeriodo("2025-01-01", "2025-12-31");
+  const intero = api.finestraConfronto();
+  check("un periodo completo non viene ritagliato",
+        !intero.parziale && intero.da === "2024-01-01" && intero.a === "2024-12-31",
+        intero.da + " .. " + intero.a);
+
+  // Un anno: due metri, e le medie coprono davvero i mesi che dichiarano.
+  const perAnno = api.confronti();
+  check("per un anno ci sono due metri", perAnno.length === 2,
+        perAnno.map(o => o.etichetta).join(", "));
+  mettiPeriodo("2025-01-01", "2025-12-31", "media3");
+  const m3 = api.finestraConfronto();
+  const mesiCoperti = (+m3.a.slice(0,4)*12 + +m3.a.slice(5,7))
+                    - (+m3.da.slice(0,4)*12 + +m3.da.slice(5,7)) + 1;
+  check("\"media 3 anni\" copre trentasei mesi", mesiCoperti === 36,
+        mesiCoperti + " mesi: " + m3.da + " .. " + m3.a);
+  mettiPeriodo(mese + "-01", mese + "-31", "media12");
+  const m12 = api.finestraConfronto();
+  const mesi12 = (+m12.a.slice(0,4)*12 + +m12.a.slice(5,7))
+               - (+m12.da.slice(0,4)*12 + +m12.da.slice(5,7)) + 1;
+  check("\"media 12 mesi\" copre dodici mesi", mesi12 === 12,
+        mesi12 + " mesi: " + m12.da + " .. " + m12.a);
+
+  // Un intervallo qualsiasi: un metro solo.
+  mettiPeriodo("2026-03-10", "2026-05-20");
+  check("per un intervallo a mano c'e' un metro solo",
+        api.confronti().length === 1);
+
+  // Cambiando periodo una scelta non piu' valida non resta appesa.
+  mettiPeriodo(mese + "-01", mese + "-31", "media12");
+  check("la scelta vale finche' esiste",
+        api.confrontoScelto().chiave === "media12");
+  mettiPeriodo("2025-01-01", "2025-12-31", "media12");
+  check("una scelta non piu' valida ricade sulla prima",
+        api.confrontoScelto().chiave === api.confronti()[0].chiave,
+        api.confrontoScelto().chiave);
+
+  F0.from = ""; F0.to = ""; F0.confronto = "";
 }
 
 console.log("=== filtri ===");
@@ -230,10 +312,18 @@ check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'))
   const F3 = api.getF();
   const [da, a] = api.QUICK[0][1]();          // mese in corso
   F3.from = da; F3.to = a;
+  // L'andamento guarda lo storico anche con un periodo scelto: ritagliarlo al
+  // mese lo riduceva a un punto, cioe' a niente. Il periodo diventa una fascia.
   const reso = api.CARDS.andamento(api.filtered());
-  check("il riquadro dell'andamento non e' muto su un mese solo",
-        reso.includes("<circle") && reso.includes("Un mese solo"));
+  const mesiStorici = api.uniq(api.spending(state.transactions)
+    .map(t => (t.Data||"").slice(0,7))).length;
+  check("l'andamento resta sullo storico anche con un mese scelto",
+        (reso.match(/<text[^>]*class="axis"[^>]*text-anchor/g)||[]).length > 1,
+        "un punto solo su " + mesiStorici + " mesi");
+  check("il periodo scelto si vede come fascia", reso.includes("class=\"fascia\""));
   F3.from = ""; F3.to = "";
+  const senza = api.CARDS.andamento(api.filtered());
+  check("senza periodo non c'e' nessuna fascia", !senza.includes("class=\"fascia\""));
 
   // Il valore sotto al mouse: una fascia per mese, non solo il pallino, cosi'
   // basta avvicinarsi e funziona anche dove i pallini non ci sono.
