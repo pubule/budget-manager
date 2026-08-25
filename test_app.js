@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el, whole, uniq, SPAN, patternNegozio,
+ setStatus, el, whole, uniq, SPAN, patternNegozio, meseLeggibile,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -209,6 +209,35 @@ check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'))
   check("il riquadro dell'andamento non e' muto su un mese solo",
         reso.includes("<circle") && reso.includes("Un mese solo"));
   F3.from = ""; F3.to = "";
+
+  // Il valore sotto al mouse: una fascia per mese, non solo il pallino, cosi'
+  // basta avvicinarsi e funziona anche dove i pallini non ci sono.
+  const dodici = api.lineChart(
+    ["2026-01","2026-02","2026-03"],
+    [{name:"entrate", values:[100,200,300], color:"#000"},
+     {name:"uscite", values:[-50,-60,-70], color:"#111"}]);
+  const fasce = (dodici.match(/data-tip="/g) || []).length;
+  check("una fascia sensibile al mouse per ogni mese", fasce === 3, String(fasce));
+  check("la fascia riporta il mese per esteso e tutte le serie",
+        dodici.includes("gennaio 2026") && dodici.includes("entrate:")
+        && dodici.includes("uscite:"));
+  check("la fascia e' invisibile ma cliccabile dal mouse",
+        dodici.includes('fill="transparent"'));
+  // Anche a cinquantasei mesi, dove i pallini non si disegnano.
+  const lungo = api.lineChart(
+    Array.from({length: 30}, (_, i) => "2024-" + String((i % 12) + 1).padStart(2, "0")),
+    [{name:"x", values: Array(30).fill(10), color:"#000"}]);
+  check("le fasce ci sono anche senza pallini",
+        !lungo.includes("<circle") && (lungo.match(/data-tip="/g) || []).length === 30);
+  check("il mese per esteso regge un'etichetta strana",
+        api.meseLeggibile("boh") === "boh" && api.meseLeggibile("") === "");
+  // La riga verticale spiega perche' il tooltip porta TUTTE le serie: legge
+  // la colonna del mese, non il punto piu' vicino.
+  check("c'e' una riga verticale, una sola per grafico",
+        (dodici.match(/class="guida hide"/g) || []).length === 1);
+  check("ogni fascia sa dove mettere la riga",
+        (dodici.match(/data-x="/g) || []).length === 3);
+  check("la riga parte nascosta", dodici.includes('class="guida hide"'));
 }
 check("le barre sono in percentuale, cosi' si adattano al riquadro",
       /width:\d+(\.\d+)?%/.test(bars));

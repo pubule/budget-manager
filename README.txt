@@ -320,7 +320,18 @@ Regole e merchant  Con anteprima: "prova" dice quante transazioni colpirebbe
 
 Componi            Quali riquadri mostrare e in che ordine.
 
-Andamento          Una linea per entrate, uscite e uscite ordinarie. Con
+Andamento          Avvicinando il mouse compare una RIGA VERTICALE
+                   tratteggiata sul mese e un riquadro coi valori di tutte e
+                   tre le serie. La riga serve a spiegare il riquadro: il
+                   tooltip legge la COLONNA del mese, non il punto piu'
+                   vicino, ed e' per questo che riporta entrate, uscite e
+                   uscite ordinarie insieme.
+
+                   La zona sensibile e' una fascia larga quanto il passo fra
+                   due mesi, non il pallino: basta avvicinarsi, e funziona
+                   anche a cinquantasei mesi dove i pallini non si disegnano.
+
+                   Una linea per entrate, uscite e uscite ordinarie. Con
                    POCHI MESI si vedono anche i pallini sui valori: serve
                    quando il mese e' UNO SOLO, perche' una polilinea di un
                    punto non disegna niente e il riquadro sembrava vuoto pur

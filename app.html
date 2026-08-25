@@ -101,6 +101,9 @@ text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
 text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
 text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
 line.grid{stroke:var(--line);stroke-width:1}
+/* La riga verticale sotto al mouse: dice che il tooltip legge tutta la
+   colonna del mese, non il singolo punto piu' vicino. */
+line.guida{stroke:var(--dim);stroke-width:1;stroke-dasharray:4 4;opacity:.75}
 svg .hit{cursor:pointer}
 svg .hit:hover rect{opacity:.75}
 .bars{display:flex;flex-direction:column;gap:7px}
@@ -137,6 +140,12 @@ gap:6px}
 system-ui,sans-serif}
 .compose .grow{flex:1}
 .hide{display:none}
+/* Il valore sotto al mouse. Segue il puntatore e non lo intercetta mai,
+   altrimenti si rincorrerebbero. */
+#tip{position:fixed;z-index:30;pointer-events:none;background:var(--card);
+border:1px solid var(--line);border-radius:8px;padding:8px 11px;
+font:12px/1.6 ui-sans-serif,system-ui,sans-serif;color:var(--ink);
+box-shadow:0 6px 20px rgba(0,0,0,.22);white-space:pre-line}
 /* I riquadri di dialogo sono nostri, non del browser: quelli di sistema
    ignorano il tema, non si possono spiegare meglio di una riga di testo, e
    bloccano la pagina in un modo che nemmeno si puo' provare. <dialog> nativo
@@ -243,6 +252,8 @@ color:var(--dim)}
     <div id="view"></div>
   </main>
 </div>
+
+<div id="tip" class="ui hide"></div>
 
 <dialog id="modale" class="ui">
   <form method="dialog">
@@ -474,6 +485,35 @@ function modale(opzioni){
     else if(chiede){ campo.focus(); campo.select(); }
   });
 }
+// Il valore sotto al mouse. Un solo ascolto sul documento invece di uno per
+// fascia: le fasce si rifanno a ogni ridisegno del grafico, e agganciarle una
+// per una vorrebbe dire riagganciarle ogni volta.
+function seguiIlMouse(ev){
+  const tip = el("tip");
+  const banda = ev.target.closest && ev.target.closest("[data-tip]");
+  // La guida si nasconde SEMPRE prima: uscendo dal grafico deve sparire, e
+  // passando da un mese all'altro non deve restarne una accesa dietro.
+  document.querySelectorAll("line.guida").forEach(g => g.classList.add("hide"));
+  if(!banda){ tip.classList.add("hide"); return; }
+  const guida = banda.ownerSVGElement
+    && banda.ownerSVGElement.querySelector("line.guida");
+  if(guida && banda.dataset.x){
+    guida.setAttribute("x1", banda.dataset.x);
+    guida.setAttribute("x2", banda.dataset.x);
+    guida.classList.remove("hide");
+  }
+  tip.textContent = banda.dataset.tip;
+  tip.classList.remove("hide");
+  // Sopra e a destra del puntatore, ma senza uscire dalla finestra.
+  const l = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY - h - 12;
+  if(x + l > innerWidth - 8) x = ev.clientX - l - 14;
+  if(y < 8) y = ev.clientY + 20;
+  tip.style.left = Math.max(8, x) + "px";
+  tip.style.top = y + "px";
+}
+document.addEventListener("mousemove", seguiIlMouse);
+
 const avvisa  = testo => modale({testo});
 const chiedi  = testo => modale({testo, annullabile:true});
 const domanda = (testo, valore) => modale({testo, valore: valore || "",
@@ -551,6 +591,15 @@ function barChart(items, opts){
   }).join("") + "</div>";
 }
 
+// "2026-08" -> "agosto 2026". Sull'asse ci sta solo "26-08", ma nel
+// tooltip, che si legge, il mese per esteso costa niente.
+const NOMI_MESI = ["gennaio","febbraio","marzo","aprile","maggio","giugno",
+  "luglio","agosto","settembre","ottobre","novembre","dicembre"];
+function meseLeggibile(etichetta){
+  const m = /^(\d{4})-(\d{2})$/.exec(String(etichetta || ""));
+  return m ? `${NOMI_MESI[+m[2]-1]} ${m[1]}` : String(etichetta || "");
+}
+
 function lineChart(labels, series){
   if(!labels.length) return '<p class="note">nessun dato</p>';
   const W = 760, H = 230, LEFT = 56, BASE = H - 26;
@@ -582,6 +631,19 @@ function lineChart(labels, series){
         + ` fill="${s.color}"/>`;
     }).join("");
   }
+  out += `<line class="guida hide" x1="0" y1="10" x2="0" y2="${BASE}"/>`;
+  // Una fascia invisibile per mese: e' lei a rispondere al mouse. Larga
+  // quanto il passo, cosi' basta AVVICINARSI al punto invece di centrarlo, e
+  // funziona anche a cinquantasei mesi dove i pallini non ci sono.
+  const passo = (W-LEFT-12)/Math.max(labels.length-1,1);
+  labels.forEach((etichetta,i) => {
+    const [x] = px(i, top);
+    const testo = [meseLeggibile(etichetta)].concat(series.map(s =>
+      `${s.name}: ${euro(s.values[i])}`)).join("\n");
+    out += `<rect x="${(x-passo/2).toFixed(1)}" y="0" width="${passo.toFixed(1)}"`
+        + ` height="${H}" fill="transparent" data-tip="${esc(testo)}"`
+        + ` data-x="${x.toFixed(1)}"/>`;
+  });
   const step = Math.max(1, Math.floor(labels.length/12));
   for(let i=0;i<labels.length;i+=step){
     const [x] = px(i, top);
