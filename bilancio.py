@@ -410,6 +410,37 @@ def apply_corrections(rows, fixes):
     return rows
 
 
+def load_exclusions(path):
+    """escluse.csv: id -> motivo, per le righe che non devono comparire.
+
+    Cancellare davvero una riga di banca sarebbe una bugia: il caricamento
+    successivo la riporterebbe. Qui si registra la decisione, e la riga resta
+    ripescabile togliendo la sua riga dal file.
+    """
+    if not path.exists():
+        return {}
+    fuori = {}
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter=";"):
+            key = (row.get("id") or "").strip()
+            if key:
+                fuori[key] = (row.get("motivo") or "").strip()
+    if fuori:
+        print(f"  {len(fuori)} righe escluse a mano")
+    return fuori
+
+
+def apply_exclusions(rows, exclusions, discarded=None):
+    """Toglie le righe elencate in escluse.csv, annotando il motivo."""
+    if not exclusions:
+        return rows
+    fuori = [r for r in rows if r.get("ID") in exclusions]
+    for row in fuori:
+        note_discarded(discarded, f"esclusa a mano: {exclusions[row['ID']]}",
+                       [row])
+    return [r for r in rows if r.get("ID") not in exclusions]
+
+
 def load_overrides(path):
     """override.csv: categoria decisa a mano per una singola transazione.
 
@@ -1642,6 +1673,19 @@ def selftest():
     assert transfer_out(TRANSFER, -3829.0, "override") == TRANSFER,         "l'override non ha retto"
     assert transfer_out("Casa > Luce e gas", -50.0, "regola") == "Casa > Luce e gas",         "una spesa qualsiasi e' stata scambiata per un giroconto"
 
+    # Escludere e' l'unica forma di cancellazione: una riga di banca tornerebbe
+    # comunque al caricamento dopo, quindi sparire davvero sarebbe una bugia.
+    righe = [
+        {"ID": "aaa#1", "Descrizione": "spesa buona", "Importo": -10.0},
+        {"ID": "bbb#1", "Descrizione": "doppione", "Importo": -10.0},
+    ]
+    buttate = []
+    resto = apply_exclusions(righe, {"bbb#1": "doppione di luglio"}, buttate)
+    assert [r["ID"] for r in resto] == ["aaa#1"], "l'esclusione non ha tolto la riga"
+    assert len(buttate) == 1, "la riga esclusa non e' finita fra le scartate"
+    assert buttate[0]["Scartata da"] == "esclusa a mano: doppione di luglio",         f"motivo perso: {buttate[0]['Scartata da']!r}"
+    assert apply_exclusions(righe, {}, []) == righe,         "senza esclusioni non deve cambiare niente"
+
     # Un giroconto fra conti propri non deve contare due volte.
     pair = [
         {"Data": "2026-01-15", "Descrizione": "giroconto", "Importo": -200.0, "Conto": "a"},
@@ -2178,6 +2222,7 @@ def load_config(folder):
         "merchants": load_merchants(folder / "merchant.csv"),
         "natura": load_natura(folder / "natura.csv"),
         "corrections": load_corrections(folder / "correzioni.csv"),
+        "exclusions": load_exclusions(folder / "escluse.csv"),
         "accounts": load_accounts(folder / "conti.csv"),
     }
     # Il sqlite estratto pesa ~5 MB: tienilo fuori dalla cartella iCloud,
@@ -2365,6 +2410,9 @@ def run(folder, use_llm=True, output="consolidato.csv",
     if not gia_pulite:
         assign_ids(rows)
     apply_corrections(rows, config["corrections"])
+    # Prima di ogni altro scarto: una riga esclusa non deve nemmeno partecipare
+    # agli appaiamenti, o consumerebbe la copertura di una riga buona.
+    rows = apply_exclusions(rows, config["exclusions"], scartate)
     if not gia_pulite:
         rows = drop_cross_file_duplicates(rows, scartate)
         # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()

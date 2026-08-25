@@ -1482,7 +1482,8 @@ VIEWS.transazioni = rows => {
             + `${esc(t.Natura)}</span>`,
           categorySelect(whole(t), t.ID),
           `<span class="mini">${esc(t.Origine)}</span>`,
-          `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`]),
+          `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`
+          + ` <button class="link" data-escludi="${esc(t.ID)}">escludi</button>`]),
         [3])
     + '<p class="note">Ogni modifica si salva da sola e la pipeline rigira '
     + 'subito. La categoria scrive override.csv; data, descrizione, merchant, '
@@ -1667,7 +1668,7 @@ function setStatus(){
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
-    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],"
+    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
     + "[data-up],[data-conferma],[data-confronto],[data-vista]");
   if(!t) return;
   const d = t.dataset;
@@ -1713,6 +1714,12 @@ document.addEventListener("click", async ev => {
   if(d.catDrop){
     if(!await chiedi(`Non imparare piu' dalla categoria "${d.catDrop}"?`)) return;
     await post("/api/categories", {azione:"elimina", nome:d.catDrop});
+    return reload();
+  }
+  if(d.escludi){
+    const motivo = await domanda("Perche' questa riga non deve comparire?", "");
+    if(!motivo) return;
+    await post("/api/transaction", {id:d.escludi, escludi:motivo});
     return reload();
   }
   if(d.resetTx){

@@ -48,6 +48,7 @@ SCHEMA = {
     "override.csv": ["id", "data", "importo", "categoria", "sottocategoria",
                      "nota"],
     "correzioni.csv": ["id", "campo", "valore", "nota"],
+    "escluse.csv": ["id", "motivo"],
     "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
@@ -358,6 +359,16 @@ def set_transaction(payload):
                                     if (r.get("id") or "").strip() != key])
         write_rows("correzioni.csv", [r for r in read_rows("correzioni.csv")
                                       if (r.get("id") or "").strip() != key])
+        return
+
+    if "escludi" in payload:
+        # Un motivo vuoto vuol dire "ripesca": la riga torna nel consolidato.
+        rows = [r for r in read_rows("escluse.csv")
+                if (r.get("id") or "").strip() != key]
+        motivo = (payload.get("escludi") or "").strip()
+        if motivo:
+            rows.append({"id": key, "motivo": motivo})
+        write_rows("escluse.csv", rows)
         return
 
     if "categoria" in payload:
