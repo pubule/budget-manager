@@ -42,8 +42,8 @@ global.fetch = () => Promise.resolve({json: () => Promise.resolve(state)});
 global.setInterval = () => 0;
 global.setTimeout = () => 0;
 global.clearTimeout = () => {};
-global.alert = m => console.log("  alert:", m);
-global.prompt = () => null;
+// Nessuno stub per alert/confirm/prompt: l'app non li usa piu' e non deve
+// tornare a usarli. Se li richiamasse, qui non esistono e il test esplode.
 
 // Espone le funzioni interne per poterle interrogare.
 // eval() su codice nostro: serve a raggiungere funzioni che app.html non
@@ -345,6 +345,27 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
   } else {
     check("la scheda Regole mostra la categoria intera", true, "nessuna regola a due livelli");
   }
+  // I riquadri di dialogo sono nostri. Quelli del browser ignorano il tema,
+  // non stanno dietro a un messaggio di piu' di una riga, e bloccano la
+  // pagina in un modo che nemmeno si puo' provare da qui.
+  const sistema = [...js.matchAll(/(?:^|[^.\w])(alert|confirm|prompt)\s*\(/g)]
+    .map(m => m[1]);
+  check("nessun popup del browser", sistema.length === 0, sistema.join(", "));
+  for (const nome of ["modale", "avvisa", "chiedi", "domanda"])
+    check(`c'e' ${nome}()`, new RegExp("(function|const) " + nome + "\\b").test(js));
+  check("il riquadro di dialogo esiste nel documento",
+        html.includes('<dialog id="modale"'));
+  check("il testo del dialogo va nel DOM come testo, non come HTML",
+        js.includes('el("modale-testo").textContent'));
+  // La promessa non deve dipendere dall'evento "close": su alcuni browser non
+  // arriva, e la pagina resterebbe bloccata dietro a un riquadro immobile.
+  // Verificato in pagina: ne' "close" ne' "cancel" scattano in quel caso.
+  check("la risposta non dipende dall'evento close",
+        !/addEventListener\(\s*["']close["']/.test(js)
+        && !/\.onclose\s*=/.test(js));
+  check("Esc chiude anche senza l'evento cancel",
+        /onkeydown[\s\S]{0,200}Escape/.test(js));
+
   check("nessuna regola perde la sottocategoria",
         state.rules.every(r => !r.categoria
           || ["Giroconto","Stipendio","Affitti incassati","Da identificare"]

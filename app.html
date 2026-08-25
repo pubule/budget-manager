@@ -137,6 +137,19 @@ gap:6px}
 system-ui,sans-serif}
 .compose .grow{flex:1}
 .hide{display:none}
+/* I riquadri di dialogo sono nostri, non del browser: quelli di sistema
+   ignorano il tema, non si possono spiegare meglio di una riga di testo, e
+   bloccano la pagina in un modo che nemmeno si puo' provare. <dialog> nativo
+   perche' porta gia' fuoco, Esc e sfondo senza una libreria. */
+#modale{border:1px solid var(--line);border-radius:12px;background:var(--card);
+color:var(--ink);padding:0;max-width:520px;width:calc(100% - 40px);
+box-shadow:0 18px 50px rgba(0,0,0,.28)}
+#modale::backdrop{background:rgba(0,0,0,.45)}
+#modale form{padding:22px 24px 18px;margin:0}
+#modale p{margin:0 0 16px;white-space:pre-wrap;line-height:1.5;
+font:14px/1.55 ui-sans-serif,system-ui,sans-serif}
+#modale input{width:100%;margin-bottom:16px}
+.modale-azioni{display:flex;gap:8px;justify-content:flex-end}
 .mini{font:11px ui-monospace,monospace;color:var(--dim)}
 .wide{min-width:260px}
 .quick{display:flex;gap:5px;flex-wrap:wrap;width:100%;align-items:center;
@@ -230,6 +243,17 @@ color:var(--dim)}
     <div id="view"></div>
   </main>
 </div>
+
+<dialog id="modale" class="ui">
+  <form method="dialog">
+    <p id="modale-testo"></p>
+    <input id="modale-campo" class="hide">
+    <div class="modale-azioni">
+      <button type="button" id="modale-no">Annulla</button>
+      <button type="submit" id="modale-si" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
 
 <aside id="log">
   <div class="top">
@@ -391,11 +415,55 @@ function coverage(rows, months){
 }
 
 
+// --------------------------------------------------------------------------
+// riquadri di dialogo
+// --------------------------------------------------------------------------
+// Sostituiscono alert, confirm e prompt del browser. Tornano una promessa, e
+// per questo ogni chiamata va attesa: e' l'unica differenza rispetto a prima.
+function modale(opzioni){
+  return new Promise(risolvi => {
+    const dlg = el("modale"), campo = el("modale-campo"), no = el("modale-no");
+    el("modale-testo").textContent = opzioni.testo;
+    const chiede = opzioni.valore !== undefined;
+    campo.classList.toggle("hide", !chiede);
+    campo.value = chiede ? opzioni.valore : "";
+    no.classList.toggle("hide", !opzioni.annullabile);
+    el("modale-si").textContent = opzioni.ok || "OK";
+    // La risposta si prende dai tre modi in cui si puo' rispondere, non
+    // dall'evento "close": su alcuni browser quell'evento non arriva, e la
+    // promessa resterebbe appesa per sempre con la pagina bloccata dietro.
+    // Sono proprieta' e non addEventListener, cosi' una chiamata sostituisce
+    // la precedente invece di accumularsi.
+    const chiudi = detto => {
+      dlg.close();
+      risolvi(chiede ? (detto ? campo.value : null) : detto);
+    };
+    dlg.querySelector("form").onsubmit = ev => {   // OK, o Invio nel campo
+      ev.preventDefault();
+      chiudi(true);
+    };
+    no.onclick = () => chiudi(false);
+    // Esc, per due strade: "cancel" e' quella prevista, ma su alcuni browser
+    // non arriva, e allora la pagina resterebbe bloccata dietro a un riquadro
+    // che non si chiude. Il tasto lo si ascolta anche direttamente.
+    dlg.oncancel = ev => { ev.preventDefault(); chiudi(false); };
+    dlg.onkeydown = ev => {
+      if(ev.key === "Escape"){ ev.preventDefault(); chiudi(false); }
+    };
+    dlg.showModal();
+    if(chiede){ campo.focus(); campo.select(); }
+  });
+}
+const avvisa  = testo => modale({testo});
+const chiedi  = testo => modale({testo, annullabile:true});
+const domanda = (testo, valore) => modale({testo, valore: valore || "",
+                                           annullabile:true});
+
 function post(route, body){
   return fetch(route, {method:"POST", headers:{"Content-Type":"application/json"},
                        body:JSON.stringify(body)})
     .then(r => r.json())
-    .then(r => { if(r.errore) alert(r.errore); return r; });
+    .then(r => { if(r.errore) avvisa(r.errore); return r; });
 }
 
 // Solo le uscite vere: i giroconti non impoveriscono, includerli falsa tutto.
@@ -964,7 +1032,7 @@ document.addEventListener("click", async ev => {
   }
   if(d.catRename || d.catMerge){
     const name = d.catRename || d.catMerge;
-    const target = prompt(d.catRename ? `Nuovo nome per "${name}":`
+    const target = await domanda(d.catRename ? `Nuovo nome per "${name}":`
                                       : `Unisci "${name}" dentro:`, name);
     if(!target || target === name) return;
     await post("/api/categories", {azione:d.catRename?"rinomina":"unisci",
@@ -972,7 +1040,7 @@ document.addEventListener("click", async ev => {
     return reload();
   }
   if(d.catDrop){
-    if(!confirm(`Non imparare piu' dalla categoria "${d.catDrop}"?`)) return;
+    if(!await chiedi(`Non imparare piu' dalla categoria "${d.catDrop}"?`)) return;
     await post("/api/categories", {azione:"elimina", nome:d.catDrop});
     return reload();
   }
@@ -986,14 +1054,14 @@ document.addEventListener("click", async ev => {
     // categoria fantasma che somiglia a una vera.
     const sel = document.querySelector(`[data-setcat="${d.id}"]`);
     const value = sel && sel.value;
-    if(!value) return alert("Scegli prima la categoria nel menu qui accanto: "
+    if(!value) return avvisa("Scegli prima la categoria nel menu qui accanto: "
       + "la regola usera' quella.");
     // Il nome del negozio finisce dentro un'espressione regolare, dove punti
     // e parentesi hanno un significato: vanno neutralizzati.
     const pattern = "(?i)" + d.rule.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const r = await post("/api/rules/preview", {pattern, valore:value});
-    if(r.errore) return alert(r.errore);
-    if(!confirm(`Ogni descrizione che contiene "${d.rule}" diventera'`
+    if(r.errore) return avvisa(r.errore);
+    if(!await chiedi(`Ogni descrizione che contiene "${d.rule}" diventera'`
       + `
 ${value}.
 
@@ -1020,7 +1088,7 @@ async function handleRule(d){
   if(d.newSave){
     const p = document.querySelector(`[data-new-pattern="${kind}"]`).value.trim();
     const v = document.querySelector(`[data-new-value="${kind}"]`).value.trim();
-    if(!p || !v) return alert("servono pattern e valore");
+    if(!p || !v) return avvisa("servono pattern e valore");
     await post("/api/rules", {tipo:type, pattern:p, valore:v});
     return reload();
   }
@@ -1186,7 +1254,7 @@ el("btn-run").addEventListener("click", () => start("btn-run", "/api/run", false
 el("btn-llm").addEventListener("click", () => start("btn-llm", "/api/run", true));
 el("btn-export").addEventListener("click", async () => {
   const r = await post("/api/export", {});
-  if(r.ok) alert("scritti: " + r.file.join(", "));
+  if(r.ok) await avvisa("Scritti:\n" + r.file.join("\n"));
 });
 
 // --------------------------------------------------------------------------

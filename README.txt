@@ -158,6 +158,25 @@ al 125% uno schermo da 1720 pixel veri ne dichiara 1375, quindi una soglia che
 sembra generosa taglia fuori proprio gli schermi larghi.
 
 
+I RIQUADRI DI DIALOGO
+---------------------
+
+Le domande e gli avvisi non usano i popup del browser: sono riquadri
+dell'applicazione, che seguono il tema e stanno dietro a un messaggio di piu'
+di una riga. Tre forme, tutte da attendere perche' tornano una promessa:
+
+    avvisa(testo)             solo OK
+    chiedi(testo)             OK / Annulla, torna vero o falso
+    domanda(testo, valore)    con un campo precompilato, torna il testo o null
+
+ATTENZIONE se ci metti mano: la risposta NON si prende dall'evento "close" del
+<dialog>. Su alcuni browser quell'evento non arriva mai - verificato, e non
+arriva nemmeno "cancel" - e la promessa resterebbe appesa per sempre con la
+pagina bloccata dietro a un riquadro che non si chiude. Si prende dai tre modi
+in cui si puo' rispondere: submit del modulo, clic su Annulla, tasto Esc
+ascoltato direttamente.
+
+
 I PULSANTI
 ----------
 
