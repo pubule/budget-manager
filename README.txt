@@ -27,6 +27,26 @@ accanto, in export/anonimi/, compare la copia ripulita. Un file da cui non si
 legge nessuna transazione NON viene archiviato: resta in export/ con l'errore
 nel log.
 
+QUALE COLONNA. Un estratto conto puo' avere PIU' colonne buone per lo stesso
+ruolo, e la scelta va per preferenza, non per ordine nel file:
+
+    data          data contabile/registrazione/operazione, poi "data"
+    descrizione   descrizione, poi operazione, beneficiario, memo, causale
+    importo       importo, poi amount, costo
+
+UniCredit ne ha due per la descrizione: "Causale" e "Descrizione". La causale
+e' l'etichetta generica del movimento ("PAGAMENTO POS"), la descrizione dice
+cosa hai comprato davvero. Prendendo la prima che capitava NEL FILE vinceva la
+causale, e il consolidato si riempiva di righe tutte uguali.
+
+Una colonna non puo' fare due mestieri: in un file con "Data operazione" e
+nessuna descrizione, quella colonna non diventa la descrizione solo perche'
+contiene la parola "operazione".
+
+Se aggiungi una banca con nomi di colonna diversi, si aggiunge una riga a
+CANDIDATE in bilancio.py. Le asserzioni in selftest() coprono i formati gia'
+in uso, cosi' una preferenza nuova non puo' cambiarli di nascosto.
+
 PREAMBOLI. Diverse banche mettono numero di conto, periodo e filtri PRIMA
 della tabella vera. La pipeline cerca da sola dove comincia l'intestazione,
 entro le prime trenta righe, e lo dice nel log:

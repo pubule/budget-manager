@@ -1039,23 +1039,42 @@ def read_table(path):
         return None
 
 
+# Cosa cercare in ogni colonna, IN ORDINE DI PREFERENZA. La prima riga che
+# trova una colonna vince, e solo a parita' conta l'ordine dentro al file.
+#
+# Serve perche' un estratto conto puo' avere piu' colonne plausibili per lo
+# stesso ruolo. UniCredit ne ha due per la descrizione, "Causale" e
+# "Descrizione": la causale e' l'etichetta generica del tipo di movimento
+# ("PAGAMENTO POS"), la descrizione e' quella che dice davvero cosa hai
+# comprato. Scegliendo la prima che capitava nel file vinceva la causale, e il
+# consolidato si riempiva di righe tutte uguali.
+CANDIDATE = {
+    "data": [r"data (contabile|registrazione|operazione)", r"\bdata\b", r"\bdate\b"],
+    "descrizione": [r"descrizione", r"\boperazione\b", r"beneficiario|payee",
+                    r"\bmemo\b", r"causale"],
+    "importo": [r"\bimporto\b", r"\bamount\b", r"\bcosto\b"],
+    "dare": [r"dare|uscite|addebiti"],
+    "avere": [r"avere|entrate|accrediti"],
+}
+
+
 def find_columns(frame):
     """Individua le colonne data, descrizione e importo."""
-    date_col = desc_col = amount_col = None
-    debit_col = credit_col = None
-    for column in frame.columns:
-        name = normalize(column)
-        if not date_col and re.search(r"\bdata\b|\bdate\b", name):
-            date_col = column
-        elif not desc_col and re.search(r"descrizione|operazione|causale|payee|memo", name):
-            desc_col = column
-        elif not amount_col and re.search(r"\bimporto\b|\bamount\b|\bcosto\b", name):
-            amount_col = column
-        elif not debit_col and re.search(r"dare|uscite|addebiti", name):
-            debit_col = column
-        elif not credit_col and re.search(r"avere|entrate|accrediti", name):
-            credit_col = column
-    return date_col, desc_col, amount_col, debit_col, credit_col
+    nomi = [(column, normalize(column)) for column in frame.columns]
+    presi, scelte = set(), {}
+    for ruolo, preferenze in CANDIDATE.items():
+        for regola in preferenze:
+            trovata = next((c for c, n in nomi
+                            if c not in presi and re.search(regola, n)), None)
+            if trovata is not None:
+                # Una colonna sola per un ruolo solo: senza questo, in un file
+                # con "Data operazione" e nessuna descrizione, la stessa
+                # colonna finirebbe a fare sia da data sia da descrizione.
+                presi.add(trovata)
+                scelte[ruolo] = trovata
+                break
+    return tuple(scelte.get(r) for r in
+                 ("data", "descrizione", "importo", "dare", "avere"))
 
 
 def quota_columns(frame):
@@ -1817,6 +1836,27 @@ def selftest():
         dritto.write_text("Data;Descrizione;Importo\n"
                           "01/02/2026;ESSELUNGA;-12,50\n", encoding="utf-8")
         assert len(load_transactions(dritto, "Prova")) == 1
+
+    # La scelta delle colonne va per PREFERENZA, non per ordine nel file.
+    def scelte(*colonne):
+        d, de, i, dare, avere = find_columns(pd.DataFrame(columns=list(colonne)))
+        return d, de, i
+
+    # UniCredit ha due colonne buone per la descrizione, e "Causale" viene
+    # prima: e' l'etichetta generica del movimento, non dice cosa hai comprato.
+    assert scelte("Data registrazione", "Data valuta", "Causale",
+                  "Descrizione", "Importo") ==         ("Data registrazione", "Descrizione", "Importo")
+    # Ma se la causale e' l'unica cosa che c'e', si usa quella.
+    assert scelte("Data", "Causale", "Importo") == ("Data", "Causale", "Importo")
+    # Due date: vince quella dell'operazione, non quella di valuta.
+    assert scelte("Data valuta", "Data operazione", "Descrizione", "Importo")[0]         == "Data operazione"
+    # Una colonna non puo' fare due mestieri: senza descrizione, "Data
+    # operazione" non deve diventare la descrizione solo perche' contiene
+    # la parola "operazione".
+    assert scelte("Data operazione", "Importo")[1] is None
+    # I formati gia' in uso non devono cambiare interpretazione.
+    assert scelte("Data", "Descrizione", "Categorie", "Costo", "Valuta") ==         ("Data", "Descrizione", "Costo")
+    assert scelte("Data", "Operazione", "Dettagli", "Valuta", "Importo") ==         ("Data", "Operazione", "Importo")
 
     # usable() guarda le colonne, non le righe: una tabella di sole
     # intestazioni deve poter essere giudicata, e serve a fiutare il preambolo.
