@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el, whole, uniq, SPAN,
+ setStatus, el, whole, uniq, SPAN, patternNegozio,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -365,6 +365,40 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         && !/\.onclose\s*=/.test(js));
   check("Esc chiude anche senza l'evento cancel",
         /onkeydown[\s\S]{0,200}Escape/.test(js));
+  // Il pulsante "regola" deve bastare a se stesso: leggere la categoria dal
+  // menu accanto era un vicolo cieco, perche' sceglierla li' salva subito e
+  // la riga esce dalla coda portandosi via il pulsante.
+  check("il pulsante regola chiede lui la categoria",
+        js.includes("valore: gia || SCEGLI, scelte"));
+  check("non preseleziona una categoria a caso",
+        /scegli una categoria/.test(js));
+  // Il nome del negozio salta le parole vuote, quindi cercarlo intero dentro
+  // la descrizione non trova niente: "Zoom Progress" contro "ZOOM IN PROGRESS".
+  {
+    const righe = state.transactions;
+    // Il nome salta le parole vuote: "Zoom Progress" non e' dentro "ZOOM IN
+    // PROGRESS", quindi le parole vanno unite con .*
+    check("il pattern aggancia anche col nome accorciato",
+          new RegExp(api.patternNegozio("Zoom Progress",
+            "ZOOM IN PROGRESS SRL CUMIANA"), "i")
+            .test("ZOOM IN PROGRESS SRL CUMIANA"));
+    // E quando il nome viene da merchant.csv puo' non somigliare affatto alla
+    // descrizione: li' si ripiega sulle parole della descrizione.
+    check("il pattern si ripiega quando il nome canonico non compare",
+          new RegExp(api.patternNegozio("NordVPN",
+            "PAYPAL *NORDSEC BV Amsterdam"), "i")
+            .test("PAYPAL *NORDSEC BV Amsterdam"));
+    // La prova che conta: premendo "regola" su una riga qualsiasi, la regola
+    // deve almeno agganciare quella riga. Altrimenti si crea una regola inerte.
+    const inerti = righe.filter(t => t.Merchant).filter(t => {
+      const p = api.patternNegozio(t.Merchant, t.Descrizione);
+      try { return !new RegExp(p, "i").test(t.Descrizione || ""); }
+      catch (e) { return true; }
+    });
+    check("una regola creata da una riga aggancia almeno quella riga",
+          inerti.length === 0,
+          inerti.slice(0, 4).map(t => t.Merchant + " / " + t.Descrizione).join(" | "));
+  }
 
   check("nessuna regola perde la sottocategoria",
         state.rules.every(r => !r.categoria

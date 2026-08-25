@@ -248,6 +248,8 @@ color:var(--dim)}
   <form method="dialog">
     <p id="modale-testo"></p>
     <input id="modale-campo" class="hide">
+    <select id="modale-scelta" class="hide"></select>
+    <p id="modale-nota" class="note hide"></p>
     <div class="modale-azioni">
       <button type="button" id="modale-no">Annulla</button>
       <button type="submit" id="modale-si" class="primary">OK</button>
@@ -423,10 +425,26 @@ function coverage(rows, months){
 function modale(opzioni){
   return new Promise(risolvi => {
     const dlg = el("modale"), campo = el("modale-campo"), no = el("modale-no");
+    const scelta = el("modale-scelta"), nota = el("modale-nota");
     el("modale-testo").textContent = opzioni.testo;
     const chiede = opzioni.valore !== undefined;
-    campo.classList.toggle("hide", !chiede);
-    campo.value = chiede ? opzioni.valore : "";
+    const sceglie = !!opzioni.scelte;
+    campo.classList.toggle("hide", !chiede || sceglie);
+    campo.value = chiede && !sceglie ? opzioni.valore : "";
+    // Un menu invece di un campo libero quando le risposte sono un insieme
+    // chiuso: cosi' non si puo' inventare una categoria che non esiste.
+    scelta.classList.toggle("hide", !sceglie);
+    if(sceglie){
+      scelta.innerHTML = opzioni.scelte.map(s =>
+        `<option ${s === opzioni.valore ? "selected" : ""}>${esc(s)}</option>`).join("");
+    }
+    // Una riga che si aggiorna mentre scegli: dice cosa succederebbe.
+    nota.classList.toggle("hide", !opzioni.aggiorna);
+    if(opzioni.aggiorna){
+      const ridisegna = () => { nota.textContent = opzioni.aggiorna(scelta.value); };
+      scelta.onchange = ridisegna;
+      ridisegna();
+    }
     no.classList.toggle("hide", !opzioni.annullabile);
     el("modale-si").textContent = opzioni.ok || "OK";
     // La risposta si prende dai tre modi in cui si puo' rispondere, non
@@ -436,7 +454,8 @@ function modale(opzioni){
     // la precedente invece di accumularsi.
     const chiudi = detto => {
       dlg.close();
-      risolvi(chiede ? (detto ? campo.value : null) : detto);
+      const dato = sceglie ? scelta.value : campo.value;
+      risolvi(chiede ? (detto ? dato : null) : detto);
     };
     dlg.querySelector("form").onsubmit = ev => {   // OK, o Invio nel campo
       ev.preventDefault();
@@ -451,7 +470,8 @@ function modale(opzioni){
       if(ev.key === "Escape"){ ev.preventDefault(); chiudi(false); }
     };
     dlg.showModal();
-    if(chiede){ campo.focus(); campo.select(); }
+    if(sceglie) scelta.focus();
+    else if(chiede){ campo.focus(); campo.select(); }
   });
 }
 const avvisa  = testo => modale({testo});
@@ -769,6 +789,38 @@ function accountSelect(current, id){
   return `<select data-fix="Conto" data-id="${esc(id)}">${opts}</select>`;
 }
 
+// Il pattern per una regola sul negozio di questa riga.
+//
+// Le parole si uniscono con .* perche' il nome del negozio salta le parole
+// vuote: "Zoom Progress" non compare da nessuna parte dentro "ZOOM IN
+// PROGRESS SRL". E se il nome viene da merchant.csv puo' non somigliare
+// affatto alla descrizione - "NordVPN" nasce da "Paypal Nordsec" - quindi
+// quando non aggancia niente si ripiega sulle parole della descrizione.
+const VUOTE = new Set(["del","della","di","da","il","la","le","lo","per","con",
+  "pagamento","carta","contactless","mastercard","visa","addebito","srl","spa",
+  "sas","snc","the","and"]);
+
+function patternNegozio(merchant, descrizione){
+  const fuggi = w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const unisci = parole => parole.map(fuggi).join(".*");
+  // La prova e' contro QUESTA descrizione, non contro tutte: un pattern che
+  // aggancia qualche altra riga ma non quella su cui hai premuto produce una
+  // regola che sembra buona e non fa niente. Capitava con "Iper Rossetto",
+  // che su una riga scritta solo "Rossetto" non combacia.
+  const regge = p => {
+    try { return p && new RegExp(p, "i").test(descrizione || ""); }
+    catch (e) { return false; }
+  };
+
+  const daMerchant = unisci((merchant || "").trim().split(/\s+/).filter(Boolean));
+  if(regge(daMerchant)) return daMerchant;
+
+  const parole = String(descrizione || "").split(/[^\p{L}\p{N}]+/u)
+    .filter(w => w.length > 2 && !VUOTE.has(w.toLowerCase()) && !/^\d+$/.test(w));
+  const daDescrizione = unisci(parole.slice(0, 2));
+  return regge(daDescrizione) ? daDescrizione : daMerchant;
+}
+
 function categorySelect(current, id){
   // Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
   // due livelli si vedono a colpo d'occhio.
@@ -793,8 +845,11 @@ VIEWS.revisione = rows => {
     + 'con i filtri attuali.</p></div>';
   return '<div class="card"><div class="head"><h2>Da rivedere</h2>'
     + `<span class="mini">${todo.length} righe</span></div>`
-    + '<p class="note">Se il negozio si ripete, conviene creare una regola invece '
-    + 'di correggere la singola riga: una regola vale per sempre.</p>'
+    + '<p class="note">Due strade, e sono alternative. Il <b>menu</b> corregge '
+    + 'solo questa riga e salva subito, quindi la riga esce da qui. '
+    + '<b>"regola"</b> chiede lui la categoria e vale per tutte le transazioni '
+    + 'di quel negozio, anche quelle che devono ancora arrivare: se il negozio '
+    + 'si ripete conviene quella.</p>'
     + tableHTML(["data","descrizione","merchant","importo","proposta","conf.","correggi"],
         todo.slice(0,300).map(t => [
           esc(t.Data), esc((t.Descrizione||"").slice(0,58)), esc(t.Merchant),
@@ -1049,31 +1104,41 @@ document.addEventListener("click", async ev => {
     return reload();
   }
   if(d.rule){
-    // Niente testo libero: la categoria e' gia' scelta nel menu accanto, e
-    // scriverla a mano vorrebbe dire poter sbagliare a digitarla e creare una
-    // categoria fantasma che somiglia a una vera.
-    const sel = document.querySelector(`[data-setcat="${d.id}"]`);
-    const value = sel && sel.value;
-    if(!value) return avvisa("Scegli prima la categoria nel menu qui accanto: "
-      + "la regola usera' quella.");
-    // Il nome del negozio finisce dentro un'espressione regolare, dove punti
-    // e parentesi hanno un significato: vanno neutralizzati.
-    const pattern = "(?i)" + d.rule.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const r = await post("/api/rules/preview", {pattern, valore:value});
-    if(r.errore) return avvisa(r.errore);
-    if(!await chiedi(`Ogni descrizione che contiene "${d.rule}" diventera'`
-      + `
-${value}.
-
-`
-      + `${r.n} transazioni combaciano, di cui ${r.cambierebbero} cambierebbero`
-      + ` categoria.
-In totale ${euro(r.totale)}.
-
-`
-      + `La regola va sopra tutte le altre, quindi vince su di loro.
-La creo?`)) return;
-    await post("/api/rules", {tipo:"regola", pattern, valore:value, posizione:0});
+    // Il pulsante si basta da solo: la categoria la chiede qui dentro. Prima
+    // la leggeva dal menu accanto, ma scegliere li' salva subito e la riga
+    // esce dalla coda portandosi via il pulsante: le due cose non si potevano
+    // fare tutte e due.
+    //
+    // Il nome del negozio finisce dentro un'espressione regolare, dove punti e
+    // parentesi hanno un significato: vanno neutralizzati.
+    const proposta = (S.transactions.find(t => t.ID === d.id) || {});
+    const nudo = patternNegozio(d.rule, proposta.Descrizione);
+    const cerca = new RegExp(nudo, "i");
+    // Il conto si fa qui, sui dati che il browser ha gia': cosi' il numero si
+    // aggiorna mentre scegli, senza un giro al server per ogni tentativo.
+    const colpite = S.transactions.filter(t => cerca.test(t.Descrizione || ""));
+    // La voce senza nome e' il mucchio delle righe non categorizzate: e'
+    // giusto vederla nell'elenco delle categorie, non e' una destinazione.
+    const categorie = S.categories.map(c => c.nome).filter(Boolean);
+    // Senza una proposta non si preseleziona niente: la prima in ordine
+    // alfabetico e' "Affitti incassati", e un OK distratto archivierebbe una
+    // spesa come un incasso.
+    const SCEGLI = "— scegli una categoria —";
+    const gia = whole(proposta);
+    const scelte = gia ? categorie : [SCEGLI].concat(categorie);
+    const valore = await modale({
+      testo: `Ogni descrizione che contiene "${d.rule}" andra' in:`,
+      valore: gia || SCEGLI, scelte, annullabile: true,
+      ok: "Crea la regola",
+      aggiorna: v => `${colpite.length} transazioni combaciano`
+        + (v === SCEGLI ? "" : `, di cui `
+           + `${colpite.filter(t => whole(t) !== v).length} cambierebbero categoria`)
+        + `. In totale ${euro(sum(colpite))}. `
+        + `La regola va sopra tutte le altre, quindi vince su di loro.`,
+    });
+    if(!valore || valore === SCEGLI) return;
+    await post("/api/rules", {tipo:"regola", pattern: "(?i)" + nudo,
+                              valore, posizione:0});
     return reload();
   }
   if(d.ruleSave || d.ruleDel || d.ruleTest || d.newSave){

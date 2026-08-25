@@ -158,6 +158,26 @@ al 125% uno schermo da 1720 pixel veri ne dichiara 1375, quindi una soglia che
 sembra generosa taglia fuori proprio gli schermi larghi.
 
 
+DA RIVEDERE: DUE STRADE, ALTERNATIVE
+------------------------------------
+
+Il MENU della categoria corregge solo quella riga, salva subito e la riga
+esce dalla coda. Scrive override.csv.
+
+"REGOLA" chiede lui la categoria e vale per tutte le transazioni di quel
+negozio, comprese quelle che devono ancora arrivare. Scrive regole.csv, in
+cima, quindi vince sulle altre regole.
+
+Sono alternative: scegliendo prima dal menu la riga sparisce e col essa il
+pulsante. Per questo "regola" non legge piu' il menu accanto ma se la chiede
+da solo, e mentre scegli dice quante transazioni combacia e quante ne
+cambierebbe davvero.
+
+Se la riga non ha ancora una categoria, il menu del riquadro NON preseleziona
+niente: la prima in ordine alfabetico e' "Affitti incassati", e un OK
+distratto archivierebbe una spesa come un incasso.
+
+
 I RIQUADRI DI DIALOGO
 ---------------------
 
