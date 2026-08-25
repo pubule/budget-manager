@@ -23,7 +23,7 @@ pattern;merchant
 (?i)burghy;Love Burghy
 (?i)beghini;Pizzeria Beghini
 (?i)zamuner;Azienda Agricola Zamuner
-(?i)visanto;Visanto Caffe
+(?i)vinsanto|visanto;Vinsanto Cafe
 (?i)enel|servizio elettrico;Enel
 (?i)\btim\b|telecom italia;TIM
 (?i)vodafone;Vodafone

@@ -5,6 +5,69 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (25/08/2026) — svuotata la coda di revisione
+
+Da **157 righe da rivedere a 118**, e da **90 senza categoria a 21**.
+
+**Tre pattern in `regole.csv` non agganciavano niente**, e nessuno se n'era
+accorto perché una regola che non matcha non fa rumore:
+
+| pattern | non prendeva | perché |
+|---|---|---|
+| `eni` | `ENI03816 SONA VR` | fra lettere e cifre non c'è confine di parola |
+| `obi italia` | `Obi del 4/11/24` | in banca e su Splitwise il negozio è solo "Obi" |
+| `visanto` (merchant) | `VINSANTO CAFE'` | il locale ha una N: era un errore di battitura |
+
+**Errori grossi corretti.** Due `PRELIEVO SMART` da 1.000 € stavano in
+`Shopping > Vestiti`: sono prelievi di contante, ora `Da identificare`. Un
+concerto di Baglioni al Filarmonico stava fra i ristoranti. `Sifone bagno` e
+`Top lavabo` pure. Vivino era un abbonamento invece che vino.
+
+**Categoria nuova `Viaggi > Vacanze`** (Discrezionali): alberghi, camere e il
+visto per la Tanzania non avevano dove stare e finivano su `Casa >
+Manutenzione` e `Shopping > Vestiti`.
+
+**Le 12 `Transazione senza nome` da +200 €** (agosto-novembre 2025, 2.500 €)
+erano ricariche fra conti propri, confermato dall'utente. Ora sono giroconti:
+**le entrate scendono da 122.595 a 120.095 €**. Le uscite non cambiano.
+
+### Il difetto che resta: una regola esplicita perde contro un'ipotesi
+
+La cascata è `override → giroconto → storico-esatto → storico-simile → regola
+→ voto-token → cache → llm`. Quindi **`regole.csv` sta sotto al match sfumato
+sullo storico**: una regola scritta apposta viene battuta da una somiglianza
+allo 0,80 con una vecchia riga MoneyWiz.
+
+Successo tre volte in una sola sessione:
+
+```
+ALBERGO CA' DEI MAGHI FUMANE VR  -> Shopping > Vestiti          [storico-simile]
+Dalla Piazza srl - materiale elettrico -> Personale > Intrattenimento [storico-esatto]
+TUTTO STOCK BUSSOLENGO           -> Cibo & Mangiare > Ristoranti [storico-esatto]
+```
+
+Ogni volta l'unico rimedio è stato un override per singola transazione, che
+non insegna niente al motore. Lo storico MoneyWiz contiene etichette sbagliate
+e oggi non c'è modo di correggerne una: `categorie_merge.csv` con `IGNORA`
+lavora per categoria intera, non per descrizione.
+
+**Proposta da valutare**: spostare `regola` sopra `storico-simile`. Se scrivo
+una regola voglio che vinca su un'ipotesi. Il rischio è che una regola larga
+copra centinaia di righe già etichettate bene, quindi va misurato prima con
+`--selfcheck` e con un confronto categoria per categoria.
+
+### L'LLM sulle righe opache non è servito
+
+Interrogato sulle 21 rimaste (cache separata, niente è entrato nel bilancio):
+**si è astenuto su 17**, e delle 4 risposte 3 erano sbagliate — `Ing. Savoia
+Valentino` letto come un medico, quando `Ing.` è ingegnere. Su nomi di
+paesi e persone il modello non ha appigli: quelle righe le può chiudere solo
+chi c'era.
+
+`--selfcheck` è salito da 57% a **58%**.
+
+---
+
 ## IN CORSO (24/08/2026) — caricamento deterministico, LLM a parte
 
 **Il problema.** I due pulsanti passavano entrambi `llm:true`, quindi ogni
