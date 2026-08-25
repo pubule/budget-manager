@@ -64,7 +64,44 @@ IGNORE = "IGNORA"
 # Categoria speciale: spostare soldi fra conti propri o verso familiari non e'
 # una spesa. Le regole che puntano qui vengono valutate PRIMA dello storico,
 # perche' capita di aver etichettato a mano un giroconto come spesa vera.
-TRANSFER = "Giroconto"
+TRANSFER = "Non spesa > Giroconto"
+
+# Le categorie hanno due livelli: "Casa > Casalinghi" e' l'area Casa e la
+# sottocategoria Casalinghi. Dentro al motore viaggiano unite in una stringa
+# sola - lo storico, il voto per token e la cache sono tutti indicizzati cosi',
+# e separarle li' dentro vorrebbe dire riscriverli senza guadagnarci niente.
+# Si dividono in due colonne quando escono: nei file di configurazione, nel
+# consolidato e nell'interfaccia.
+#
+# Il livello che conta per la natura e' il SECONDO: "Casa" da sola contiene
+# quattro nature diverse, perche' le bollette sono ricorrenti e una
+# ristrutturazione e' straordinaria.
+LEVEL_SEP = " > "
+
+
+def _text(value):
+    """Stringa ripulita, con il NaN di pandas trattato come vuoto.
+
+    Serve perche' queste funzioni girano anche sulle colonne del frame, dove
+    una sottocategoria assente e' NaN: senza questo controllo str() ne farebbe
+    la stringa "nan" e nascerebbe una sottocategoria che non esiste.
+    """
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    return str(value).strip()
+
+
+def split_category(name):
+    """"Casa > Casalinghi" -> ("Casa", "Casalinghi"). Senza separatore la
+    sottocategoria resta vuota."""
+    area, _, leaf = _text(name).partition(LEVEL_SEP)
+    return area.strip(), leaf.strip()
+
+
+def join_category(area, leaf=""):
+    """L'inverso. Una sottocategoria vuota lascia solo l'area."""
+    area, leaf = _text(area), _text(leaf)
+    return f"{area}{LEVEL_SEP}{leaf}" if area and leaf else area
 
 # Parole che ogni banca infila nelle causali e che non identificano il merchant.
 STOPWORDS = {
@@ -263,14 +300,21 @@ def canonical_category(name, parent, merge_map):
 
 
 def load_merge_map(path):
-    """categorie_merge.csv: colonna 1 attuale, colonna 3 finale."""
+    """categorie_merge.csv: la coppia attuale -> la coppia finale.
+
+    Nella colonna finale IGNORA non e' una categoria ma un marcatore, quindi
+    resta intero: dice di non imparare quella voce dallo storico.
+    """
     if not path.exists():
         return {}
     mapping = {}
     with open(path, encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle, delimiter=";"):
-            current = (row.get("categoria_attuale") or "").strip()
+            current = join_category(row.get("categoria_attuale"),
+                                    row.get("sottocategoria_attuale"))
             final = (row.get("categoria_finale") or "").strip()
+            if final != IGNORE:
+                final = join_category(final, row.get("sottocategoria_finale"))
             if current and final and current != final:
                 mapping[current] = final
     if mapping:
@@ -352,7 +396,8 @@ def load_overrides(path):
         for row in csv.DictReader(handle, delimiter=";"):
             key = (row.get("id") or "").strip()
             date = (row.get("data") or "").strip()
-            category = (row.get("categoria") or "").strip()
+            category = join_category(row.get("categoria"),
+                                     row.get("sottocategoria"))
             if not key and not date:
                 continue
             if not category:
@@ -506,13 +551,18 @@ def same_expense(first, second, merchants=()):
 
 
 def load_natura(path):
-    """natura.csv: categoria -> natura (quanto e' comprimibile quella spesa)."""
+    """natura.csv: categoria + sottocategoria -> natura.
+
+    La natura sta sulla COPPIA, non sull'area: dentro "Casa" le bollette sono
+    ricorrenti e una ristrutturazione e' straordinaria.
+    """
     if not path.exists():
         return {}
     natura = {}
     with open(path, encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle, delimiter=";"):
-            category = (row.get("categoria") or "").strip()
+            category = join_category(row.get("categoria"),
+                                     row.get("sottocategoria"))
             kind = (row.get("natura") or "").strip()
             if category and kind:
                 natura[category] = kind
@@ -529,7 +579,8 @@ def load_rules(path):
     with open(path, encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle, delimiter=";"):
             pattern = (row.get("pattern") or "").strip()
-            category = (row.get("categoria") or "").strip()
+            category = join_category(row.get("categoria"),
+                                     row.get("sottocategoria"))
             if not pattern or not category:
                 continue
             try:
@@ -1652,6 +1703,26 @@ def selftest():
     assert not same_expense("5274 UCAGRIC BAR VERONA", "rossetto del 11/04"),         "un bar non e' il supermercato Rossetto"
     assert not same_expense("VINSANTO CAFE' VERONA VR", "Pannello per tettoia"),         "un pannello per la tettoia non e' un caffe'"
 
+    # I due livelli della categoria. Il giro completo deve tornare al punto di
+    # partenza, altrimenti una categoria cambia nome passando dai file al
+    # consolidato e i confronti smettono di combaciare.
+    assert split_category("Casa > Casalinghi") == ("Casa", "Casalinghi")
+    assert split_category("Stipendio") == ("Stipendio", "")
+    assert split_category("") == ("", "")
+    assert split_category(None) == ("", "")
+    assert join_category("Casa", "Casalinghi") == "Casa > Casalinghi"
+    assert join_category("Stipendio", "") == "Stipendio"
+    assert join_category("Stipendio") == "Stipendio"
+    assert join_category("", "Casalinghi") == "",         "senza area non si inventa una categoria"
+    for nome in ("Casa > Casalinghi", "Stipendio", "Cibo & Mangiare > Alimentari"):
+        assert join_category(*split_category(nome)) == nome, nome
+    # Gli spazi intorno al separatore non devono creare una categoria diversa.
+    assert split_category("Casa >  Casalinghi ") == ("Casa", "Casalinghi")
+    # Il NaN di pandas arriva dalle colonne del frame e non deve diventare
+    # la sottocategoria "nan".
+    assert join_category("Stipendio", float("nan")) == "Stipendio"
+    assert split_category(float("nan")) == ("", "")
+
     # Un export sostituito da uno scarico piu' recente non deve rientrare
     # dalla finestra. archived_exports() fa rglob() sugli elaborati, quindi
     # basta annidare la cartella dei sostituiti li' dentro perche' le righe
@@ -1903,10 +1974,12 @@ def run(folder, use_llm=True, output="consolidato.csv",
             categorizer.stats["override"] += 1
         else:
             category, source, score = categorizer.categorize(row["Descrizione"])
-        row["Categoria"] = category
+        # La natura si cerca sulla coppia intera, prima di dividerla: e' li'
+        # che natura.csv la tiene.
+        row["Natura"] = config["natura"].get(category, "Da classificare")
+        row["Categoria"], row["Sottocategoria"] = split_category(category)
         row["Merchant"] = canonical_merchant(row["Descrizione"],
                                              config["merchants"])
-        row["Natura"] = config["natura"].get(category, "Da classificare")
         row["Origine"] = source
         row["Confidenza"] = round(score, 2)
     categorizer.save_cache()
@@ -1915,7 +1988,7 @@ def run(folder, use_llm=True, output="consolidato.csv",
         print(f"  {count:>6}  {source}")
 
     columns = ["ID", "Data", "Descrizione", "Merchant", "Importo", "Conto",
-               "Natura", "Categoria", "Origine", "Confidenza"]
+               "Natura", "Categoria", "Sottocategoria", "Origine", "Confidenza"]
     frame = pd.DataFrame(rows)[columns].sort_values(["Data", "Descrizione"])
     frame.to_csv(folder / output, index=False, sep=";", encoding="utf-8-sig")
 

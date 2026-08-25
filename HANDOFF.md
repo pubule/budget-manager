@@ -5,6 +5,91 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (25/08/2026) — categorie a due livelli
+
+`Casa > Casalinghi` era una stringa sola. Ora sono due campi: **Categoria**
+`Casa` e **Sottocategoria** `Casalinghi`, in due colonne nel consolidato e in
+due colonne nei file di configurazione.
+
+### Il vincolo che ha deciso il disegno
+
+**La natura sta sulla coppia, non sull'area.** `Casa` da sola contiene quattro
+nature: le bollette sono Ricorrenti, una ristrutturazione e' Straordinaria.
+Appiattire i livelli avrebbe perso proprio l'informazione che serve a capire
+dove si puo' comprimere. Quindi `natura.csv` continua a mappare la coppia
+intera.
+
+### Dentro al motore la stringa resta unita
+
+Lo storico, il voto per token e la cache sono tutti indicizzati sul nome
+intero. Dividerli li' dentro voleva dire riscriverli senza guadagnarci niente,
+quindi la coppia viaggia unita nel motore e si divide **quando esce**: nei
+file, nel consolidato, nell'interfaccia. Il ponte sono due funzioni in
+`bilancio.py`:
+
+```python
+split_category("Casa > Casalinghi")   ->  ("Casa", "Casalinghi")
+join_category("Casa", "Casalinghi")   ->  "Casa > Casalinghi"
+```
+
+Entrambe reggono il NaN di pandas, che arriva dalle colonne del frame: senza
+quel controllo `str()` ne faceva la stringa `"nan"` e nasceva una
+sottocategoria inesistente. C'e' un'asserzione in `selftest()` a guardia.
+
+Il nome intero resta la **chiave con cui browser e server si parlano**: il
+payload manda `nome`, `categoria` e `sottocategoria` insieme.
+
+### Le quattro orfane
+
+`Stipendio`, `Affitti incassati`, `Giroconto` e `Da identificare` non avevano
+un livello sotto. Ora l'area coincide con la natura:
+
+```
+Entrate > Stipendio          Non spesa > Giroconto
+Entrate > Affitti incassati  Da chiarire > Da identificare
+```
+
+Effetto collaterale accettato: `Entrate`, `Non spesa` e `Da chiarire` sono ora
+nomi di **categoria** oltre che di **natura**. I filtri sono menu separati,
+quindi non si scontrano, ma la stessa parola compare in due colonne.
+
+`TRANSFER` in `bilancio.py` e' passato da `"Giroconto"` a
+`"Non spesa > Giroconto"`: e' load-bearing, ci passa il riconoscimento dei
+giroconti.
+
+### La trappola della migrazione
+
+`categorie_merge.csv` ha due colonne di categoria e **non vanno trattate allo
+stesso modo**. La colonna `categoria_attuale` e' il nome GREZZO come lo scrive
+MoneyWiz: promuoverlo l'ha scollegato dallo storico, che quel nome lo scrive
+ancora a un livello solo. Sintomo: 16 righe `Affitti incassati` rimaste senza
+sottocategoria e con natura `Da classificare`.
+
+Stessa cosa per `categorie_cache.json`, che tiene nomi di categoria e va
+migrato anche lui: 2 voci erano rimaste indietro.
+
+Regola generale: **le colonne che contengono nomi provenienti da fuori non si
+migrano**, solo quelle che contengono nomi nostri.
+
+### Dashboard
+
+Due filtri a cascata (`categoria` e `sotto`, il secondo mostra solo le
+sottocategorie dell'area scelta) **e** il riquadro "Voci per costo annuo" che
+parte dalle aree e scende al clic, con "< tutte le categorie" per risalire. I
+due modi restano allineati: scendere nel grafico riempie i filtri, e cambiare
+area azzera la sottocategoria, che altrimenti apparterrebbe a un'altra area e
+lascerebbe la tabella vuota.
+
+In `dashboard.py` c'era una colonna `Voce` da introdurre: i riquadri di
+livello 3 raggruppavano su `Categoria` quando quella conteneva il nome intero,
+e dopo il cambio avrebbero mostrato le 11 aree duplicando il riquadro sopra.
+
+**Totali invariati**: 1845 righe, entrate 120.095,24 €, uscite −148.688,88 €.
+11 aree, 36 voci, zero righe con categoria ma senza sottocategoria.
+`--selfcheck` 58%, `test_app.js` 63 controlli.
+
+---
+
 ## IN CORSO (25/08/2026) — svuotata la coda di revisione
 
 Da **157 righe da rivedere a 118**, e da **90 senza categoria a 21**.
@@ -270,7 +355,7 @@ python bilancio.py --migra-storico # riscrive export/elaborati/storico-moneywiz.
                                    # dal backup MoneyWiz. Idempotente: stesso
                                    # percorso, sovrascrive, non duplica
 
-# l'interfaccia, senza aprire un browser (57 controlli)
+# l'interfaccia, senza aprire un browser (63 controlli)
 curl -s http://127.0.0.1:8770/api/state -o "$TEMP/state.json"
 node test_app.js "$TEMP/state.json"
 ```

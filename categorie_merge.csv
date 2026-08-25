@@ -1,39 +1,39 @@
-﻿categoria_attuale;transazioni;categoria_finale
-Cibo & Mangiare > Alimentari;489;Cibo & Mangiare > Alimentari
-Cibo & Mangiare > Ristoranti;146;Cibo & Mangiare > Ristoranti
-Casa > Altro;141;IGNORA
-Personale > Abbonamenti;109;Personale > Abbonamenti
-Casa > Bollette;104;Casa > Bollette
-Casa > Ipoteca/Affitto;76;Casa > Ipoteca/Affitto
-Casa > Mobili;74;Casa > Mobili
-Cibo & Mangiare > Pranzo Lavoro;73;Cibo & Mangiare > Pranzo Lavoro
-Cibo & Mangiare > Altro;49;Cibo & Mangiare > Cantina e Specialita
-Assistenza Sanitaria > Farmacia;47;Assistenza Sanitaria > Farmacia
-Shopping > Regali;43;Shopping > Regali
-Casa > Manutenzione;41;Casa > Manutenzione
-Shopping > Vestiti;35;Shopping > Vestiti
-Trasporto > Altro;23;IGNORA
-Salario;22;Stipendio
-Assistenza Sanitaria > Altro;21;Assistenza Sanitaria > Altro
-Trasporto > Benzina/Carburante;20;Trasporto > Benzina/Carburante
-Casa > Materiali;19;Casa > Materiali
-Shopping > Tecnologia;16;Shopping > Tecnologia
-Affitto;13;Affitti incassati
-Affitti incassati;13;Affitti incassati
-Comunità > Tasse;9;Comunità > Tasse
-Stipendio;8;Stipendio
-Personale > Intrattenimento;8;Personale > Intrattenimento
-Generali;6;IGNORA
-Personale > Benessere;5;Personale > Benessere
-Alimentari;4;Cibo & Mangiare > Alimentari
-Trasporto > Manutenzione;3;Trasporto > Manutenzione
-Trasporto > Bollo;3;Trasporto > Bollo
-Trasporto > Parcheggio;2;Trasporto > Parcheggio
-Trasporto > Trasporti pubblici;2;Trasporto > Trasporti pubblici
-Casa > Assicurazione Casa;2;Casa > Assicurazione Casa
-Trasporto > Assicurazione Auto;2;Trasporto > Assicurazione Auto
-Ristorante;2;Cibo & Mangiare > Ristoranti
-Abbigliamento;2;Shopping > Vestiti
-Assistenza Sanitaria > Medico;1;Assistenza Sanitaria > Medico
-Altro;1;IGNORA
-Domiciliazioni e Utenze;1;Casa > Bollette
+﻿categoria_attuale;sottocategoria_attuale;transazioni;categoria_finale;sottocategoria_finale
+Cibo & Mangiare;Alimentari;489;Cibo & Mangiare;Alimentari
+Cibo & Mangiare;Ristoranti;146;Cibo & Mangiare;Ristoranti
+Casa;Altro;141;IGNORA;
+Personale;Abbonamenti;109;Personale;Abbonamenti
+Casa;Bollette;104;Casa;Bollette
+Casa;Ipoteca/Affitto;76;Casa;Ipoteca/Affitto
+Casa;Mobili;74;Casa;Mobili
+Cibo & Mangiare;Pranzo Lavoro;73;Cibo & Mangiare;Pranzo Lavoro
+Cibo & Mangiare;Altro;49;Cibo & Mangiare;Cantina e Specialita
+Assistenza Sanitaria;Farmacia;47;Assistenza Sanitaria;Farmacia
+Shopping;Regali;43;Shopping;Regali
+Casa;Manutenzione;41;Casa;Manutenzione
+Shopping;Vestiti;35;Shopping;Vestiti
+Trasporto;Altro;23;IGNORA;
+Salario;;22;Entrate;Stipendio
+Assistenza Sanitaria;Altro;21;Assistenza Sanitaria;Altro
+Trasporto;Benzina/Carburante;20;Trasporto;Benzina/Carburante
+Casa;Materiali;19;Casa;Materiali
+Shopping;Tecnologia;16;Shopping;Tecnologia
+Affitto;;13;Entrate;Affitti incassati
+Affitti incassati;;13;Entrate;Affitti incassati
+Comunità;Tasse;9;Comunità;Tasse
+Stipendio;;8;Entrate;Stipendio
+Personale;Intrattenimento;8;Personale;Intrattenimento
+Generali;;6;IGNORA;
+Personale;Benessere;5;Personale;Benessere
+Alimentari;;4;Cibo & Mangiare;Alimentari
+Trasporto;Manutenzione;3;Trasporto;Manutenzione
+Trasporto;Bollo;3;Trasporto;Bollo
+Trasporto;Parcheggio;2;Trasporto;Parcheggio
+Trasporto;Trasporti pubblici;2;Trasporto;Trasporti pubblici
+Casa;Assicurazione Casa;2;Casa;Assicurazione Casa
+Trasporto;Assicurazione Auto;2;Trasporto;Assicurazione Auto
+Ristorante;;2;Cibo & Mangiare;Ristoranti
+Abbigliamento;;2;Shopping;Vestiti
+Assistenza Sanitaria;Medico;1;Assistenza Sanitaria;Medico
+Altro;;1;IGNORA;
+Domiciliazioni e Utenze;;1;Casa;Bollette

@@ -66,6 +66,43 @@ Serve ancora la riga di comando? C'e':
                                        moneywiz.csv dal backup MoneyWiz
 
 
+CATEGORIE A DUE LIVELLI
+-----------------------
+
+Ogni voce di spesa ha una CATEGORIA e una SOTTOCATEGORIA: l'area larga e il
+dettaglio. "Casa" e' l'area, "Casalinghi" il dettaglio.
+
+    Categoria             Sottocategoria
+    Casa                  Bollette, Casalinghi, Condominio, Ipoteca/Affitto,
+                          Manutenzione, Materiali, Mobili, Ristrutturazione,
+                          Assicurazione Casa
+    Cibo & Mangiare       Alimentari, Ristoranti, Pranzo Lavoro,
+                          Cantina e Specialita
+    Trasporto             Benzina/Carburante, Pedaggi, Parcheggio, Bollo, ...
+
+Nei file di configurazione sono DUE COLONNE:
+
+    natura.csv     categoria;sottocategoria;natura
+    regole.csv     pattern;categoria;sottocategoria
+    override.csv   id;data;importo;categoria;sottocategoria;nota
+
+LA NATURA STA SULLA COPPIA, non sull'area. Dentro "Casa" le bollette sono
+Ricorrenti e una ristrutturazione e' Straordinaria: appiattire i due livelli
+perderebbe proprio l'informazione che serve a capire dove si puo' risparmiare.
+
+Quattro voci non hanno un livello sotto perche' non sono spese vere, e per
+loro l'area coincide con la natura:
+
+    Entrate > Stipendio          Entrate > Affitti incassati
+    Non spesa > Giroconto        Da chiarire > Da identificare
+
+Nella dashboard i livelli si navigano in due modi, che restano allineati fra
+loro: i menu "categoria" e "sotto" nella barra dei filtri (il secondo mostra
+solo le sottocategorie dell'area scelta), e il riquadro "Voci per costo annuo",
+che parte dalle aree e scende nel dettaglio quando ne clicchi una. Il link
+"< tutte le categorie" risale.
+
+
 I PULSANTI IN ALTO
 ------------------
 

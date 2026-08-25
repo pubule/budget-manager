@@ -1,38 +1,38 @@
-﻿categoria;natura
-Casa > Ipoteca/Affitto;Vincolate
-Casa > Assicurazione Casa;Vincolate
-Trasporto > Assicurazione Auto;Vincolate
-Trasporto > Bollo;Vincolate
-Comunità > Tasse;Vincolate
-Casa > Bollette;Ricorrenti
-Casa > Condominio;Ricorrenti
-Casa > Sicurezza;Ricorrenti
-Personale > Abbonamenti;Ricorrenti
-Trasporto > Pedaggi;Ricorrenti
-Cibo & Mangiare > Alimentari;Quotidiane
-Cibo & Mangiare > Pranzo Lavoro;Quotidiane
-Trasporto > Benzina/Carburante;Quotidiane
-Trasporto > Trasporti pubblici;Quotidiane
-Trasporto > Parcheggio;Quotidiane
-Assistenza Sanitaria > Farmacia;Quotidiane
-Cibo & Mangiare > Ristoranti;Discrezionali
-Cibo & Mangiare > Cantina e Specialita;Discrezionali
-Casa > Casalinghi;Discrezionali
-Shopping > Vestiti;Discrezionali
-Shopping > Tecnologia;Discrezionali
-Shopping > Online;Discrezionali
-Personale > Intrattenimento;Discrezionali
-Personale > Benessere;Discrezionali
-Casa > Mobili;Straordinarie
-Casa > Manutenzione;Straordinarie
-Casa > Materiali;Straordinarie
-Casa > Ristrutturazione;Straordinarie
-Trasporto > Manutenzione;Straordinarie
-Assistenza Sanitaria > Altro;Straordinarie
-Assistenza Sanitaria > Medico;Straordinarie
-Stipendio;Entrate
-Affitti incassati;Entrate
-Da identificare;Da chiarire
-Giroconto;Non spesa
-Shopping > Regali;Discrezionali
-Viaggi > Vacanze;Discrezionali
+﻿categoria;sottocategoria;natura
+Casa;Ipoteca/Affitto;Vincolate
+Casa;Assicurazione Casa;Vincolate
+Trasporto;Assicurazione Auto;Vincolate
+Trasporto;Bollo;Vincolate
+Comunità;Tasse;Vincolate
+Casa;Bollette;Ricorrenti
+Casa;Condominio;Ricorrenti
+Casa;Sicurezza;Ricorrenti
+Personale;Abbonamenti;Ricorrenti
+Trasporto;Pedaggi;Ricorrenti
+Cibo & Mangiare;Alimentari;Quotidiane
+Cibo & Mangiare;Pranzo Lavoro;Quotidiane
+Trasporto;Benzina/Carburante;Quotidiane
+Trasporto;Trasporti pubblici;Quotidiane
+Trasporto;Parcheggio;Quotidiane
+Assistenza Sanitaria;Farmacia;Quotidiane
+Cibo & Mangiare;Ristoranti;Discrezionali
+Cibo & Mangiare;Cantina e Specialita;Discrezionali
+Casa;Casalinghi;Discrezionali
+Shopping;Vestiti;Discrezionali
+Shopping;Tecnologia;Discrezionali
+Shopping;Online;Discrezionali
+Personale;Intrattenimento;Discrezionali
+Personale;Benessere;Discrezionali
+Casa;Mobili;Straordinarie
+Casa;Manutenzione;Straordinarie
+Casa;Materiali;Straordinarie
+Casa;Ristrutturazione;Straordinarie
+Trasporto;Manutenzione;Straordinarie
+Assistenza Sanitaria;Altro;Straordinarie
+Assistenza Sanitaria;Medico;Straordinarie
+Entrate;Stipendio;Entrate
+Entrate;Affitti incassati;Entrate
+Da chiarire;Da identificare;Da chiarire
+Non spesa;Giroconto;Non spesa
+Shopping;Regali;Discrezionali
+Viaggi;Vacanze;Discrezionali

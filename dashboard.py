@@ -14,6 +14,8 @@ from collections import Counter
 
 import pandas as pd
 
+import bilancio
+
 # I giroconti non sono spesa: spostare soldi fra conti propri non impoverisce.
 NOT_SPENDING = "Non spesa"
 
@@ -132,7 +134,7 @@ def recurring(frame, min_months=6):
         if months < min_months or not merchant:
             continue
         total = group.Importo.sum()
-        labels = Counter(group.Categoria.dropna())
+        labels = Counter(group.Voce.dropna())
         out.append({
             "merchant": merchant,
             "categoria": labels.most_common(1)[0][0] if labels else "",
@@ -151,6 +153,11 @@ def build(frame):
     frame = frame.dropna(subset=["Data"])
     frame["Mese"] = frame["Data"].dt.strftime("%Y-%m")
     frame["Anno"] = frame["Data"].dt.year
+    # Il nome intero, per i riquadri che ragionano sulla voce e non sull'area:
+    # "Casa" da sola mette insieme le bollette e la ristrutturazione.
+    frame["Voce"] = [bilancio.join_category(a, s) or "Senza categoria"
+                     for a, s in zip(frame.get("Categoria", []),
+                                     frame.get("Sottocategoria", []))]
 
     real = frame[frame["Natura"] != NOT_SPENDING]
     return {
@@ -285,7 +292,7 @@ def render(data, title="Bilancio familiare"):
 
     # ---- livello 2: aree -------------------------------------------------
     body.append("<h2>Aree, anno su anno</h2>")
-    areas = out.Categoria.fillna("Senza categoria").str.split(" > ").str[0]
+    areas = out.Categoria.fillna("Senza categoria")
     out_area = out.assign(Area=areas)
     years = sorted(out_area.Anno.unique())[-2:]
     pivot = (out_area[out_area.Anno.isin(years)]
@@ -308,7 +315,7 @@ def render(data, title="Bilancio familiare"):
 
     # ---- livello 3: voci e ricorrenti ------------------------------------
     body.append("<h2>Voci per costo annuo</h2>")
-    by_cat = out.groupby("Categoria").Importo.agg(["sum", "count"]).sort_values("sum")
+    by_cat = out.groupby("Voce").Importo.agg(["sum", "count"]).sort_values("sum")
     rows = [[html.escape(str(cat)), euro(row["sum"] / months * 12),
              euro(row["sum"] / months), int(row["count"])]
             for cat, row in by_cat.head(20).iterrows()]
@@ -354,7 +361,7 @@ def render(data, title="Bilancio familiare"):
 def write_excel(data, path):
     """Un foglio per livello, piu' il dettaglio completo filtrabile."""
     out, months = data["out"], data["months"]
-    areas = out.Categoria.fillna("Senza categoria").str.split(" > ").str[0]
+    areas = out.Categoria.fillna("Senza categoria")
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         (out.groupby("Natura").Importo.agg(totale="sum", transazioni="count")
          .assign(al_mese=lambda d: d.totale / months)
@@ -363,7 +370,7 @@ def write_excel(data, path):
          .pivot_table(index="Area", columns="Anno", values="Importo",
                       aggfunc="sum")
          .to_excel(writer, sheet_name="2 aree"))
-        (out.groupby("Categoria").Importo.agg(totale="sum", transazioni="count")
+        (out.groupby("Voce").Importo.agg(totale="sum", transazioni="count")
          .assign(al_mese=lambda d: d.totale / months,
                  all_anno=lambda d: d.totale / months * 12)
          .sort_values("totale").to_excel(writer, sheet_name="3 voci"))

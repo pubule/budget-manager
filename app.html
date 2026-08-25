@@ -144,6 +144,7 @@ color:var(--dim)}
     <label>conto</label><select id="f-account"></select>
     <label>natura</label><select id="f-nature"></select>
     <label>categoria</label><select id="f-category"></select>
+    <label>sotto</label><select id="f-sub"></select>
     <input type="search" id="f-text" placeholder="cerca nella descrizione"
            class="wide">
     <button class="link" id="f-reset">azzera</button>
@@ -173,7 +174,15 @@ color:var(--dim)}
 let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
-const F = {from:"", to:"", account:"", nature:"", category:"", text:""};
+const F = {from:"", to:"", account:"", nature:"", category:"", sub:"", text:""};
+
+// Le categorie hanno due livelli. Dentro al motore viaggiano unite
+// ("Casa > Casalinghi"), qui arrivano gia' divise in Categoria e
+// Sottocategoria; questa ricompone il nome intero, che resta la chiave con cui
+// si parla col server.
+const SEP = " > ";
+const whole = t => t.Sottocategoria ? t.Categoria + SEP + t.Sottocategoria
+                                    : (t.Categoria || "");
 
 const TABS = [
   ["dashboard", "Dashboard"],
@@ -331,6 +340,7 @@ function filtered(){
     if(F.account && t.Conto !== F.account) return false;
     if(F.nature && t.Natura !== F.nature) return false;
     if(F.category && t.Categoria !== F.category) return false;
+    if(F.sub && t.Sottocategoria !== F.sub) return false;
     if(F.text){
       const hay = ((t.Descrizione||"")+" "+(t.Merchant||"")).toLowerCase();
       if(!hay.includes(F.text.toLowerCase())) return false;
@@ -505,7 +515,7 @@ CARDS.aree = rows => {
   const MESI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set","ott",
                 "nov","dic"];
 
-  const area = t => (t.Categoria||"Senza categoria").split(" > ")[0];
+  const area = t => t.Categoria || "Senza categoria";
   const names = uniq(out.map(area));
   const body = names.map(n => {
     const a = sum(out.filter(t => area(t)===n && inWindow(t, years[0])));
@@ -527,10 +537,21 @@ CARDS.aree = rows => {
 
 CARDS.voci = rows => {
   const m = monthsOf(spending(rows));
-  const groups = groupSum(outflow(rows), "Categoria").slice(0,20);
-  return tableHTML(["voce", "all'anno", "al mese", "tx"],
+  // Due livelli, un riquadro solo: finche' non hai scelto una categoria si
+  // vedono le 12 aree; scegliendone una si scende nelle sue sottocategorie.
+  // Cosi' la classifica resta leggibile invece di elencare 37 voci sempre.
+  const giu = !!F.category;
+  const groups = groupSum(outflow(rows), giu ? "Sottocategoria" : "Categoria")
+    .slice(0, 20);
+  const risali = giu
+    ? `<p class="note"><button class="link" data-up="1">&lt; tutte le `
+      + `categorie</button> &middot; stai guardando ${esc(F.category)}</p>`
+    : "";
+  return risali + tableHTML(
+    [giu ? "sottocategoria" : "categoria", "all'anno", "al mese", "tx"],
     groups.map(g => [
-      `<button class="link" data-drill="category" data-value="${esc(g.name)}">${esc(g.name)}</button>`,
+      `<button class="link" data-drill="${giu ? "sub" : "category"}" `
+      + `data-value="${esc(g.name)}">${esc(g.name)}</button>`,
       euro(g.total/m*12), euro(g.total/m), g.n]), [1,2,3]);
 };
 
@@ -541,7 +562,10 @@ CARDS.ricorrenti = rows => {
     const k = t.Merchant; if(!k) continue;
     const cur = map.get(k) || {total:0, n:0, months:new Set(), cats:{}};
     cur.total += t.Importo; cur.n++; cur.months.add(month(t));
-    cur.cats[t.Categoria] = (cur.cats[t.Categoria]||0)+1;
+    // Il nome intero: qui interessa la voce, e "Casa" da sola non dice se
+    // sono bollette o mobili.
+    const nome = whole(t);
+    cur.cats[nome] = (cur.cats[nome]||0)+1;
     map.set(k, cur);
   }
   const rec = [...map.entries()].filter(([,v]) => v.months.size >= 6)
@@ -584,8 +608,16 @@ VIEWS.dashboard = rows => S.layout.filter(c => c.visibile && CARDS[c.id])
             + CARDS[c.id](rows) + "</div>").join("");
 
 function categorySelect(current, id){
-  const opts = S.categories.map(c =>
-    `<option ${c.nome===current?"selected":""}>${esc(c.nome)}</option>`).join("");
+  // Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
+  // due livelli si vedono a colpo d'occhio.
+  const aree = uniq(S.categories.map(c => c.categoria));
+  const opts = aree.map(a => {
+    const dentro = S.categories.filter(c => c.categoria === a);
+    const voci = dentro.map(c =>
+      `<option value="${esc(c.nome)}" ${c.nome===current?"selected":""}>`
+      + `${esc(c.sottocategoria || c.categoria)}</option>`).join("");
+    return `<optgroup label="${esc(a)}">${voci}</optgroup>`;
+  }).join("");
   return `<select data-setcat="${esc(id)}"><option value=""></option>${opts}</select>`;
 }
 
@@ -604,9 +636,9 @@ VIEWS.revisione = rows => {
     + tableHTML(["data","descrizione","merchant","importo","proposta","conf.","correggi"],
         todo.slice(0,300).map(t => [
           esc(t.Data), esc((t.Descrizione||"").slice(0,58)), esc(t.Merchant),
-          euro(t.Importo), esc(t.Categoria||"—"),
+          euro(t.Importo), esc(whole(t)||"—"),
           (t.Confidenza ?? 0).toFixed(2),
-          categorySelect(t.Categoria, t.ID)
+          categorySelect(whole(t), t.ID)
             + ` <button class="link" data-rule="${esc(t.Merchant||"")}">regola</button>`]),
         [3,5])
     + "</div>";
@@ -623,7 +655,7 @@ VIEWS.transazioni = rows => {
           esc((t.Descrizione||"").slice(0,52)), esc(t.Merchant),
           `<input style="width:92px;text-align:right" value="${t.Importo}"`
             + ` data-fix="Importo" data-id="${esc(t.ID)}">`,
-          esc(t.Conto), esc(t.Natura), categorySelect(t.Categoria, t.ID),
+          esc(t.Conto), esc(t.Natura), categorySelect(whole(t), t.ID),
           `<span class="mini">${esc(t.Origine)}</span>`,
           `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`]),
         [3])
@@ -637,16 +669,17 @@ VIEWS.categorie = () => {
   const rows = S.categories.slice().sort((a,b) => a.totale - b.totale);
   return '<div class="card"><div class="head"><h2>Categorie</h2>'
     + `<span class="mini">${rows.length}</span></div>`
-    + tableHTML(["categoria","tx","totale","natura","azioni"],
+    + tableHTML(["categoria","sottocategoria","tx","totale","natura","azioni"],
         rows.map(c => [
-          esc(c.nome), c.n, euro(c.totale),
+          esc(c.categoria), esc(c.sottocategoria || "—"),
+          c.n, euro(c.totale),
           `<select data-natura="${esc(c.nome)}">`
             + natures.map(n => `<option ${n===c.natura?"selected":""}>${esc(n)}</option>`).join("")
             + "</select>",
           `<button class="link" data-cat-rename="${esc(c.nome)}">rinomina</button>`
           + `<button class="link" data-cat-merge="${esc(c.nome)}">unisci</button>`
           + `<button class="link" data-cat-drop="${esc(c.nome)}">ignora</button>`]),
-        [1,2])
+        [2,3])
     + '<p class="note">"ignora" non cancella le transazioni: dice al motore di '
     + 'non imparare da quella categoria, e le righe vengono ricategorizzate '
     + 'dalle regole.</p></div>';
@@ -704,11 +737,16 @@ function render(){
   renderQuick();
   fillSelect("f-account", S.accounts, F.account, "tutti");
   fillSelect("f-nature", S.nature, F.nature, "tutte");
-  fillSelect("f-category", S.categories.map(c => c.nome), F.category, "tutte");
+  const aree = uniq(S.categories.map(c => c.categoria)).filter(Boolean).sort();
+  fillSelect("f-category", aree, F.category, "tutte");
+  const sotto = uniq(S.categories
+    .filter(c => !F.category || c.categoria === F.category)
+    .map(c => c.sottocategoria)).filter(Boolean).sort();
+  fillSelect("f-sub", sotto, F.sub, "tutte");
   el("f-from").value = F.from; el("f-to").value = F.to; el("f-text").value = F.text;
 
   const ETICHETTE = {from:"dal", to:"al", account:"conto", nature:"natura",
-                     category:"categoria", text:"cerca"};
+                     category:"categoria", sub:"sotto", text:"cerca"};
   el("crumbs").innerHTML = Object.entries(F).filter(([,v]) => v)
     .map(([k,v]) => `<span class="chip" data-clear="${k}">`
                     + `${esc(ETICHETTE[k]||k)}: ${esc(v)} ×</span>`)
@@ -776,7 +814,7 @@ function setStatus(){
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
-    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule]");
+    + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-rule],[data-up]");
   if(!t) return;
   const d = t.dataset;
 
@@ -793,9 +831,14 @@ document.addEventListener("click", async ev => {
     render(); return;
   }
   if(d.drill){
-    const map = {nature:"nature", category:"category", text:"text"};
-    F[map[d.drill]] = d.value; render(); return;
+    const map = {nature:"nature", category:"category", sub:"sub", text:"text"};
+    F[map[d.drill]] = d.value;
+    // Cambiare area azzera la sottocategoria: quella di prima appartiene a
+    // un'altra area e lascerebbe la tabella vuota.
+    if(d.drill === "category") F.sub = "";
+    render(); return;
   }
+  if(d.up){ F.category = ""; F.sub = ""; render(); return; }
   if(d.move !== undefined){
     const i = +d.move, j = i + (+d.dir);
     if(j<0 || j>=S.layout.length) return;
@@ -889,12 +932,17 @@ document.addEventListener("change", async ev => {
   }
 });
 
-["f-from","f-to","f-account","f-nature","f-category"].forEach(id =>
+["f-from","f-to","f-account","f-nature","f-category","f-sub"].forEach(id =>
   el(id).addEventListener("change", () => {
-    F[id.slice(2).replace("account","account")] = el(id).value;
     F.from = el("f-from").value; F.to = el("f-to").value;
     F.account = el("f-account").value; F.nature = el("f-nature").value;
-    F.category = el("f-category").value;
+    F.sub = el("f-sub").value;
+    // Cambiare area rende la sottocategoria di prima senza senso: appartiene
+    // a un'altra area, e tenerla lascerebbe la tabella vuota.
+    if(el("f-category").value !== F.category){
+      F.category = el("f-category").value;
+      F.sub = "";
+    }
     render();
   }));
 let typing;

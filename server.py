@@ -42,13 +42,15 @@ FOLDER = Path(__file__).parent
 
 # Intestazioni dei file di configurazione, per riscriverli senza perdere colonne.
 SCHEMA = {
-    "regole.csv": ["pattern", "categoria"],
+    "regole.csv": ["pattern", "categoria", "sottocategoria"],
     "merchant.csv": ["pattern", "merchant"],
-    "natura.csv": ["categoria", "natura"],
-    "override.csv": ["id", "data", "importo", "categoria", "nota"],
+    "natura.csv": ["categoria", "sottocategoria", "natura"],
+    "override.csv": ["id", "data", "importo", "categoria", "sottocategoria",
+                     "nota"],
     "correzioni.csv": ["id", "campo", "valore", "nota"],
-    "categorie_merge.csv": ["categoria_attuale", "transazioni",
-                            "categoria_finale"],
+    "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
+                            "transazioni", "categoria_finale",
+                            "sottocategoria_finale"],
 }
 
 DEFAULT_LAYOUT = [
@@ -262,18 +264,31 @@ class State:
             transactions = clean.to_dict("records")
             accounts = sorted(frame["Conto"].dropna().unique().tolist())
 
-        natura = {r["categoria"]: r["natura"] for r in read_rows("natura.csv")}
+        # Le categorie viaggiano con i due livelli separati E col nome intero:
+        # il nome intero e' la chiave con cui il browser le confronta e le
+        # rimanda indietro, i due livelli servono a raggrupparle e a riempire
+        # i menu a cascata.
+        natura = {bilancio.join_category(r["categoria"], r["sottocategoria"]):
+                  r["natura"] for r in read_rows("natura.csv")}
         totals = {}
         if not frame.empty:
-            grouped = frame.groupby("Categoria").Importo.agg(["sum", "count"])
+            pairs = frame.assign(
+                nome=[bilancio.join_category(a, s) for a, s in
+                      zip(frame["Categoria"], frame["Sottocategoria"])])
+            grouped = pairs.groupby("nome").Importo.agg(["sum", "count"])
             totals = {str(k): {"totale": round(r["sum"], 2),
                                "n": int(r["count"])}
                       for k, r in grouped.iterrows()}
 
         names = sorted(set(natura) | set(totals))
-        categories = [{"nome": n, "natura": natura.get(n, "Da classificare"),
-                       "totale": totals.get(n, {}).get("totale", 0),
-                       "n": totals.get(n, {}).get("n", 0)} for n in names]
+        categories = []
+        for n in names:
+            area, leaf = bilancio.split_category(n)
+            categories.append({"nome": n, "categoria": area,
+                               "sottocategoria": leaf,
+                               "natura": natura.get(n, "Da classificare"),
+                               "totale": totals.get(n, {}).get("totale", 0),
+                               "n": totals.get(n, {}).get("n", 0)})
 
         return {
             "version": self.version,
@@ -343,9 +358,10 @@ def set_transaction(payload):
                 if (r.get("id") or "").strip() != key]
         category = (payload.get("categoria") or "").strip()
         if category:
+            area, leaf = bilancio.split_category(category)
             rows.append({"id": key, "data": payload.get("data", ""),
                          "importo": payload.get("importo", ""),
-                         "categoria": category,
+                         "categoria": area, "sottocategoria": leaf,
                          "nota": payload.get("nota", "")})
         write_rows("override.csv", rows)
 
@@ -369,12 +385,20 @@ def set_category(payload):
     if not name:
         raise ValueError("nome categoria mancante")
 
+    # Dal browser i nomi arrivano interi ("Casa > Casalinghi"); nei file
+    # stanno su due colonne. Si confronta sul nome intero e si scrive diviso.
+    area, leaf = bilancio.split_category(name)
+
+    def whole(row, base, sub):
+        return bilancio.join_category(row.get(base), row.get(sub))
+
     if action == "natura":
         rows = [r for r in read_rows("natura.csv")
-                if (r.get("categoria") or "").strip() != name]
+                if whole(r, "categoria", "sottocategoria") != name]
         kind = (payload.get("natura") or "").strip()
         if kind:
-            rows.append({"categoria": name, "natura": kind})
+            rows.append({"categoria": area, "sottocategoria": leaf,
+                         "natura": kind})
         write_rows("natura.csv", rows)
         return
 
@@ -384,26 +408,34 @@ def set_category(payload):
             target = bilancio.IGNORE
         if not target:
             raise ValueError("destinazione mancante")
+        # IGNORA non e' una categoria ma un marcatore: non si divide.
+        if target == bilancio.IGNORE:
+            to_area, to_leaf = target, ""
+        else:
+            to_area, to_leaf = bilancio.split_category(target)
+
         rows = read_rows("categorie_merge.csv")
         found = False
         for row in rows:
-            if (row.get("categoria_attuale") or "").strip() == name:
-                row["categoria_finale"] = target
+            if whole(row, "categoria_attuale", "sottocategoria_attuale") == name:
+                row["categoria_finale"], row["sottocategoria_finale"] = to_area, to_leaf
                 found = True
             # Una categoria gia' rediretta su questa deve seguirla, altrimenti
             # dopo due rinomini si torna a puntare a un nome che non esiste.
-            elif (row.get("categoria_finale") or "").strip() == name:
-                row["categoria_finale"] = target
+            elif whole(row, "categoria_finale", "sottocategoria_finale") == name:
+                row["categoria_finale"], row["sottocategoria_finale"] = to_area, to_leaf
         if not found:
-            rows.append({"categoria_attuale": name, "transazioni": "",
-                         "categoria_finale": target})
+            rows.append({"categoria_attuale": area,
+                         "sottocategoria_attuale": leaf, "transazioni": "",
+                         "categoria_finale": to_area,
+                         "sottocategoria_finale": to_leaf})
         write_rows("categorie_merge.csv", rows)
 
         # Le regole che producevano il vecchio nome devono produrre il nuovo.
         rules = read_rows("regole.csv")
         for rule in rules:
-            if (rule.get("categoria") or "").strip() == name:
-                rule["categoria"] = target
+            if whole(rule, "categoria", "sottocategoria") == name:
+                rule["categoria"], rule["sottocategoria"] = to_area, to_leaf
         write_rows("regole.csv", rules)
         return
 
@@ -428,8 +460,12 @@ def set_rule(payload):
         value = (payload.get("valore") or "").strip()
         if not value:
             raise ValueError("categoria o merchant mancante")
-        target = "merchant" if name == "merchant.csv" else "categoria"
-        entry = {"pattern": pattern, target: value}
+        if name == "merchant.csv":
+            entry = {"pattern": pattern, "merchant": value}
+        else:
+            area, leaf = bilancio.split_category(value)
+            entry = {"pattern": pattern, "categoria": area,
+                     "sottocategoria": leaf}
         position = payload.get("posizione")
         # L'ordine conta: vince la prima regola che combacia, quindi le
         # specifiche devono poter stare sopra le generiche.
@@ -455,14 +491,21 @@ def preview_rule(payload):
     hit = frame[frame["Descrizione"].fillna("").str.contains(matcher)]
     # Le regole scattano solo dopo lo storico: distinguere quante righe
     # cambierebbero davvero categoria da quante gia' ce l'hanno giusta.
+    # Il confronto e' sul nome intero, perche' cambiare solo sottocategoria
+    # dentro la stessa area e' comunque un cambio.
     target = (payload.get("valore") or "").strip()
-    changed = hit[hit["Categoria"] != target] if target else hit
+    whole = [bilancio.join_category(a, s) for a, s in
+             zip(hit["Categoria"], hit["Sottocategoria"])]
+    changed = hit[[w != target for w in whole]] if target else hit
+    esempi = hit.head(8)[["Data", "Descrizione", "Importo", "Categoria",
+                          "Sottocategoria"]].to_dict("records")
+    for riga, nome in zip(esempi, whole):
+        riga["Categoria intera"] = nome
     return {
         "n": int(len(hit)),
         "cambierebbero": int(len(changed)),
         "totale": round(float(hit["Importo"].sum()), 2),
-        "esempi": hit.head(8)[["Data", "Descrizione", "Importo", "Categoria"]]
-        .to_dict("records"),
+        "esempi": esempi,
     }
 
 

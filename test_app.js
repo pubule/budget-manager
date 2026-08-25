@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el,
+ setStatus, el, whole,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -249,6 +249,26 @@ check("durante un giro i pulsanti sono tutti spenti",
       api.el("btn-llm").disabled && api.el("btn-run").disabled
       && api.el("btn-load").disabled);
 api.setState(state);
+
+// I due livelli della categoria. whole() ricompone il nome intero, che resta
+// la chiave con cui il browser parla col server: se si rompe, il menu di
+// correzione seleziona la voce sbagliata e gli override finiscono altrove.
+check("il nome intero si ricompone dai due livelli",
+      api.whole({Categoria:"Casa", Sottocategoria:"Casalinghi"}) === "Casa > Casalinghi");
+check("senza sottocategoria resta la sola area",
+      api.whole({Categoria:"Stipendio", Sottocategoria:""}) === "Stipendio");
+check("senza sottocategoria definita non spunta 'undefined'",
+      api.whole({Categoria:"Stipendio"}) === "Stipendio");
+check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
+{
+  const orfane = state.transactions.filter(t => t.Categoria && !t.Sottocategoria);
+  check("nei dati veri ogni riga categorizzata ha due livelli",
+        orfane.length === 0,
+        orfane.length + " righe con categoria ma senza sottocategoria");
+  const conSotto = state.transactions.filter(t => t.Sottocategoria);
+  check("il nome intero porta il separatore quando i livelli sono due",
+        conSotto.length === 0 || api.whole(conSotto[0]).includes(" > "));
+}
 
 console.log(failures ? `\n${failures} controlli falliti` : "\nTutti i controlli passati");
 process.exit(failures ? 1 : 0);
