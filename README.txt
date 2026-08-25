@@ -226,6 +226,27 @@ Tre azioni:
     il menu    corregge la categoria di quella riga sola.
 
 
+RIFINITURA DELL'INTERFACCIA
+--------------------------
+
+Poche cose, quelle che si notano solo quando mancano:
+
+    cifre tabulari      i numeri hanno tutti la stessa larghezza, cosi' le
+                        colonne non ballano a ogni aggiornamento. In un'app di
+                        soldi cambiano di continuo.
+    anello di fuoco     col colore d'accento su :focus-visible. Il contorno di
+                        sistema su fondo scuro e' quasi invisibile, e chi
+                        naviga da tastiera non sa dove si trova.
+    transizioni         160ms su colori e bordi. Un cambio istantaneo si legge
+                        come uno sfarfallio.
+    pressione           il pulsante scende di un pixel al clic
+    text-wrap: pretty   niente parole sole in fondo alle spiegazioni
+    favicon             SVG in linea, nessun file da servire
+
+Il movimento rispetta prefers-reduced-motion: chi ha chiesto meno animazioni
+non vede pulsare il pallino di "elaboro", che e' l'unica animazione continua.
+
+
 I RIQUADRI DI DIALOGO
 ---------------------
 

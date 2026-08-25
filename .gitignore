@@ -36,3 +36,8 @@ backup/*.zip
 # sorgenti .dc.html che stanno accanto. I sorgenti si versionano, questo no.
 design/layout-dashboard-bilancio.html
 
+# Skill di terze parti installate con `npx skills add`: si reinstallano
+# da skills-lock.json e non sono codice di questo progetto.
+.agents/
+.claude/
+
