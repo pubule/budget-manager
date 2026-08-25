@@ -221,8 +221,26 @@ Da rivedere        Le righe con confidenza sotto 1. Scegli la categoria dal
                    menu. Se il negozio si ripete, usa "regola" invece di
                    correggere la singola riga: una regola vale per sempre.
 
-Transazioni        Tutte le righe. Qui si correggono anche data e importo.
-                   "annulla" toglie sia la categoria forzata sia la correzione.
+Transazioni        Tutte le righe, e QUASI TUTTI I CAMPI SI CORREGGONO:
+                   data, descrizione, merchant, importo, conto e categoria.
+                   Ogni modifica si salva da sola e la pipeline rigira
+                   subito, non c'e' nessun pulsante "salva".
+
+                   La NATURA no: discende dalla categoria attraverso
+                   natura.csv. Cambiarla per riga vorrebbe dire avere due
+                   transazioni della stessa voce con nature diverse. Si
+                   cambia nella scheda Categorie, e vale per tutte.
+
+                   Dove finisce cosa: la categoria in override.csv, perche'
+                   e' un'interpretazione; tutto il resto in correzioni.csv,
+                   perche' cambia i fatti. Restano separati apposta, cosi'
+                   ricategorizzare non puo' alterare un importo per sbaglio.
+
+                   L'ID della transazione NON cambia mai, nemmeno correggendo
+                   data, importo o conto: si corregge quella riga, non se ne
+                   crea un'altra.
+
+                   "annulla" toglie sia la categoria forzata sia le correzioni.
 
 Categorie          Rinomina, unisci, cambia natura. "ignora" non cancella le
                    transazioni: dice al motore di non imparare da quella

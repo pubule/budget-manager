@@ -57,9 +57,9 @@ DEFAULT_LAYOUT = [
     {"id": "indicatori", "titolo": "Indicatori", "visibile": True},
     {"id": "natura", "titolo": "Dove puoi agire", "visibile": True},
     {"id": "andamento", "titolo": "Andamento", "visibile": True},
-    {"id": "aree", "titolo": "Aree, anno su anno", "visibile": True},
-    {"id": "voci", "titolo": "Voci per costo annuo", "visibile": True},
     {"id": "ricorrenti", "titolo": "Costi ricorrenti", "visibile": True},
+    {"id": "voci", "titolo": "Voci per costo annuo", "visibile": True},
+    {"id": "aree", "titolo": "Aree, anno su anno", "visibile": True},
     {"id": "merchant", "titolo": "Dove finiscono i soldi", "visibile": True},
     {"id": "revisione", "titolo": "Da rivedere", "visibile": True},
 ]
@@ -368,9 +368,9 @@ def set_transaction(payload):
     fixes = [r for r in read_rows("correzioni.csv")
              if (r.get("id") or "").strip() != key
              or (r.get("campo") or "").strip().capitalize()
-             not in {f.capitalize() for f in payload if f in
-                     ("importo", "data", "descrizione")}]
-    for field in ("importo", "data", "descrizione"):
+             not in {f.capitalize() for f in payload
+                     if f.capitalize() in bilancio.CORREGGIBILI}]
+    for field in (c.lower() for c in bilancio.CORREGGIBILI):
         if field in payload and str(payload[field]).strip():
             fixes.append({"id": key, "campo": field.capitalize(),
                           "valore": str(payload[field]).strip(),

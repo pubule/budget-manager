@@ -693,6 +693,14 @@ VIEWS.dashboard = rows => '<div class="grid">'
               + CARDS[c.id](rows) + "</div>").join("")
   + "</div>";
 
+// Il conto e' un insieme chiuso: un menu evita di scriverlo con una grafia
+// diversa e creare un conto fantasma.
+function accountSelect(current, id){
+  const opts = uniq(S.accounts.concat(current ? [current] : [])).sort()
+    .map(a => `<option ${a===current?"selected":""}>${esc(a)}</option>`).join("");
+  return `<select data-fix="Conto" data-id="${esc(id)}">${opts}</select>`;
+}
+
 function categorySelect(current, id){
   // Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
   // due livelli si vedono a colpo d'occhio.
@@ -738,16 +746,28 @@ VIEWS.transazioni = rows => {
                  "categoria","origine",""],
         shown.map(t => [
           `<input type="date" value="${esc(t.Data)}" data-fix="Data" data-id="${esc(t.ID)}">`,
-          esc((t.Descrizione||"").slice(0,52)), esc(t.Merchant),
+          `<input style="min-width:230px" value="${esc(t.Descrizione||"")}"`
+            + ` data-fix="Descrizione" data-id="${esc(t.ID)}">`,
+          `<input style="min-width:130px" value="${esc(t.Merchant||"")}"`
+            + ` data-fix="Merchant" data-id="${esc(t.ID)}">`,
           `<input style="width:92px;text-align:right" value="${t.Importo}"`
             + ` data-fix="Importo" data-id="${esc(t.ID)}">`,
-          esc(t.Conto), esc(t.Natura), categorySelect(whole(t), t.ID),
+          accountSelect(t.Conto, t.ID),
+          // La natura non si tocca qui: discende dalla categoria attraverso
+          // natura.csv. Cambiarla per riga vorrebbe dire avere due
+          // transazioni della stessa voce con nature diverse.
+          `<span title="viene dalla categoria, si cambia nella scheda Categorie">`
+            + `${esc(t.Natura)}</span>`,
+          categorySelect(whole(t), t.ID),
           `<span class="mini">${esc(t.Origine)}</span>`,
           `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`]),
         [3])
-    + '<p class="note">Cambiare la categoria scrive override.csv. Cambiare data '
-    + 'o importo scrive correzioni.csv. "annulla" toglie entrambe le modifiche '
-    + 'per quella riga.</p></div>';
+    + '<p class="note">Ogni modifica si salva da sola e la pipeline rigira '
+    + 'subito. La categoria scrive override.csv; data, descrizione, merchant, '
+    + 'importo e conto scrivono correzioni.csv. "annulla" toglie entrambe le '
+    + 'modifiche per quella riga.<br>La natura non si modifica qui perche\' '
+    + 'discende dalla categoria: si cambia nella scheda Categorie, e vale per '
+    + 'tutte le righe di quella voce.</p></div>';
 };
 
 VIEWS.categorie = () => {

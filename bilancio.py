@@ -348,8 +348,15 @@ def assign_ids(rows):
     return rows
 
 
+# I campi che si possono correggere a mano su una singola transazione.
+# Natura non c'e' di proposito: discende dalla coppia categoria +
+# sottocategoria attraverso natura.csv, e deciderla per riga vorrebbe dire
+# avere due transazioni della stessa voce con nature diverse.
+CORREGGIBILI = ("Importo", "Data", "Descrizione", "Conto", "Merchant")
+
+
 def load_corrections(path):
-    """correzioni.csv: id -> {campo: valore}, per importi e date sbagliati.
+    """correzioni.csv: id -> {campo: valore}, per i fatti sbagliati.
 
     Separato da override.csv perche' cambia i fatti della transazione, non la
     sua interpretazione. Applicato dopo l'assegnazione degli ID, cosi' anche
@@ -363,7 +370,7 @@ def load_corrections(path):
             key = (row.get("id") or "").strip()
             field = (row.get("campo") or "").strip().capitalize()
             value = (row.get("valore") or "").strip()
-            if key and field in ("Importo", "Data", "Descrizione") and value:
+            if key and field in CORREGGIBILI and value:
                 fixes[key][field] = value
     if fixes:
         print(f"  {len(fixes)} transazioni corrette da correzioni.csv")
@@ -1548,6 +1555,23 @@ def selftest():
     assert rows[0]["ID"] == before, "l'ID e' cambiato dopo la correzione"
     assert rows[0]["Importo"] == -90.0, f"correzione non applicata: {rows[0]}"
 
+    # Tutti i campi correggibili devono arrivare fino in fondo, e nessuno di
+    # loro puo' spostare l'ID: si corregge una riga, non se ne crea un'altra.
+    rows = assign_ids([dict(sample[0])])
+    before = rows[0]["ID"]
+    apply_corrections(rows, {before: {
+        "Data": "15/01/2026", "Descrizione": "ALTRO NEGOZIO",
+        "Conto": "Hype", "Merchant": "Altro Negozio", "Importo": "-1,50"}})
+    assert rows[0]["ID"] == before, "l'ID si e' mosso correggendo i campi"
+    assert rows[0]["Data"] == "2026-01-15", rows[0]["Data"]
+    assert rows[0]["Descrizione"] == "ALTRO NEGOZIO"
+    assert rows[0]["Conto"] == "Hype"
+    assert rows[0]["Merchant"] == "Altro Negozio"
+    assert set(CORREGGIBILI) == {"Importo", "Data", "Descrizione", "Conto",
+                                 "Merchant"}, CORREGGIBILI
+    assert "Natura" not in CORREGGIBILI,         "la natura discende dalla categoria, non si corregge per riga"
+    assert "Categoria" not in CORREGGIBILI,         "la categoria e' un'interpretazione: va in override.csv"
+
     # L'override per ID deve battere quello per data+importo.
     row = {"ID": "abc#1", "Data": "2026-01-12", "Importo": -84.30}
     both = {"abc#1": "Casa > Bollette", ("2026-01-12", -84.30): "Shopping"}
@@ -1983,8 +2007,11 @@ def run(folder, use_llm=True, output="consolidato.csv",
         # che natura.csv la tiene.
         row["Natura"] = config["natura"].get(category, "Da classificare")
         row["Categoria"], row["Sottocategoria"] = split_category(category)
-        row["Merchant"] = canonical_merchant(row["Descrizione"],
-                                             config["merchants"])
+        # Un merchant corretto a mano deve sopravvivere: qui verrebbe
+        # ricalcolato da merchant.csv e la correzione sparirebbe in silenzio.
+        if "Merchant" not in config["corrections"].get(row["ID"], {}):
+            row["Merchant"] = canonical_merchant(row["Descrizione"],
+                                                 config["merchants"])
         row["Origine"] = source
         row["Confidenza"] = round(score, 2)
     categorizer.save_cache()

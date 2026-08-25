@@ -307,5 +307,26 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         larghezze.every(n => n >= 1 && n <= 12), larghezze.join(","));
 }
 
+// I campi correggibili sono un contratto fra due file: l'interfaccia scrive
+// data-fix="Conto", il motore accetta CORREGGIBILI in bilancio.py. Se uno dei
+// due cambia senza l'altro, la modifica si salva e non succede niente - e
+// nessun errore lo dice.
+{
+  const ATTESI = ["Data", "Descrizione", "Merchant", "Importo", "Conto"];
+  const usati = [...new Set([...html.matchAll(/data-fix="([^"]+)"/g)]
+    .map(m => m[1]))].sort();
+  check("l'interfaccia corregge esattamente i campi che il motore accetta",
+        JSON.stringify(usati) === JSON.stringify([...ATTESI].sort()),
+        "trovati: " + usati.join(", "));
+  const py = fs.readFileSync(path.join(FOLDER, "bilancio.py"), "utf-8");
+  const riga = py.match(/^CORREGGIBILI = \(([^)]*)\)/m);
+  const motore = riga ? [...riga[1].matchAll(/"([^"]+)"/g)].map(m => m[1]).sort() : [];
+  check("e il motore accetta esattamente quelli",
+        JSON.stringify(motore) === JSON.stringify([...ATTESI].sort()),
+        "bilancio.py: " + motore.join(", "));
+  check("la natura non e' fra i campi correggibili a mano",
+        !motore.includes("Natura") && !usati.includes("Natura"));
+}
+
 console.log(failures ? `\n${failures} controlli falliti` : "\nTutti i controlli passati");
 process.exit(failures ? 1 : 0);
