@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bilancio - direzione B, Il pannello</title>
+<style>
+/* ==========================================================================
+   DIREZIONE B - IL PANNELLO
+   Tutto sopra la piega. Tre zone che non si mescolano mai:
+     - la SPALLA a sinistra: dove sono (sezioni) e cosa faccio ai dati;
+     - la BARRA in alto: quale periodo guardo, e i numeri che ne discendono;
+     - il CORPO: le prove.
+   Oggi la pagina e' alta 2462 px con 400 px di vuoto in mezzo. Qui sta in una
+   schermata, e le due colonne del corpo sono pareggiate PER COSTRUZIONE: le
+   lega la griglia, non si spera che i contenuti si somiglino.
+   ========================================================================== */
+:root{
+  --bg:#101014; --pan:#191920; --spalla:#15151b;
+  --ink:#eceaf0; --dim:#948e9c; --faint:#5d5866;
+  --line:#282833; --su:#6fae99; --giu:#d98a6a; --acc:#7c9fd4;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+.telaio{height:100vh;min-height:740px;display:grid;
+  grid-template-columns:212px minmax(0,1fr)}
+
+/* ==========================================================================
+   LA SPALLA
+   Sopra: dove sono. Sotto: cosa posso fare ai dati. In mezzo lo spazio, cosi'
+   le due cose non si toccano mai: navigare non e' ricaricare.
+   ========================================================================== */
+.spalla{background:var(--spalla);border-right:1px solid var(--line);
+  display:grid;grid-template-rows:auto 1fr auto;padding:14px 12px 12px;
+  min-height:0}
+.marchio{display:flex;align-items:center;gap:9px;padding:2px 8px 18px}
+.marchio b{font-size:16px;font-weight:650;letter-spacing:-.01em}
+.pallino{width:7px;height:7px;border-radius:50%;background:var(--su);
+  box-shadow:0 0 0 3px #6fae9922}
+
+.spalla nav{display:flex;flex-direction:column;gap:1px}
+.spalla nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:6px;color:var(--dim);text-decoration:none;font-size:13.5px;
+  line-height:1.2}
+.spalla nav a:hover{background:#ffffff08;color:var(--ink)}
+.spalla nav a[aria-current=page]{background:#ffffff12;color:var(--ink);font-weight:550}
+.spalla nav a .conta{margin-left:auto;font:600 11px var(--mono);
+  background:#d98a6a22;color:var(--giu);border-radius:999px;padding:2px 7px}
+.spalla nav a[aria-current=page] .conta{background:#d98a6a2e}
+
+/* --- le azioni: staccate dalla navigazione da un filetto e da un titolo --- */
+.azioni{display:flex;flex-direction:column;gap:6px;
+  border-top:1px solid var(--line);padding-top:12px}
+.azioni h3{margin:0 0 4px;font:600 10px/1 var(--sans);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint)}
+.azioni button{width:100%;text-align:left;background:#ffffff0a;
+  border:1px solid var(--line);border-radius:6px;color:var(--ink);
+  font:500 13px var(--sans);padding:8px 11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:8px}
+.azioni button:hover{background:#ffffff14;border-color:#3a3a48}
+/* Carica risalta solo quando c'e' davvero un export nuovo da prendere: un
+   pulsante sempre acceso smette di voler dire qualcosa. */
+.azioni button.primo{background:var(--su);border-color:var(--su);color:#10100f;
+  font-weight:600}
+.azioni button.primo:hover{filter:brightness(1.08)}
+.azioni button .n{font:600 11px var(--mono);color:var(--dim)}
+.azioni button.primo .n{color:#10100f;opacity:.75}
+.sorgente{margin:10px 2px 0;font-size:11px;line-height:1.55;color:var(--faint)}
+.sorgente b{color:var(--dim);font-weight:500}
+
+/* ==========================================================================
+   IL LATO DESTRO
+   ========================================================================== */
+.lato{display:grid;grid-template-rows:auto 1fr;gap:10px;padding:10px;
+  min-height:0}
+
+.barra{background:var(--pan);border:1px solid var(--line);border-radius:8px;
+  display:grid;grid-template-columns:1fr repeat(4,auto);align-items:center;
+  padding:0 4px 0 10px}
+.finestra{display:flex;gap:6px;padding:8px 0;flex-wrap:wrap}
+.finestra button{background:none;border:1px solid transparent;border-radius:5px;
+  color:var(--dim);font:500 12px var(--sans);padding:5px 10px;cursor:pointer}
+.finestra button:hover{color:var(--ink);border-color:var(--line)}
+.finestra button[aria-pressed=true]{background:#ffffff12;color:var(--ink)}
+.kpi{padding:9px 20px;border-left:1px solid var(--line);text-align:right;
+  min-width:156px}
+.kpi .et{display:block;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.kpi .v{font:600 21px/1 var(--mono);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.kpi .d{display:block;font-size:11px;margin-top:4px;color:var(--dim)}
+.su{color:var(--su)} .giu{color:var(--giu)}
+
+.corpo{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);
+  gap:10px;min-height:0}
+.riquadro{background:var(--pan);border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;min-height:0;display:flex;flex-direction:column}
+.riquadro > h2{margin:0 0 10px;font:600 10px/1 var(--sans);
+  letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  display:flex;justify-content:space-between;align-items:center;gap:12px}
+.colonnaDestra{display:grid;grid-template-rows:auto auto 1fr auto;gap:10px;
+  min-height:0}
+
+.viste{display:flex;gap:2px;background:#00000040;border-radius:6px;padding:2px}
+.viste button{background:none;border:0;border-radius:4px;padding:4px 10px;
+  color:var(--dim);font:500 11px var(--sans);cursor:pointer}
+.viste button[aria-selected=true]{background:#ffffff14;color:var(--ink)}
+
+/* --- tabella densa ------------------------------------------------------ */
+.scroll{overflow:auto;min-height:0;margin:0 -16px;padding:0 16px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+thead th{position:sticky;top:0;background:var(--pan);z-index:1;
+  font:500 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);text-align:right;padding:0 0 8px}
+thead th:first-child{text-align:left}
+td{padding:5px 0;border-top:1px solid var(--line);text-align:right;
+  font:13px/1.3 var(--mono);white-space:nowrap}
+td:first-child{text-align:left;font-family:var(--sans);width:100%;
+  max-width:0;overflow:hidden;text-overflow:ellipsis}
+td + td, th + th{padding-left:14px}
+tbody tr:hover td{background:#ffffff09}
+.dove{color:var(--dim);font-size:11px}
+/* Il secondo livello della tassonomia, rientrato: risponde a "dentro Casa,
+   cosa?" senza aprire un altro riquadro. */
+tr.sub td:first-child{padding-left:18px;color:var(--dim)}
+tr.sub td{font-size:12px;color:var(--dim)}
+tr.area td{padding-top:9px}
+.q{position:relative}
+/* Filetto sotto al nome, non blocco dietro: a piena altezza la riga sembrava
+   selezionata invece di misurata. */
+.q i{position:absolute;left:0;bottom:0;height:2px;border-radius:2px;
+  background:#7c9fd455;width:var(--w)}
+.q span{position:relative}
+
+.leve{list-style:none;margin:0;padding:0;font-size:12px}
+.leve li{display:grid;grid-template-columns:9px 1fr auto;gap:9px;
+  align-items:center;padding:5px 0;border-top:1px solid var(--line)}
+.leve li:first-child{border-top:0}
+.leve i{width:9px;height:9px;border-radius:2px;display:block}
+.leve .n{color:var(--dim);font-size:11px;display:block}
+.leve b{font:600 13px var(--mono);font-variant-numeric:tabular-nums}
+
+.spark{flex:1;min-height:70px}
+.spark svg{width:100%;height:100%;display:block}
+.sotto{display:flex;justify-content:space-between;color:var(--faint);
+  font-size:10px;margin-top:6px}
+
+.scarti{list-style:none;margin:0;padding:0;font-size:12px}
+.scarti li{display:flex;justify-content:space-between;gap:10px;padding:4px 0;
+  border-top:1px solid var(--line)}
+.scarti li:first-child{border-top:0}
+.scarti em{font-style:normal;font-family:var(--mono);
+  font-variant-numeric:tabular-nums}
+
+.avviso{background:#d98a6a14;border:1px solid #d98a6a33;border-radius:8px;
+  padding:10px 14px;display:flex;align-items:center;justify-content:space-between;
+  gap:12px}
+.avviso b{color:var(--giu);font-size:13px}
+.avviso span{color:var(--dim);font-size:11px}
+.avviso a{color:var(--ink);font-size:12px;white-space:nowrap;
+  text-decoration:none}
+
+@media(max-width:1200px){
+  .telaio{grid-template-columns:1fr;height:auto}
+  .spalla{grid-template-rows:auto;grid-template-columns:auto 1fr auto;
+    align-items:center;border-right:0;border-bottom:1px solid var(--line)}
+  .spalla nav{flex-direction:row;flex-wrap:wrap}
+  .marchio{padding:0 14px 0 4px}
+  .azioni{flex-direction:row;border-top:0;padding-top:0}
+  .azioni h3,.sorgente{display:none}
+  .corpo{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="telaio">
+
+  <!-- ======================= LA SPALLA ================================= -->
+  <aside class="spalla">
+    <div>
+      <div class="marchio"><span class="pallino"></span><b>Bilancio</b></div>
+      <nav>
+        <a href="#" aria-current="page">Dashboard</a>
+        <a href="#">Da rivedere <span class="conta">35</span></a>
+        <a href="#">Transazioni</a>
+        <a href="#">Categorie</a>
+        <a href="#">Regole e merchant</a>
+        <a href="#">Componi</a>
+      </nav>
+    </div>
+
+    <div></div><!-- lo spazio in mezzo tiene separate le due famiglie -->
+
+    <div class="azioni">
+      <h3>Dati</h3>
+      <button class="primo">Carica dati <span class="n">2 nuovi</span></button>
+      <button>Ricarica</button>
+      <button>Analizza con LLM <span class="n">12</span></button>
+      <button>Esporta HTML + Excel</button>
+      <p class="sorgente"><b>1.902 righe</b> su 56 mesi, da gen 2022 ad ago
+        2026<br><b>5 conti</b> &middot; ultimo giro 3 minuti fa</p>
+    </div>
+  </aside>
+
+  <!-- ======================= IL LATO DESTRO ============================ -->
+  <div class="lato">
+
+    <header class="barra">
+      <nav class="finestra">
+        <button aria-pressed="true">Mese in corso</button>
+        <button>Mese scorso</button>
+        <button>Ultimi 3 mesi</button>
+        <button>Anno in corso</button>
+        <button>Anno scorso</button>
+        <button>Tutto</button>
+      </nav>
+      <div class="kpi"><span class="et">Uscite</span>
+        <span class="v">4.031</span>
+        <span class="d giu">+50% su lug (1&ndash;25)</span></div>
+      <div class="kpi"><span class="et">Entrate</span>
+        <span class="v">750</span>
+        <span class="d">come lug (1&ndash;25)</span></div>
+      <div class="kpi"><span class="et">Differenza</span>
+        <span class="v giu">-3.281</span>
+        <span class="d giu">stipendio dopo il 25</span></div>
+      <div class="kpi"><span class="et">Ordinaria</span>
+        <span class="v">2.812</span>
+        <span class="d su">-18% su lug</span></div>
+    </header>
+
+    <div class="corpo">
+
+      <!-- SINISTRA: la tabella unica. Prima erano cinque riquadri con le
+           stesse righe misurate in modi diversi. -->
+      <div class="riquadro">
+        <h2>Dove vanno i soldi
+          <span class="viste" role="tablist">
+            <button role="tab" aria-selected="true">area</button>
+            <button role="tab" aria-selected="false">negozio</button>
+            <button role="tab" aria-selected="false">ricorrenti</button>
+          </span>
+        </h2>
+        <div class="scroll">
+          <table>
+            <thead><tr>
+              <th>Voce</th><th>Mese</th><th>Anno</th>
+              <th>Quota</th><th>Su 2025</th><th>Tx</th>
+            </tr></thead>
+            <tbody>
+              <tr class="area"><td class="q" style="--w:100%"><i></i><span>Casa</span> <span class="dove">&middot; mutui, luce, gas</span></td><td>1.441</td><td>17.290</td><td class="dove">55%</td><td class="giu">+3.996</td><td class="dove">419</td></tr>
+              <tr class="sub"><td class="q" style="--w:32%"><i></i><span>Luce e gas</span></td><td>454</td><td>5.447</td><td class="dove">17%</td><td class="dove">&mdash;</td><td class="dove">109</td></tr>
+              <tr class="sub"><td class="q" style="--w:27%"><i></i><span>Ipoteca/Affitto</span></td><td>390</td><td>4.678</td><td class="dove">15%</td><td class="dove">&mdash;</td><td class="dove">90</td></tr>
+              <tr class="sub"><td class="q" style="--w:11%"><i></i><span>Arredamento</span></td><td>153</td><td>1.832</td><td class="dove">6%</td><td class="dove">&mdash;</td><td class="dove">65</td></tr>
+              <tr class="sub"><td class="q" style="--w:10%"><i></i><span>Condominio</span></td><td>151</td><td>1.809</td><td class="dove">6%</td><td class="dove">&mdash;</td><td class="dove">20</td></tr>
+              <tr class="sub"><td class="q" style="--w:5%"><i></i><span>Manutenzione</span></td><td>69</td><td>830</td><td class="dove">3%</td><td class="dove">&mdash;</td><td class="dove">18</td></tr>
+              <tr class="area"><td class="q" style="--w:41%"><i></i><span>Cibo &amp; Mangiare</span> <span class="dove">&middot; spesa, ristoranti</span></td><td>589</td><td>7.063</td><td class="dove">23%</td><td>-52</td><td class="dove">806</td></tr>
+              <tr class="sub"><td class="q" style="--w:24%"><i></i><span>Alimentari</span></td><td>347</td><td>4.161</td><td class="dove">13%</td><td class="dove">&mdash;</td><td class="dove">374</td></tr>
+              <tr class="sub"><td class="q" style="--w:13%"><i></i><span>Ristoranti</span></td><td>191</td><td>2.297</td><td class="dove">7%</td><td class="dove">&mdash;</td><td class="dove">279</td></tr>
+              <tr class="sub"><td class="q" style="--w:2%"><i></i><span>Cantina e Specialita</span></td><td>33</td><td>394</td><td class="dove">1%</td><td class="dove">&mdash;</td><td class="dove">40</td></tr>
+              <tr class="sub"><td class="q" style="--w:1%"><i></i><span>Pranzo Lavoro</span></td><td>18</td><td>211</td><td class="dove">1%</td><td class="dove">&mdash;</td><td class="dove">113</td></tr>
+              <tr class="area"><td class="q" style="--w:20%"><i></i><span>Shopping</span></td><td>292</td><td>3.505</td><td class="dove">11%</td><td class="su">-1.469</td><td class="dove">198</td></tr>
+              <tr class="sub"><td class="q" style="--w:7%"><i></i><span>Vestiti</span></td><td>102</td><td>1.223</td><td class="dove">4%</td><td class="dove">&mdash;</td><td class="dove">49</td></tr>
+              <tr class="sub"><td class="q" style="--w:5%"><i></i><span>Tecnologia</span></td><td>70</td><td>837</td><td class="dove">3%</td><td class="dove">&mdash;</td><td class="dove">8</td></tr>
+              <tr class="sub"><td class="q" style="--w:4%"><i></i><span>Regali</span></td><td>61</td><td>735</td><td class="dove">2%</td><td class="dove">&mdash;</td><td class="dove">46</td></tr>
+              <tr class="sub"><td class="q" style="--w:4%"><i></i><span>Amazon</span></td><td>59</td><td>709</td><td class="dove">2%</td><td class="dove">&mdash;</td><td class="dove">95</td></tr>
+              <tr class="area"><td class="q" style="--w:9%"><i></i><span>Da identificare</span> <span class="dove">&middot; nessuna regola le prende</span></td><td>129</td><td>1.551</td><td class="dove">5%</td><td class="giu">+1.240</td><td class="dove">12</td></tr>
+              <tr class="area"><td class="q" style="--w:6%"><i></i><span>Personale</span></td><td>82</td><td>985</td><td class="dove">3%</td><td class="giu">+626</td><td class="dove">200</td></tr>
+              <tr class="sub"><td class="q" style="--w:4%"><i></i><span>Abbonamenti</span></td><td>56</td><td>671</td><td class="dove">2%</td><td class="dove">&mdash;</td><td class="dove">162</td></tr>
+              <tr class="sub"><td class="q" style="--w:1%"><i></i><span>Intrattenimento</span></td><td>18</td><td>222</td><td class="dove">1%</td><td class="dove">&mdash;</td><td class="dove">29</td></tr>
+              <tr class="area"><td class="q" style="--w:4%"><i></i><span>Comunita&#39;</span> <span class="dove">&middot; tasse</span></td><td>51</td><td>615</td><td class="dove">2%</td><td class="su">-137</td><td class="dove">19</td></tr>
+              <tr class="area"><td class="q" style="--w:3%"><i></i><span>Trasporto</span></td><td>45</td><td>546</td><td class="dove">2%</td><td>+109</td><td class="dove">62</td></tr>
+              <tr class="area"><td class="q" style="--w:3%"><i></i><span>Assistenza Sanitaria</span></td><td>44</td><td>522</td><td class="dove">2%</td><td>+209</td><td class="dove">57</td></tr>
+              <tr class="area"><td class="q" style="--w:3%"><i></i><span>Auto</span></td><td>43</td><td>521</td><td class="dove">2%</td><td class="giu">+388</td><td class="dove">8</td></tr>
+              <tr class="area"><td class="q" style="--w:2%"><i></i><span>Viaggi</span></td><td>30</td><td>359</td><td class="dove">1%</td><td class="giu">da 110 a 1.152</td><td class="dove">14</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DESTRA: strumenti piccoli, misure fisse, nessun vuoto. -->
+      <div class="colonnaDestra">
+
+        <div class="riquadro">
+          <h2>Le leve, dalla piu&#39; facile</h2>
+          <ul class="leve">
+            <li><i style="background:#d9a441"></i>
+              <span>Discrezionali<span class="n">basta decidere di non farlo &middot; subito</span></span>
+              <b>833</b></li>
+            <li><i style="background:#7c9fd4"></i>
+              <span>Ricorrenti<span class="n">disdette e cambio fornitore &middot; qualche mese</span></span>
+              <b>728</b></li>
+            <li><i style="background:#9b8ec4"></i>
+              <span>Vincolate<span class="n">surroga del mutuo, polizza &middot; una volta l&#39;anno</span></span>
+              <b>520</b></li>
+            <li><i style="background:#6fae99"></i>
+              <span>Quotidiane<span class="n">dove fai la spesa, e quanto spesso &middot; settimane</span></span>
+              <b>423</b></li>
+            <li><i style="background:#8a8a8a"></i>
+              <span>Da chiarire<span class="n">prima bisogna sapere cosa sono</span></span>
+              <b>129</b></li>
+            <li><i style="background:#d98a6a"></i>
+              <span>Straordinarie<span class="n">non si comprime: va messa da parte</span></span>
+              <b>113</b></li>
+          </ul>
+        </div>
+
+        <div class="riquadro">
+          <h2>Il 2026 contro il 2025 <span style="color:var(--giu)">+3.996 &euro;</span></h2>
+          <ul class="scarti">
+            <li><span>Casa</span><em class="giu">+3.996</em></li>
+            <li><span>Shopping</span><em class="su">-1.469</em></li>
+            <li><span>Viaggi</span><em class="giu">da 110 a 1.152</em></li>
+            <li><span>Personale</span><em class="giu">+626</em></li>
+            <li><span>Auto</span><em class="giu">+388</em></li>
+          </ul>
+        </div>
+
+        <div class="riquadro">
+          <h2>Uscite mese per mese</h2>
+          <div class="spark">
+            <svg viewBox="0 0 400 90" preserveAspectRatio="none" aria-hidden="true">
+              <rect x="383" y="0" width="17" height="90" fill="#ffffff0d"/>
+              <polyline fill="none" stroke="#d98a6a" stroke-width="1.6"
+                stroke-linejoin="round" points="
+                0,70 17,44 35,61 52,68 70,58 87,26 104,54 122,61 139,38
+                157,59 174,66 191,66 209,6 226,63 243,40 261,29 278,36 296,37
+                313,34 330,24 348,52 365,38 383,54 400,46"/>
+              <circle cx="400" cy="46" r="3" fill="#d98a6a"/>
+            </svg>
+          </div>
+          <div class="sotto"><span>set 2024</span><span>ago 2026</span></div>
+        </div>
+
+        <div class="avviso">
+          <div><b>35 righe da guardare</b>
+            <span>&nbsp;nessuna regola le ha classificate</span></div>
+          <a href="#">Apri &rarr;</a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

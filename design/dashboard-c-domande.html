@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bilancio - direzione C, Le domande</title>
+<style>
+/* ==========================================================================
+   DIREZIONE C - LE DOMANDE
+   La dashboard e' un elenco di domande in italiano, una risposta ciascuna.
+   Niente confronti affiancati, niente due tabelle che dicono la stessa cosa
+   con unita' diverse: una domanda, un solo elemento visivo, poi la prossima.
+   ========================================================================== */
+:root{
+  --bg:#131317; --pan:#1b1b22; --ink:#efedf2; --dim:#948e9e; --faint:#615c6b;
+  --line:#2b2b35; --su:#6fae99; --giu:#d98a6a;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  --serif:"Iowan Old Style",Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+.pagina{max-width:940px;margin:0 auto;padding:0 40px 140px}
+
+/* --- testata appiccicata: il periodo resta sotto gli occhi mentre scorri - */
+.testata{position:sticky;top:0;z-index:5;background:#131317f2;
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:14px 0;margin-bottom:64px}
+.testata b{font-size:16px;font-weight:650}
+.finestra{display:flex;gap:4px}
+.finestra button{background:none;border:1px solid transparent;border-radius:999px;
+  color:var(--dim);font:500 13px var(--sans);padding:6px 14px;cursor:pointer}
+.finestra button[aria-pressed=true]{background:#ffffff14;color:var(--ink)}
+.finestra button:hover{color:var(--ink)}
+
+/* --- la domanda: e' il titolo, e ha la voce di una persona -------------- */
+section{margin-bottom:96px;scroll-margin-top:80px}
+.domanda{display:flex;align-items:baseline;gap:14px;margin:0 0 6px}
+.numero{font:600 12px/1 var(--mono);color:var(--faint);
+  padding-top:2px;min-width:22px}
+h2{margin:0;font:400 30px/1.25 var(--serif);letter-spacing:-.01em;
+  text-wrap:balance}
+.risposta{margin:20px 0 0 36px;font-size:20px;line-height:1.5;
+  color:var(--ink);max-width:52ch;text-wrap:pretty}
+.risposta .giu{color:var(--giu)} .risposta .su{color:var(--su)}
+.risposta b{font-weight:650;font-variant-numeric:tabular-nums}
+.dettaglio{margin:26px 0 0 36px}
+
+/* --- 1. quanto e' rimasto ---------------------------------------------- */
+.saldo{display:flex;gap:0;border:1px solid var(--line);border-radius:10px;
+  overflow:hidden;background:var(--pan)}
+.saldo div{flex:1;padding:18px 22px;border-right:1px solid var(--line)}
+.saldo div:last-child{border-right:0}
+.saldo dt{font:500 11px/1 var(--sans);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+.saldo dd{margin:0;font:600 27px/1 var(--mono);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.saldo small{display:block;margin-top:9px;font-size:12px;color:var(--dim);
+  font-weight:400}
+
+/* --- 2. cosa sta salendo ----------------------------------------------- */
+.grafico svg{width:100%;height:170px;display:block}
+.assex{display:flex;justify-content:space-between;color:var(--faint);
+  font-size:12px;margin-top:8px}
+.salite{list-style:none;margin:24px 0 0;padding:0;display:flex;
+  flex-wrap:wrap;gap:8px}
+.salite li{border:1px solid var(--line);border-radius:999px;
+  padding:7px 15px;font-size:14px;background:var(--pan)}
+.salite b{font-variant-numeric:tabular-nums}
+.salite .giu b{color:var(--giu)} .salite .su b{color:var(--su)}
+
+/* --- 3. cosa posso tagliare -------------------------------------------- */
+.leve{list-style:none;margin:0;padding:0}
+.leve li{display:grid;grid-template-columns:130px 1fr auto;gap:20px;
+  align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.leve li:first-child{border-top:0}
+.leve .quando{font-size:13px;color:var(--faint)}
+.leve .barra{height:26px;border-radius:4px;position:relative}
+.leve .barra span{position:absolute;left:12px;top:50%;
+  transform:translateY(-50%);font:500 13px var(--sans);color:#131317}
+.leve .cifra{font:600 16px var(--mono);font-variant-numeric:tabular-nums;
+  min-width:74px;text-align:right}
+.leve .come{grid-column:2/4;font-size:13px;color:var(--dim);margin-top:-6px}
+
+table{width:100%;border-collapse:collapse;margin-top:30px;
+  font-variant-numeric:tabular-nums}
+th{font:500 11px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);text-align:right;padding:0 0 10px}
+th:first-child{text-align:left}
+td{padding:10px 0;border-top:1px solid var(--line);text-align:right;
+  font-family:var(--mono);font-size:14px}
+td:first-child{text-align:left;font-family:var(--sans);font-size:15px}
+td + td{padding-left:18px}
+tbody tr:hover td{background:#ffffff08}
+.viste{display:flex;gap:22px;margin-top:8px;font:500 14px var(--sans)}
+.viste button{background:none;border:0;padding:0 0 7px;cursor:pointer;
+  color:var(--faint);font:inherit;border-bottom:2px solid transparent}
+.viste button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+
+/* --- 4. cosa non ho capito --------------------------------------------- */
+.dubbi{border:1px solid #d98a6a33;background:#d98a6a10;border-radius:10px;
+  padding:20px 24px;margin-left:36px}
+.dubbi ul{list-style:none;margin:14px 0 0;padding:0;font-size:15px}
+.dubbi li{display:flex;justify-content:space-between;gap:16px;padding:9px 0;
+  border-top:1px solid #d98a6a22;font-variant-numeric:tabular-nums}
+.dubbi li:first-child{border-top:0}
+.dubbi .q{color:var(--dim);font-family:var(--mono);font-size:13px}
+.bottone{display:inline-block;margin-top:18px;background:var(--ink);
+  color:#131317;border-radius:7px;padding:9px 18px;font:600 14px var(--sans);
+  text-decoration:none}
+
+@media(max-width:760px){
+  .pagina{padding:0 22px 90px}
+  h2{font-size:24px}
+  .risposta,.dettaglio,.dubbi{margin-left:0}
+  .saldo{flex-wrap:wrap}
+  .saldo div{flex:1 1 50%}
+  .leve li{grid-template-columns:1fr auto}
+  .leve .quando{grid-column:1/3;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="pagina">
+
+  <header class="testata">
+    <b>Bilancio</b>
+    <nav class="finestra">
+      <button aria-pressed="true">Agosto 2026</button>
+      <button>Mese scorso</button>
+      <button>Anno in corso</button>
+      <button>Tutto</button>
+    </nav>
+  </header>
+
+  <!-- 1 ------------------------------------------------------------------ -->
+  <section>
+    <div class="domanda"><span class="numero">01</span>
+      <h2>Quanto e&#39; rimasto questo mese?</h2></div>
+    <p class="risposta">Niente: sei <span class="giu">sotto di
+      <b>3.281&thinsp;&euro;</b></span>. Ma lo stipendio arriva dopo il 25,
+      quindi il mese non e&#39; ancora finito &mdash; a luglio, allo stesso
+      punto, eri messo uguale.</p>
+    <div class="dettaglio">
+      <dl class="saldo">
+        <div><dt>Uscite</dt><dd>4.031&thinsp;&euro;</dd>
+          <small class="giu">meta&#39; in piu&#39; di luglio (1&ndash;25)</small></div>
+        <div><dt>Entrate</dt><dd>750&thinsp;&euro;</dd>
+          <small>come luglio (1&ndash;25)</small></div>
+        <div><dt>Spesa ordinaria</dt><dd>2.812&thinsp;&euro;</dd>
+          <small class="su">un quinto in meno</small></div>
+        <div><dt>Media 56 mesi</dt><dd>3.119&thinsp;&euro;</dd>
+          <small>il tuo passo normale</small></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 2 ------------------------------------------------------------------ -->
+  <section>
+    <div class="domanda"><span class="numero">02</span>
+      <h2>Cosa sta salendo?</h2></div>
+    <p class="risposta">La <b>Casa</b>, e da sola: nei primi otto mesi del 2026
+      costa <span class="giu"><b>3.996&thinsp;&euro;</b> in piu&#39;</span> dello
+      stesso periodo 2025. Tutto il resto e&#39; fermo o in calo.</p>
+    <div class="dettaglio grafico">
+      <svg viewBox="0 0 1000 170" preserveAspectRatio="none" aria-hidden="true">
+        <rect x="957" y="0" width="43" height="170" fill="#ffffff0d"/>
+        <line x1="0" y1="88" x2="1000" y2="88" stroke="#2b2b35" stroke-width="1"/>
+        <polyline fill="none" stroke="#d98a6a" stroke-width="2.2"
+          stroke-linejoin="round" points="
+          0,131 43,83 87,116 130,128 174,110 217,50 261,102 304,114 348,71
+          391,112 435,125 478,125 522,11 565,119 609,75 652,56 696,68 739,69
+          783,65 826,45 870,97 913,72 957,102 1000,87"/>
+        <circle cx="1000" cy="87" r="4.5" fill="#d98a6a"/>
+        <text x="990" y="110" fill="#948e9e" font-size="13"
+          font-family="ui-sans-serif,system-ui" text-anchor="end">ago 4.031 &euro;</text>
+        <text x="0" y="82" fill="#615c6b" font-size="12"
+          font-family="ui-sans-serif,system-ui">media 3.119 &euro;</text>
+      </svg>
+      <div class="assex"><span>set 2024</span><span>set 2025</span><span>ago 2026</span></div>
+      <ul class="salite">
+        <li class="giu">Casa <b>+3.996 &euro;</b></li>
+        <li class="giu">Viaggi <b>da 110 a 1.152 &euro;</b></li>
+        <li class="giu">Personale <b>+626 &euro;</b></li>
+        <li class="giu">Auto <b>+388 &euro;</b></li>
+        <li class="su">Shopping <b>-1.469 &euro;</b></li>
+        <li class="su">Comunita&#39; <b>-137 &euro;</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 ------------------------------------------------------------------ -->
+  <section>
+    <div class="domanda"><span class="numero">03</span>
+      <h2>Cosa posso tagliare, e in quanto tempo?</h2></div>
+    <p class="risposta">Le <b>discrezionali</b> valgono
+      <b>833&thinsp;&euro; al mese</b> e non hanno bisogno di nessuna
+      trattativa: basta decidere. Sotto, le stesse spese viste per voce.</p>
+    <div class="dettaglio">
+      <ul class="leve">
+        <li><span class="quando">subito</span>
+          <span class="barra" style="background:#d9a441;width:100%">
+            <span>Discrezionali</span></span>
+          <span class="cifra">833 &euro;</span>
+          <span class="come">basta decidere di non farlo</span></li>
+        <li><span class="quando">qualche mese</span>
+          <span class="barra" style="background:#7c9fd4;width:87%">
+            <span>Ricorrenti</span></span>
+          <span class="cifra">728 &euro;</span>
+          <span class="come">disdette e cambio fornitore</span></li>
+        <li><span class="quando">una volta l&#39;anno</span>
+          <span class="barra" style="background:#9b8ec4;width:62%">
+            <span>Vincolate</span></span>
+          <span class="cifra">520 &euro;</span>
+          <span class="come">surroga del mutuo, cambio polizza</span></li>
+        <li><span class="quando">settimane</span>
+          <span class="barra" style="background:#6fae99;width:51%">
+            <span>Quotidiane</span></span>
+          <span class="cifra">423 &euro;</span>
+          <span class="come">dove fai la spesa, e quanto spesso</span></li>
+        <li><span class="quando">prima capirle</span>
+          <span class="barra" style="background:#8a8a8a;width:15%">
+            <span>Da chiarire</span></span>
+          <span class="cifra">129 &euro;</span>
+          <span class="come">non sai ancora cosa sono</span></li>
+        <li><span class="quando">non si comprime</span>
+          <span class="barra" style="background:#d98a6a;width:14%">
+            <span>Straordinarie</span></span>
+          <span class="cifra">113 &euro;</span>
+          <span class="come">va messa da parte, non tagliata</span></li>
+      </ul>
+
+      <div class="viste" role="tablist">
+        <button role="tab" aria-selected="true">per area</button>
+        <button role="tab" aria-selected="false">per negozio</button>
+        <button role="tab" aria-selected="false">solo i ricorrenti</button>
+      </div>
+      <table>
+        <thead><tr><th>Area</th><th>Al mese</th><th>All&#39;anno</th>
+          <th>Quota</th><th>Rispetto al 2025</th></tr></thead>
+        <tbody>
+          <tr><td>Casa</td><td>1.441 &euro;</td><td>17.290 &euro;</td>
+            <td>55%</td><td class="giu">+3.996 &euro;</td></tr>
+          <tr><td>Cibo &amp; Mangiare</td><td>589 &euro;</td><td>7.063 &euro;</td>
+            <td>23%</td><td>-52 &euro;</td></tr>
+          <tr><td>Shopping</td><td>292 &euro;</td><td>3.505 &euro;</td>
+            <td>11%</td><td class="su">-1.469 &euro;</td></tr>
+          <tr><td>Da identificare</td><td>129 &euro;</td><td>1.551 &euro;</td>
+            <td>5%</td><td class="giu">+1.240 &euro;</td></tr>
+          <tr><td>Personale</td><td>82 &euro;</td><td>985 &euro;</td>
+            <td>3%</td><td class="giu">+626 &euro;</td></tr>
+          <tr><td>Comunita&#39;</td><td>51 &euro;</td><td>615 &euro;</td>
+            <td>2%</td><td class="su">-137 &euro;</td></tr>
+          <tr><td>Trasporto</td><td>45 &euro;</td><td>546 &euro;</td>
+            <td>2%</td><td>+109 &euro;</td></tr>
+          <tr><td>Auto</td><td>43 &euro;</td><td>521 &euro;</td>
+            <td>2%</td><td class="giu">+388 &euro;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4 ------------------------------------------------------------------ -->
+  <section>
+    <div class="domanda"><span class="numero">04</span>
+      <h2>Cosa non ho ancora capito?</h2></div>
+    <p class="risposta">Trentacinque righe che nessuna regola ha saputo
+      classificare, per <b>1.551&thinsp;&euro;</b>. Finche&#39; restano li&#39;,
+      la voce &ldquo;Da identificare&rdquo; e&#39; la quarta spesa di casa.</p>
+    <div class="dubbi">
+      <ul>
+        <li><span>Bonifici in uscita senza chi li riceve</span>
+          <span class="q">10 righe &middot; 9.471 &euro;</span></li>
+        <li><span>Prelievi di contante</span>
+          <span class="q">31 righe &middot; 1.524 &euro;</span></li>
+        <li><span>Negozi visti una volta sola</span>
+          <span class="q">12 righe &middot; 1.551 &euro;</span></li>
+      </ul>
+      <a class="bottone" href="#">Apri le righe da rivedere</a>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
