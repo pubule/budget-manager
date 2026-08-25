@@ -31,3 +31,8 @@ state.json
 
 # Il backup MoneyWiz pesa 1,8 MB ed e' gia' un archivio a se'.
 backup/*.zip
+
+# Il canvas di design: 2,2 MB di editor impacchettato, si rigenera dai
+# sorgenti .dc.html che stanno accanto. I sorgenti si versionano, questo no.
+design/layout-dashboard-bilancio.html
+

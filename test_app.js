@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
- setStatus, el, whole, uniq,
+ setStatus, el, whole, uniq, SPAN,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -184,10 +184,16 @@ for (const g of perNatura) console.log(`    ${g.name.padEnd(16)} ${g.total.toFix
 console.log("=== grafici ===");
 const bars = api.barChart(perNatura.map(g => ({name: g.name, value: g.total})),
                           {drill: "nature"});
-check("barChart produce SVG", bars.startsWith("<svg") && bars.endsWith("</svg>"));
+// Le barre sono HTML, non SVG: un viewBox fisso rimpicciolirebbe anche le
+// etichette quando il riquadro si stringe.
+check("barChart produce HTML", bars.startsWith('<div class="bars">')
+      && bars.endsWith("</div>"));
 check("barChart ha una barra per voce",
-      (bars.match(/<rect/g) || []).length === perNatura.length);
+      (bars.match(/class="bar-track"/g) || []).length === perNatura.length);
 check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'));
+check("le barre sono in percentuale, cosi' si adattano al riquadro",
+      /width:\d+(\.\d+)?%/.test(bars));
+check("la barra piu' lunga arriva al 100%", bars.includes("width:100.0%"));
 const line = api.lineChart(["2025-01", "2025-02", "2025-03"],
   [{name: "x", values: [10, 40, 20], color: "#000"}]);
 check("lineChart produce SVG", line.includes("<polyline"));
@@ -281,6 +287,24 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
   const conSotto = state.transactions.filter(t => t.Sottocategoria);
   check("il nome intero porta il separatore quando i livelli sono due",
         conSotto.length === 0 || api.whole(conSotto[0]).includes(" > "));
+}
+
+// La griglia della dashboard: ogni riquadro deve dichiarare quante colonne
+// occupa. Un riquadro nuovo dimenticato in SPAN prenderebbe tutta la riga in
+// silenzio, e la disposizione tornerebbe una colonna sola senza che nessuno
+// se ne accorga.
+{
+  const html = api.VIEWS.dashboard(api.filtered());
+  check("i riquadri della dashboard stanno su una griglia",
+        html.startsWith('<div class="grid">'));
+  const senzaSpan = state.layout
+    .filter(c => c.visibile && api.CARDS[c.id] && api.SPAN[c.id] === undefined)
+    .map(c => c.id);
+  check("ogni riquadro visibile dichiara la sua larghezza",
+        senzaSpan.length === 0, senzaSpan.join(", "));
+  const larghezze = Object.values(api.SPAN);
+  check("nessun riquadro chiede piu' di 12 colonne",
+        larghezze.every(n => n >= 1 && n <= 12), larghezze.join(","));
 }
 
 console.log(failures ? `\n${failures} controlli falliti` : "\nTutti i controlli passati");

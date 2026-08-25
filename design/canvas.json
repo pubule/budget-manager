@@ -1,0 +1,21 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1600, "h": 1080,
+      "title": "A · Griglia fluida" },
+    { "file": "Barra.dc.html", "x": 1720, "y": 0, "w": 1600, "h": 1080,
+      "title": "B · Rotaia dei filtri" },
+    { "file": "Editoriale.dc.html", "x": 3440, "y": 0, "w": 1600, "h": 1080,
+      "title": "C · Editoriale senza cornici" }
+  ],
+  "annotations": [
+    { "id": "problema", "x": 0, "y": -230, "w": 520,
+      "text": "Oggi .wrap e' fermo a max-width:1060px.\nSu uno schermo da 1920 restano 860px vuoti,\ne i riquadri si impilano in una colonna sola.\n\nTre direzioni, stessi token dell'app,\nnumeri veri dal consolidato." },
+    { "id": "nota-a", "x": 0, "y": 1120, "w": 460,
+      "text": "A · GRIGLIA FLUIDA\nCambio minimo: la pagina si allarga e i riquadri\nvanno su una griglia a 12 colonne.\nTutto quello che c'e' resta dov'e'.\n\nCosto: una manciata di righe di CSS.\nLimite: la barra dei filtri resta in alto e\nscorre via quando scendi." },
+    { "id": "nota-b", "x": 1720, "y": 1120, "w": 460,
+      "text": "B · ROTAIA DEI FILTRI\nI filtri passano a sinistra e restano sempre\nvisibili. L'area di lavoro prende il resto.\n\nGuadagno: non risali mai per cambiare periodo.\nCosto: tocca la struttura HTML, non solo il CSS.\nLimite: 250px in meno per i contenuti, e sotto\ni 1100px la rotaia va comunque richiusa." },
+    { "id": "nota-c", "x": 3440, "y": 1120, "w": 460,
+      "text": "C · EDITORIALE SENZA CORNICI\nVia i bordi dei riquadri: separano l'aria e un\nfilo. I numeri diventano piu' grandi.\n\nGuadagno: si legge come un rapporto, meno\nrumore visivo, piu' dati per schermata.\nCosto: perde i riquadri come oggetti spostabili,\ne la scheda Componi si basa su quelli." }
+  ],
+  "launch": { "view": "canvas" }
+}

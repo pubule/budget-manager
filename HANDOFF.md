@@ -5,6 +5,52 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (25/08/2026) — la pagina usa tutta la larghezza
+
+`.wrap` era fermo a `max-width:1060px`. Su uno schermo largo restavano
+centinaia di pixel vuoti e gli otto riquadri si impilavano in una colonna
+sola, alta come un palazzo.
+
+Scelta dall'utente fra tre direzioni disegnate su canvas: **rotaia dei filtri
+a sinistra** più griglia a 12 colonne per i riquadri.
+
+- I filtri, il titolo e i pulsanti di elaborazione stanno in una `.rail`
+  `position:sticky` alta `100vh`: non scorrono via, quindi cambiare periodo
+  non richiede di risalire in cima. È questo che permette al resto di
+  allargarsi quanto vuole.
+- `Esporta` e `Log` sono passati a destra nella barra delle schede. Il `<nav>`
+  ora contiene un `#tablist` che `render()` riscrive, perché riscrivere tutto
+  il `<nav>` cancellava quei due pulsanti.
+- `VIEWS.dashboard` avvolge i riquadri in `.grid` e ognuno prende una classe
+  `sp<N>` dalla mappa `SPAN`. Un riquadro nuovo non elencato lì prende tutta
+  la riga: c'è un controllo in `test_app.js` che lo segnala.
+
+### Due difetti trovati guardando la pagina, non i test
+
+**Le soglie responsive erano in pixel sbagliati.** Avevo messo
+`@media (max-width:1500px)` per sfilare i due grafici. Ma le media query sono
+in pixel CSS, e su Windows con lo zoom di sistema al 125% uno schermo da 1720
+pixel veri ne dichiara **1375**: la regola scattava proprio sugli schermi
+larghi, cioè esattamente dove servivano affiancati. Sceso a 1250 e 1050.
+
+**`barChart()` rimpiccioliva anche il testo.** Era un SVG con
+`viewBox="0 0 760 …"` e `width:100%`: dentro una colonna da 432px scalava
+tutto al 57%, e le etichette scendevano a sette pixel. Riscritto in HTML —
+una griglia di tre colonne per riga, etichetta / traccia / importo — così le
+etichette restano alla loro dimensione e si adatta solo la barra, che è
+l'unica cosa che deve adattarsi. È anche meno codice dell'SVG.
+
+Nessuno dei due sarebbe emerso da `test_app.js`: misurano il DOM, non come
+appare. Sono usciti aprendo la pagina in un browser a dimensione reale.
+
+### Verificato sulla pagina viva
+
+Riquadri affiancati alle larghezze attese (432 e 610 per i grafici, 521 per le
+classifiche), clic su una barra che filtra per natura, tutte e sei le schede
+senza scroll orizzontale, e il ripiegamento a fascia sotto i 1100px.
+
+---
+
 ## IN CORSO (25/08/2026) — categorie a due livelli
 
 `Casa > Casalinghi` era una stringa sola. Ora sono due campi: **Categoria**

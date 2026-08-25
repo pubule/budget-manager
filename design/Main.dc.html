@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    /* Token presi da app.html, non riscritti a occhio. */
+    .app{--bg:#fbfaf8;--card:#fff;--ink:#1c1a17;--dim:#6b6560;--line:#e6e1da;
+      --accent:#3f6f5f;--warn:#b5654a;--soft:#f2efe9}
+    .app.scuro{--bg:#16161a;--card:#1e1e24;--ink:#eceaf0;--dim:#9c96a3;
+      --line:#31313a;--accent:#6fae99;--warn:#d98a6a;--soft:#26262e}
+    body{margin:0}
+    .app{background:var(--bg);color:var(--ink);
+      font:15px/1.55 "Iowan Old Style",Georgia,serif;min-height:100%}
+    .app *{box-sizing:border-box}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{color:var(--ink)}
+    .ui{font-family:ui-sans-serif,system-ui,sans-serif}
+    h1{font-size:26px;margin:0;letter-spacing:-.02em}
+    h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;
+      color:var(--dim);margin:0 0 12px;font-family:ui-sans-serif,system-ui,sans-serif}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+      padding:18px 20px}
+    .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
+      padding:15px 17px}
+    .kpi b{display:block;font-size:23px;letter-spacing:-.02em;font-weight:600;
+      font-family:ui-sans-serif,system-ui,sans-serif}
+    .kpi span{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+      color:var(--dim);font-family:ui-sans-serif,system-ui,sans-serif}
+    .kpi.good b{color:var(--accent)}
+    .kpi.bad b{color:var(--warn)}
+    .ctl{font:13px ui-sans-serif,system-ui,sans-serif;color:var(--ink);
+      background:var(--card);border:1px solid var(--line);border-radius:7px;
+      padding:6px 10px}
+    .ctl.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .lab{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.08em}
+    .pill{font:12px ui-sans-serif,system-ui,sans-serif;background:var(--card);
+      border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--ink)}
+    .pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+    table{border-collapse:collapse;width:100%;
+      font:13px ui-sans-serif,system-ui,sans-serif}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.09em;
+      color:var(--dim);border-bottom:1px solid var(--line);padding:7px 12px 7px 0;
+      font-weight:600;white-space:nowrap}
+    td{padding:6px 12px 6px 0;border-bottom:1px solid var(--line)}
+    tr:last-child td{border-bottom:none}
+    td.num{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
+    text.lbl{font:12px ui-sans-serif,system-ui,sans-serif;fill:var(--ink)}
+    text.val{font:11px ui-monospace,monospace;fill:var(--dim)}
+    .note{font-size:13px;color:var(--dim);border-left:2px solid var(--line);
+      padding-left:14px;margin:12px 0 0}
+    .tab{border:none;background:none;padding:9px 14px;color:var(--dim);
+      border-bottom:2px solid transparent;font:13px ui-sans-serif,system-ui,sans-serif}
+    .tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  </style>
+</helmet>
+
+<div class="app {{tema}}" style="width:1600px;padding:22px 40px 40px">
+
+  <!-- intestazione -->
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+    <h1>Bilancio familiare</h1>
+    <div style="flex-grow:1"></div>
+    <span class="ui" style="font-size:12px;color:var(--dim);display:flex;
+      align-items:center;gap:6px">
+      <span style="width:9px;height:9px;border-radius:50%;
+        background:var(--accent);display:inline-block"></span>1.845 transazioni</span>
+    <span class="ctl">Ricarica</span>
+    <span class="ctl">Analizza con LLM (21)</span>
+    <span class="ctl">Esporta HTML + Excel</span>
+    <span class="ctl">Log</span>
+  </div>
+
+  <div style="display:flex;gap:4px;border-bottom:1px solid var(--line);
+    margin-bottom:18px">
+    <span class="tab on">Dashboard</span>
+    <span class="tab">Revisione</span>
+    <span class="tab">Transazioni</span>
+    <span class="tab">Categorie</span>
+    <span class="tab">Regole</span>
+    <span class="tab">Componi</span>
+  </div>
+
+  <!-- filtri: una riga sola, perche' a 1600px ci sta tutto -->
+  <div class="card" style="padding:10px 14px;display:flex;gap:10px;
+    align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <span class="pill on">Mese in corso</span>
+    <span class="pill">Ultimi 3 mesi</span>
+    <span class="pill">Anno in corso</span>
+    <span class="pill">Ultimo mese con dati</span>
+    <span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span>
+    <span class="lab">conto</span><span class="ctl">tutti</span>
+    <span class="lab">natura</span><span class="ctl">tutte</span>
+    <span class="lab">categoria</span><span class="ctl">tutte</span>
+    <span class="lab">sotto</span><span class="ctl">tutte</span>
+    <span class="ctl" style="flex-grow:1;color:var(--dim)">cerca nella descrizione</span>
+  </div>
+
+  <!-- indicatori: sei in fila, non tre con il vuoto a destra -->
+  <div style="display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:14px;margin-bottom:14px">
+    <div class="kpi good"><span>entrate</span><b>120.095 €</b></div>
+    <div class="kpi bad"><span>uscite</span><b>-148.689 €</b></div>
+    <div class="kpi bad"><span>risparmio</span><b>-28.594 €</b></div>
+    <div class="kpi"><span>tasso di risparmio</span><b>-23,8%</b></div>
+    <div class="kpi"><span>uscite al mese</span><b>-2.655 €</b></div>
+    <div class="kpi"><span>periodo coperto</span><b>56 mesi</b></div>
+  </div>
+
+  <!-- riga: dove puoi agire + andamento, affiancati -->
+  <div style="display:grid;grid-template-columns:repeat(12, minmax(0, 1fr));
+    gap:14px;margin-bottom:14px">
+
+    <div class="card" style="grid-column:span 5">
+      <h2>Dove puoi agire</h2>
+      <svg viewBox="0 0 470 190" style="width:100%;height:auto">
+        <text x="0" y="20" class="lbl">Discrezionali</text>
+        <rect x="150" y="8" width="245" height="17" rx="3" fill="#d99442"/>
+        <text x="403" y="21" class="val">35.714</text>
+        <text x="0" y="55" class="lbl">Vincolate</text>
+        <rect x="150" y="43" width="234" height="17" rx="3" fill="#7c6a9c"/>
+        <text x="392" y="56" class="val">34.067</text>
+        <text x="0" y="90" class="lbl">Ricorrenti</text>
+        <rect x="150" y="78" width="181" height="17" rx="3" fill="#4a7fb5"/>
+        <text x="339" y="91" class="val">26.407</text>
+        <text x="0" y="125" class="lbl">Straordinarie</text>
+        <rect x="150" y="113" width="181" height="17" rx="3" fill="#b5654a"/>
+        <text x="339" y="126" class="val">26.334</text>
+        <text x="0" y="160" class="lbl">Quotidiane</text>
+        <rect x="150" y="148" width="159" height="17" rx="3" fill="#3f9e8c"/>
+        <text x="317" y="161" class="val">23.128</text>
+      </svg>
+      <p class="note">Le prime due righe sono le meno comprimibili:
+        insieme fanno il 47% delle uscite.</p>
+    </div>
+
+    <div class="card" style="grid-column:span 7">
+      <h2>Andamento</h2>
+      <svg viewBox="0 0 640 210" style="width:100%;height:auto">
+        <line x1="42" y1="20" x2="628" y2="20" stroke="var(--line)"/>
+        <line x1="42" y1="95" x2="628" y2="95" stroke="var(--line)"/>
+        <line x1="42" y1="170" x2="628" y2="170" stroke="var(--line)"/>
+        <text x="0" y="24" class="val">6,0k</text>
+        <text x="0" y="99" class="val">3,0k</text>
+        <text x="0" y="174" class="val">0,0k</text>
+        <polyline fill="none" stroke="#3f6f5f" stroke-width="2.5"
+          stroke-linejoin="round"
+          points="42,140 107,128 172,146 237,120 302,132 367,112 432,126 497,104 562,118 628,110"/>
+        <polyline fill="none" stroke="#b5654a" stroke-width="2.5"
+          stroke-linejoin="round"
+          points="42,118 107,96 172,132 237,88 302,110 367,74 432,102 497,66 562,94 628,80"/>
+        <text x="42" y="200" class="val" text-anchor="middle">11-25</text>
+        <text x="172" y="200" class="val" text-anchor="middle">01-26</text>
+        <text x="302" y="200" class="val" text-anchor="middle">03-26</text>
+        <text x="432" y="200" class="val" text-anchor="middle">05-26</text>
+        <text x="562" y="200" class="val" text-anchor="middle">07-26</text>
+      </svg>
+      <div style="display:flex;gap:16px;margin-top:6px;
+        font:12px ui-sans-serif,system-ui,sans-serif;color:var(--dim)">
+        <span><i style="display:inline-block;width:11px;height:11px;
+          border-radius:2px;background:#3f6f5f;margin-right:5px"></i>entrate</span>
+        <span><i style="display:inline-block;width:11px;height:11px;
+          border-radius:2px;background:#b5654a;margin-right:5px"></i>uscite</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- riga: tre tabelle affiancate invece di tre schermate di scroll -->
+  <div style="display:grid;grid-template-columns:repeat(12, minmax(0, 1fr));
+    gap:14px">
+
+    <div class="card" style="grid-column:span 4">
+      <h2>Aree, anno su anno</h2>
+      <table>
+        <thead><tr><th>area</th><th style="text-align:right">2025</th>
+          <th style="text-align:right">2026</th><th style="text-align:right">diff</th></tr></thead>
+        <tbody>
+          <tr><td>Casa</td><td class="num">-19.402</td><td class="num">-24.870</td>
+            <td class="num" style="color:var(--warn)">-5.468</td></tr>
+          <tr><td>Cibo &amp; Mangiare</td><td class="num">-8.114</td><td class="num">-7.902</td>
+            <td class="num">+212</td></tr>
+          <tr><td>Shopping</td><td class="num">-4.031</td><td class="num">-5.286</td>
+            <td class="num" style="color:var(--warn)">-1.255</td></tr>
+          <tr><td>Personale</td><td class="num">-1.204</td><td class="num">-1.388</td>
+            <td class="num" style="color:var(--warn)">-184</td></tr>
+          <tr><td>Trasporto</td><td class="num">-1.117</td><td class="num">-1.049</td>
+            <td class="num">+68</td></tr>
+          <tr><td>Assistenza Sanitaria</td><td class="num">-836</td><td class="num">-611</td>
+            <td class="num">+225</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column:span 4">
+      <h2>Voci per costo annuo</h2>
+      <table>
+        <thead><tr><th>voce</th><th style="text-align:right">all'anno</th>
+          <th style="text-align:right">al mese</th><th style="text-align:right">tx</th></tr></thead>
+        <tbody>
+          <tr><td>Casa &gt; Ipoteca/Affitto</td><td class="num">-5.880</td>
+            <td class="num">-490</td><td class="num">88</td></tr>
+          <tr><td>Cibo &amp; Mangiare &gt; Alimentari</td><td class="num">-3.940</td>
+            <td class="num">-328</td><td class="num">369</td></tr>
+          <tr><td>Casa &gt; Bollette</td><td class="num">-3.859</td>
+            <td class="num">-322</td><td class="num">110</td></tr>
+          <tr><td>Cibo &amp; Mangiare &gt; Ristoranti</td><td class="num">-2.583</td>
+            <td class="num">-215</td><td class="num">238</td></tr>
+          <tr><td>Casa &gt; Manutenzione</td><td class="num">-2.109</td>
+            <td class="num">-176</td><td class="num">40</td></tr>
+          <tr><td>Casa &gt; Mobili</td><td class="num">-2.003</td>
+            <td class="num">-167</td><td class="num">103</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column:span 4">
+      <h2>Dove finiscono i soldi</h2>
+      <table>
+        <thead><tr><th>merchant</th><th style="text-align:right">costo annuo</th>
+          <th style="text-align:right">mesi</th></tr></thead>
+        <tbody>
+          <tr><td>Mutuo casa</td><td class="num">-2.356</td><td class="num">56</td></tr>
+          <tr><td>Iper Rossetto</td><td class="num">-1.938</td><td class="num">51</td></tr>
+          <tr><td>Borgo Mangano</td><td class="num">-1.707</td><td class="num">44</td></tr>
+          <tr><td>Gas</td><td class="num">-1.495</td><td class="num">49</td></tr>
+          <tr><td>Agsm Aim</td><td class="num">-1.460</td><td class="num">47</td></tr>
+          <tr><td>Bolletta Luce</td><td class="num">-1.020</td><td class="num">38</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Presenti in molti mesi: la lista da cui partire
+        per le disdette.</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"tema":{"editor":"enum","options":["chiaro","scuro"],"default":"chiaro","section":"Aspetto"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { tema: this.props.tema ?? 'chiaro' };
+  }
+}
+</script>
+</body>
+</html>

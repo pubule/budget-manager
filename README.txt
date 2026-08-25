@@ -108,11 +108,38 @@ che parte dalle aree e scende nel dettaglio quando ne clicchi una. Il link
 "< tutte le categorie" risale.
 
 
-I PULSANTI IN ALTO
-------------------
+COM'E' DISPOSTA LA PAGINA
+-------------------------
+
+A sinistra una ROTAIA che non scorre via: titolo, pulsanti e tutti i filtri.
+Cambiare periodo non richiede piu' di risalire in cima.
+
+A destra l'area di lavoro, che prende tutta la larghezza che c'e'. I riquadri
+della dashboard stanno su una griglia a 12 colonne, e ognuno dichiara quante
+colonne occupa nella mappa SPAN dentro app.html:
+
+    indicatori 12    natura 5     andamento 7    aree 6
+    voci 6           ricorrenti 6 merchant 6     revisione 12
+
+Un riquadro nuovo che non compare in SPAN prende tutta la riga. C'e' un
+controllo in test_app.js che lo segnala.
+
+Restringendo la finestra si sfilano prima i due grafici (sotto i 1250px CSS),
+poi tutto torna in colonna (1050px), e sotto i 1100px la rotaia diventa una
+fascia in cima coi filtri di nuovo in orizzontale.
+
+ATTENZIONE alle soglie: sono in pixel CSS. Su Windows con lo zoom di sistema
+al 125% uno schermo da 1720 pixel veri ne dichiara 1375, quindi una soglia che
+sembra generosa taglia fuori proprio gli schermi larghi.
+
+
+I PULSANTI
+----------
 
 Caricare i dati e farli analizzare dal modello sono due cose diverse, e i
 pulsanti sono separati apposta.
+
+Nella rotaia a sinistra:
 
     Carica N export      compare solo quando ci sono file in attesa in
                          export/. Legge, archivia, ricostruisce. Secondi.
@@ -124,6 +151,8 @@ pulsanti sono separati apposta.
     (N)                  nessun livello deterministico ha saputo risolvere.
                          Il numero fra parentesi dice quante sono: a zero il
                          pulsante e' spento. Minuti.
+
+In fondo alla barra delle schede, a destra: "Esporta HTML + Excel" e "Log".
 
 I primi due non chiamano mai il modello: a parita' di file danno sempre lo
 stesso consolidato, byte per byte. E' la proprieta' che rende il caricamento

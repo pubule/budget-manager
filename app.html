@@ -13,8 +13,20 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
 font:15px/1.55 "Iowan Old Style",Georgia,serif}
-.wrap{max-width:1060px;margin:0 auto;padding:22px 20px 80px}
-h1{font-size:26px;margin:0;letter-spacing:-.02em}
+/* Rotaia a sinistra piu' area di lavoro che prende tutto il resto. Prima la
+   pagina era ferma a 1060px: su uno schermo largo restavano centinaia di
+   pixel vuoti e i riquadri si impilavano in una colonna sola. */
+.wrap{display:flex;align-items:flex-start}
+.rail{position:sticky;top:0;height:100vh;width:252px;flex-shrink:0;
+overflow-y:auto;background:var(--card);border-right:1px solid var(--line);
+padding:20px 18px;display:flex;flex-direction:column;gap:14px}
+.rail header{display:block;margin:0}
+.rail .acts{display:flex;flex-direction:column;gap:6px}
+.rail .acts button{width:100%}
+.railfoot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.railfoot .status{display:block;line-height:1.5}
+.main{flex:1 1 auto;min-width:0;padding:20px 26px 80px}
+h1{font-size:21px;margin:0;letter-spacing:-.02em}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);
 margin:0 0 12px;font-family:ui-sans-serif,system-ui,sans-serif}
 .ui{font-family:ui-sans-serif,system-ui,sans-serif}
@@ -34,21 +46,47 @@ button:hover{border-color:var(--dim)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.link{border:none;background:none;color:var(--dim);padding:2px 5px}
 button.link:hover{color:var(--ink)}
-nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:16px 0 20px}
-nav button{border:none;background:none;border-radius:0;padding:9px 14px;
+nav{display:flex;gap:4px;align-items:flex-end;
+border-bottom:1px solid var(--line);margin:0 0 16px}
+#tablist{display:flex;gap:4px}
+nav #tablist button{border:none;background:none;border-radius:0;padding:9px 14px;
 border-bottom:2px solid transparent;color:var(--dim)}
-nav button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+nav #tablist button.on{color:var(--ink);border-bottom-color:var(--accent);
+font-weight:600}
+nav>button{margin-bottom:7px}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
 background:var(--card);border:1px solid var(--line);border-radius:10px;
 padding:10px 12px;margin-bottom:14px}
 .bar label{font:11px ui-sans-serif,system-ui,sans-serif;color:var(--dim);
 text-transform:uppercase;letter-spacing:.08em}
+/* Dentro alla rotaia la stessa barra diventa una colonna: niente cornice,
+   perche' la rotaia gliela fa gia' lei. */
+.rail .bar{flex-direction:column;align-items:stretch;gap:4px;border:none;
+background:none;padding:0;margin:0}
+.rail .bar label{margin-top:8px}
+.rail .bar select,.rail .bar input{width:100%;min-width:0}
+.rail .bar .link{align-self:flex-start;margin-top:10px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .chip{font:12px ui-sans-serif,system-ui,sans-serif;background:var(--soft);
 border:1px solid var(--line);border-radius:20px;padding:3px 10px;cursor:pointer}
 .chip:hover{border-color:var(--warn)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
 padding:18px 20px;margin-bottom:14px}
+/* I riquadri della dashboard su griglia: due grafici affiancati e tre tabelle
+   in fila invece di una colonna sola alta come un palazzo. Ogni riquadro
+   dichiara quante colonne occupa in SPAN, dentro app.html. */
+.grid{display:grid;grid-template-columns:repeat(12, minmax(0, 1fr));
+gap:14px;align-items:start}
+.grid>.card{margin-bottom:0;grid-column:span 12}
+.grid>.sp5{grid-column:span 5}
+.grid>.sp6{grid-column:span 6}
+.grid>.sp7{grid-column:span 7}
+/* Stretto: prima si sfilano i due grafici, che hanno bisogno di larghezza,
+   poi tutto torna in colonna. Le soglie sono in pixel CSS, che su Windows al
+   125% sono gia' un quinto in meno di quelli veri: una soglia a 1500 sfilava
+   i grafici su uno schermo da 1720, cioe' proprio dove serviva affiancarli. */
+@media (max-width:1250px){.grid>.sp5,.grid>.sp7{grid-column:span 12}}
+@media (max-width:1050px){.grid>.sp5,.grid>.sp6,.grid>.sp7{grid-column:span 12}}
 .card>.head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:12px;
 margin-bottom:14px}
@@ -65,6 +103,16 @@ text.axis{font:10px ui-sans-serif,system-ui,sans-serif;fill:var(--dim)}
 line.grid{stroke:var(--line);stroke-width:1}
 svg .hit{cursor:pointer}
 svg .hit:hover rect{opacity:.75}
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar-row{display:grid;grid-template-columns:minmax(84px,168px) 1fr auto;
+gap:10px;align-items:center;
+font:12px ui-sans-serif,system-ui,sans-serif}
+.bar-row.hit{cursor:pointer}
+.bar-row.hit:hover i{opacity:.72}
+.bar-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{display:block;height:16px;min-width:0}
+.bar-track i{display:block;height:100%;border-radius:3px;min-width:2px}
+.bar-val{font:11px ui-monospace,monospace;color:var(--dim);white-space:nowrap}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;
 font:12px ui-sans-serif,system-ui,sans-serif;color:var(--dim)}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;
@@ -93,6 +141,8 @@ system-ui,sans-serif}
 .wide{min-width:260px}
 .quick{display:flex;gap:5px;flex-wrap:wrap;width:100%;align-items:center;
 padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
+.rail .quick{padding-bottom:0;margin-bottom:0;border-bottom:none}
+.rail .quick .anchor{margin-left:0;width:100%}
 .quick button{padding:4px 11px;border-radius:20px;font-size:12px}
 .quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .quick .anchor{font-size:11px;color:var(--dim);margin-left:auto}
@@ -117,41 +167,68 @@ color:var(--dim)}
 @media (max-width:1100px){
   #log{width:100%;border-left:none}
   body.log-on .wrap{margin-right:0;display:none}
+  /* Sotto questa larghezza la rotaia non ci sta di fianco: torna una fascia
+     in cima, coi filtri di nuovo in orizzontale. Se restasse alta 100vh
+     mangerebbe tutto lo schermo. */
+  .wrap{display:block}
+  .rail{position:static;height:auto;width:auto;overflow:visible;
+    border-right:none;border-bottom:1px solid var(--line)}
+  .rail .bar{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+  .rail .bar label{margin-top:0}
+  .rail .bar select,.rail .bar input{width:auto}
+  .rail .acts{flex-direction:row;flex-wrap:wrap}
+  .rail .acts button{width:auto}
+  .railfoot{margin-top:0}
+  .main{padding:16px 18px 60px}
 }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Bilancio familiare</h1>
-    <div class="grow"></div>
-    <span class="status" id="status"></span>
-    <button id="btn-load" class="hide">Carica dati</button>
-    <button id="btn-run">Ricarica</button>
-    <button id="btn-llm">Analizza con LLM</button>
-    <button id="btn-export">Esporta HTML + Excel</button>
-    <button id="btn-log">Log</button>
-  </header>
-  <div class="status ui" id="source"></div>
+  <!-- I filtri stanno in una rotaia che non scorre via: si cambia periodo
+       senza risalire in cima, ed e' il motivo per cui il resto della pagina
+       puo' allargarsi quanto vuole. -->
+  <aside class="rail ui" id="rail">
+    <header>
+      <h1>Bilancio</h1>
+      <span class="status" id="status"></span>
+    </header>
+    <div class="acts">
+      <button id="btn-load" class="hide">Carica dati</button>
+      <button id="btn-run">Ricarica</button>
+      <button id="btn-llm">Analizza con LLM</button>
+    </div>
 
-  <nav id="tabs"></nav>
-  <div id="error" class="err hide"></div>
+    <div class="bar ui" id="filters">
+      <div class="quick" id="f-quick"></div>
+      <label>dal</label><input type="date" id="f-from">
+      <label>al</label><input type="date" id="f-to">
+      <label>conto</label><select id="f-account"></select>
+      <label>natura</label><select id="f-nature"></select>
+      <label>categoria</label><select id="f-category"></select>
+      <label>sotto</label><select id="f-sub"></select>
+      <input type="search" id="f-text" placeholder="cerca nella descrizione"
+             class="wide">
+      <button class="link" id="f-reset">azzera</button>
+    </div>
 
-  <div class="bar ui" id="filters">
-    <div class="quick" id="f-quick"></div>
-    <label>dal</label><input type="date" id="f-from">
-    <label>al</label><input type="date" id="f-to">
-    <label>conto</label><select id="f-account"></select>
-    <label>natura</label><select id="f-nature"></select>
-    <label>categoria</label><select id="f-category"></select>
-    <label>sotto</label><select id="f-sub"></select>
-    <input type="search" id="f-text" placeholder="cerca nella descrizione"
-           class="wide">
-    <button class="link" id="f-reset">azzera</button>
-  </div>
-  <div class="chips" id="crumbs"></div>
+    <div class="railfoot">
+      <div class="status ui" id="source"></div>
+    </div>
+  </aside>
 
-  <div id="view"></div>
+  <main class="main">
+    <nav id="tabs">
+      <div id="tablist"></div>
+      <div class="grow"></div>
+      <button id="btn-export">Esporta HTML + Excel</button>
+      <button id="btn-log">Log</button>
+    </nav>
+    <div id="error" class="err hide"></div>
+    <div class="chips" id="crumbs"></div>
+
+    <div id="view"></div>
+  </main>
 </div>
 
 <aside id="log">
@@ -364,26 +441,26 @@ function groupSum(rows, key){
 // --------------------------------------------------------------------------
 // grafici (stessa logica di dashboard.py, ma reagiscono ai filtri)
 // --------------------------------------------------------------------------
+// Barre in HTML, non in SVG. Un SVG con viewBox fisso scala TUTTO quando il
+// riquadro si stringe, testo compreso: dentro una colonna da 440px le
+// etichette scendevano a sette pixel. Qui l'etichetta e l'importo restano
+// alla loro dimensione e si adatta solo la barra, che e' l'unica cosa che
+// deve adattarsi.
 function barChart(items, opts){
   opts = opts || {};
   if(!items.length) return '<p class="note">nessun dato</p>';
-  const W = 760, RH = 30, LW = 210, PAD = 130;
   const top = Math.max(...items.map(i => Math.abs(i.value))) || 1;
-  const H = items.length*RH + 10;
-  let out = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
-  items.forEach((it, i) => {
-    const y = i*RH + 6;
-    const w = Math.abs(it.value)/top * (W-LW-PAD);
-    const click = opts.drill ? ` class="hit" data-drill="${esc(opts.drill)}"`
-                             + ` data-value="${esc(it.name)}"` : "";
-    out += `<g${click}>`
-        + `<text x="0" y="${y+14}" class="lbl">${esc(String(it.name).slice(0,34))}</text>`
-        + `<rect x="${LW}" y="${y+3}" width="${w.toFixed(1)}" height="16" rx="3"`
-        + ` fill="${it.color||"#4a7fb5"}"/>`
-        + `<text x="${(LW+w+8).toFixed(1)}" y="${y+15}" class="val">${euro(it.value)}</text>`
-        + `</g>`;
-  });
-  return out + "</svg>";
+  return '<div class="bars">' + items.map(it => {
+    const w = Math.abs(it.value) / top * 100;
+    const click = opts.drill ? ` class="bar-row hit" data-drill="${esc(opts.drill)}"`
+                             + ` data-value="${esc(it.name)}"` : ' class="bar-row"';
+    return `<div${click}>`
+      + `<span class="bar-lbl" title="${esc(String(it.name))}">`
+      + `${esc(String(it.name))}</span>`
+      + `<span class="bar-track"><i style="width:${w.toFixed(1)}%;`
+      + `background:${esc(it.color||"#4a7fb5")}"></i></span>`
+      + `<span class="bar-val">${euro(it.value)}</span></div>`;
+  }).join("") + "</div>";
 }
 
 function lineChart(labels, series){
@@ -603,9 +680,18 @@ CARDS.revisione = rows => {
 // --------------------------------------------------------------------------
 const VIEWS = {};
 
-VIEWS.dashboard = rows => S.layout.filter(c => c.visibile && CARDS[c.id])
-  .map(c => `<div class="card"><div class="head"><h2>${esc(c.titolo)}</h2></div>`
-            + CARDS[c.id](rows) + "</div>").join("");
+// Quante delle 12 colonne occupa ogni riquadro. Chi ha bisogno di larghezza
+// la chiede: gli indicatori e le tabelle larghe prendono tutto, i due grafici
+// si dividono la riga, le tre classifiche stanno in fila.
+const SPAN = {indicatori:12, natura:5, andamento:7, aree:6, voci:6,
+              ricorrenti:6, merchant:6, revisione:12};
+
+VIEWS.dashboard = rows => '<div class="grid">'
+  + S.layout.filter(c => c.visibile && CARDS[c.id])
+    .map(c => `<div class="card sp${SPAN[c.id] || 12}">`
+              + `<div class="head"><h2>${esc(c.titolo)}</h2></div>`
+              + CARDS[c.id](rows) + "</div>").join("")
+  + "</div>";
 
 function categorySelect(current, id){
   // Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
@@ -728,7 +814,9 @@ VIEWS.componi = () => '<div class="card"><div class="head">'
 // --------------------------------------------------------------------------
 function render(){
   if(!S) return;
-  el("tabs").innerHTML = TABS.map(([id,label]) =>
+  // Solo l'elenco delle schede: "Esporta" e "Log" vivono nella stessa barra
+  // ma sono HTML fisso, e riscrivere tutto il <nav> li cancellerebbe.
+  el("tablist").innerHTML = TABS.map(([id,label]) =>
     `<button data-tab="${id}" class="${TAB===id?"on":""}">${esc(label)}</button>`).join("");
 
   el("filters").classList.toggle("hide",
