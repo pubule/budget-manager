@@ -1714,6 +1714,16 @@ def selftest():
     assert len(fuso) == 1, "la riga scritta a mano si e' duplicata"
     assert fuso[0]["Importo"] == -90.0,         "transazioni.csv non ha vinto sulla copia ferma nel derivato"
 
+    # merge_manual() PRIMA di apply_corrections(): al contrario una
+    # correzione scritta per l'ID di una riga a mano non troverebbe mai la
+    # riga (apply_corrections scorre solo cio' che gli si passa) e resterebbe
+    # inerte per sempre, anche se corretto in correzioni.csv.
+    riga_mano = [{"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
+                  "Importo": -84.0, "Conto": "Contanti", "Rango": RANK_BANK}]
+    sequenza = merge_manual([], riga_mano)
+    apply_corrections(sequenza, {"man-1": {"Importo": -90.0}})
+    assert sequenza[0]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
+
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
               "Conto": "Koala"}]
@@ -2491,12 +2501,16 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # la correzione si staccherebbe dalla transazione al giro successivo.
     if not gia_pulite:
         assign_ids(rows)
-    apply_corrections(rows, config["corrections"])
-    # Le manuali entrano dopo l'assegnazione degli ID: il loro ID viene dal
-    # file e assign_ids lo rispetta, ma non c'e' motivo di farle passare di li'.
-    # merge_manual() toglie prima l'eventuale copia gia' ferma in "rows": vedi
-    # li' il perche' (consolidato.csv puo' averla scritta il giro precedente).
+    # Le manuali entrano DOPO l'assegnazione degli ID (il loro ID viene dal
+    # file, non passano mai da assign_ids) ma PRIMA delle correzioni: una
+    # correzione in correzioni.csv e' chiave sull'ID, e apply_corrections()
+    # scorre solo le righe che gli si passano. Entrando dopo, una correzione
+    # scritta per una riga a mano non troverebbe mai la sua riga e resterebbe
+    # inerte per sempre. merge_manual() toglie prima l'eventuale copia gia'
+    # ferma in "rows": vedi li' il perche' (consolidato.csv puo' averla
+    # scritta il giro precedente).
     rows = merge_manual(rows, manuali)
+    apply_corrections(rows, config["corrections"])
     # Prima di ogni altro scarto: una riga esclusa non deve nemmeno partecipare
     # agli appaiamenti, o consumerebbe la copertura di una riga buona.
     rows = apply_exclusions(rows, config["exclusions"], scartate)
