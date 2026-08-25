@@ -24,7 +24,8 @@ fra voi due.
 
 | domanda | risposta |
 |---|---|
-| I totali della dashboard | **la cassa**: quello che è uscito dal conto, 60 € non 30 |
+| I totali della dashboard | **quanto è costato** (60 €), con un interruttore per leggere **quanto è tuo** (30 €) |
+| Una spesa condivisa | **una riga sola** con le quote dentro, non due righe su due conti |
 | A quali righe si applica la quota | **a tutte**, anche a quelle di banca |
 | Splitwise | **convive**: resta sorgente, e le colonne persona smettono di essere buttate |
 | Cancellare | **sempre "escludi"**: niente sparisce, tutto resta ripescabile |
@@ -56,15 +57,54 @@ saldo positivo = Michela deve a te
 
 Assente = non condivisa. È il caso normale e non richiede nessun gesto.
 
-### La conseguenza che cambia numeri esistenti
+### Due letture, non due conti
 
-Con «i totali sono la cassa», una riga **pagata da Michela** non è cassa tua:
-non è mai passata dal tuo conto. Oggi quelle righe — arrivano solo da
-Splitwise, `drop_covered_by` le tiene apposta — **sono contate fra le tue
-uscite**. Marcandole `pagato_da = lei` escono dai totali ed entrano nel
-registro. **Escono anche dalle tabelle per categoria**: "Dove vanno i soldi"
-mostra la tua cassa, e una spesa che non è passata dal tuo conto lì non ci
-sta. Resta visibile in Transazioni e nel registro, dove ha senso.
+L'idea di partenza era **due conti**, uno tuo e uno di Michela, il suo
+alimentato dalla sua quota Splitwise. La misura l'ha resa impraticabile per
+com'era: spaccare ogni riga condivisa in due porterebbe le 657 righe Splitwise
+a 1.314, e con loro i conteggi `tx` e la coda di revisione — esattamente il
+raddoppio che la migrazione del 24 agosto aveva tolto dallo storico MoneyWiz.
+
+Ma la domanda dietro l'idea è giusta, e si può rispondere senza raddoppiare
+niente: **una riga sola, letta in due modi**.
+
+| lettura | cosa somma | a cosa risponde |
+|---|---|---|
+| **tutto** (predefinita) | il costo pieno di ogni riga | quanto è costato vivere, per la coppia |
+| **la mia quota** | ogni riga × la tua quota | quanto di quella spesa è tuo |
+
+L'interruttore sta accanto ai filtri rapidi e vale per tutti i riquadri della
+dashboard. Il conto "Michela" che avevi in mente diventa la differenza fra le
+due letture, e il registro dei debiti la racconta riga per riga.
+
+Nessun numero di oggi cambia nella lettura predefinita: è quella che l'app
+mostra già.
+
+### Le colonne persona bastano da sole
+
+La spec del 24 agosto buttava le colonne persona dell'export Splitwise. Non
+servivano allora; adesso contengono tutto quello che serve, per tutte e 669 le
+righe, senza che tu marchi niente a mano.
+
+Il valore nella colonna di una persona è il suo **saldo su quella riga**,
+cioè `pagato − dovuto`, e la somma delle due fa zero (verificato su tutte e
+669 nella spec precedente). Con due persone e un pagatore solo:
+
+```
+Costo 60,00    Michela +30,00    Fabio -30,00
+
+chi ha pagato  = quello col saldo positivo          -> Michela
+quota di chi non ha pagato = -saldo                 -> Fabio 30,00
+quota del pagatore = Costo - quota dell'altro       -> Michela 30,00
+```
+
+Quindi `pagato_da` e `quota` si ricavano dal file. `quote.csv` serve per le
+righe che Splitwise non conosce — quelle di banca e quelle a mano — e per
+correggere quando la derivazione sbaglia.
+
+La derivazione va **verificata sui dati veri al primo giro**, non data per
+buona: se qualche riga non torna (tre persone in una spesa, un arrotondamento,
+un saldo a zero da entrambe le parti) il numero va stampato, non nascosto.
 
 Quante siano si misura al primo giro: il numero va stampato e confrontato
 con i totali di prima, non stimato adesso.
@@ -131,15 +171,17 @@ manuali, con un meccanismo solo.
 2. **`apply_exclusions(rows, escluse, scartate)`** subito dopo
    `apply_corrections()`: sposta in `scartate` le righe elencate, col motivo.
    Riusa il registro di scarto che già stampa il rapporto per conto.
-3. **`apply_shares(rows, quote, condivise)`** dopo la categorizzazione:
-   aggiunge le colonne `Pagato da` e `Quota`. La sorgente è `quote.csv`; dove
-   manca, la quota arriva dalle **colonne persona di Splitwise**, lette in
+3. **`apply_shares(rows, quote)`** dopo la categorizzazione: aggiunge le
+   colonne `Pagato da` e `Quota`. `quote.csv` vince; dove manca, valgono i
+   valori derivati dalle colonne persona di Splitwise, lette in
    `load_transactions()` e portate avanti sulla riga.
 4. **`consolidato.csv` guadagna due colonne**, `Pagato da` e `Quota`, e
    `read_consolidato()` le rilegge come tutte le altre.
 
-Le righe `pagato_da = lei` escono dai totali marcandole con una natura che
-esiste già (`Non spesa`), come i giroconti: nessun meccanismo nuovo.
+Nessuna riga esce dai totali per via della quota: la lettura predefinita è il
+costo pieno, ed è quella di oggi. La seconda lettura è un moltiplicatore
+applicato **nel browser**, dove già vivono filtri e aggregazioni — non tocca
+la pipeline e non riscrive niente.
 
 ### Una contraddizione da segnalare, non da risolvere in silenzio
 
@@ -177,6 +219,10 @@ un modo di usare l'app che il modello deve imparare a descrivere.
 menu che salvano subito — lo stesso schema di `data-fix` e del menu delle
 categorie. Più un pulsante **"+ transazione"** in cima che apre il modale già
 esistente (`modale()`) con data, descrizione, importo, conto.
+
+**L'interruttore delle due letture**, accanto ai filtri rapidi del periodo:
+`tutto` / `la mia quota`. Cambia solo il moltiplicatore con cui i riquadri
+sommano le righe condivise, e sta in `F` come gli altri filtri.
 
 **Una scheda nuova, "Con Michela"**, che risponde alla domanda che hai scelto —
 *da cosa nasce quel numero*:
@@ -235,14 +281,20 @@ il piano dovesse venire troppo lungo:
 **Asserzioni in `test_app.js`:**
 
 - il saldo progressivo dell'ultima riga è uguale al totale in cima;
+- con l'interruttore su `tutto` i totali sono **identici a quelli di oggi**:
+  è la prova che la lettura predefinita non ha spostato niente;
+- con l'interruttore su `la mia quota`, una riga a metà pesa la metà e una non
+  condivisa pesa uguale;
 - il registro parte dalla data di `partita.csv` e non prima;
 - una riga senza quota non compare nel registro.
 
 **Sui dati veri, col server acceso:**
 
-- il totale delle uscite **prima e dopo** l'introduzione delle quote, con
-  quante righe sono uscite dai totali perché pagate da Michela: è il numero
-  che dice se il modello ha cambiato il bilancio come previsto;
+- quante delle 669 righe Splitwise danno un pagatore e due quote coerenti con
+  la derivazione, e quante no: è il numero che dice se le colonne persona
+  bastano davvero da sole;
+- la differenza fra le due letture sui 56 mesi, cioè quanto della spesa
+  storica è quota di Michela;
 - inserire una transazione a mano, ricaricare, e ritrovarla con la sua
   categoria e la sua quota;
 - escluderla, ricaricare, e ritrovarla fra le escluse con il motivo;
