@@ -1463,7 +1463,8 @@ VIEWS.revisione = rows => {
 VIEWS.transazioni = rows => {
   const shown = rows.slice(0, 500);
   return '<div class="card"><div class="head"><h2>Transazioni</h2>'
-    + `<span class="mini">${rows.length} righe, ne mostro ${shown.length}</span></div>`
+    + `<span class="mini">${rows.length} righe, ne mostro ${shown.length}</span>`
+    + '<button class="link" data-nuova="1">+ transazione</button></div>'
     + tableHTML(["data","descrizione","merchant","importo","conto","natura",
                  "categoria","origine",""],
         shown.map(t => [
@@ -1669,7 +1670,7 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
-    + "[data-up],[data-conferma],[data-confronto],[data-vista]");
+    + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova]");
   if(!t) return;
   const d = t.dataset;
 
@@ -1714,6 +1715,20 @@ document.addEventListener("click", async ev => {
   if(d.catDrop){
     if(!await chiedi(`Non imparare piu' dalla categoria "${d.catDrop}"?`)) return;
     await post("/api/categories", {azione:"elimina", nome:d.catDrop});
+    return reload();
+  }
+  if(d.nuova){
+    // Quattro domande in fila invece di un modulo: il modale sa fare una
+    // domanda per volta, e un modulo nuovo sarebbe l'unico dell'app.
+    const data = await domanda("Data (aaaa-mm-gg):", today().iso);
+    if(!data) return;
+    const descrizione = await domanda("Descrizione:", "");
+    if(!descrizione) return;
+    const importo = await domanda("Importo (negativo se e' una spesa):", "-");
+    if(!importo) return;
+    const conto = await domanda("Conto:", "A mano");
+    if(!conto) return;
+    await post("/api/nuova", {data, descrizione, importo, conto});
     return reload();
   }
   if(d.escludi){

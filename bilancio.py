@@ -363,10 +363,16 @@ def transaction_id(row, seen):
 
 
 def assign_ids(rows):
-    """Assegna l'ID a ogni riga. Va fatto PRIMA di applicare le correzioni."""
+    """Assegna l'ID a ogni riga. Va fatto PRIMA di applicare le correzioni.
+
+    Un ID gia' presente non si tocca: le righe scritte a mano se lo portano dal
+    file, e ricalcolarlo dal contenuto le staccherebbe dalla loro categoria e
+    dalla loro quota appena si corregge un importo.
+    """
     seen = Counter()
     for row in rows:
-        row["ID"] = transaction_id(row, seen)
+        if not str(row.get("ID") or "").strip():
+            row["ID"] = transaction_id(row, seen)
     return rows
 
 
@@ -1686,6 +1692,23 @@ def selftest():
     assert buttate[0]["Scartata da"] == "esclusa a mano: doppione di luglio",         f"motivo perso: {buttate[0]['Scartata da']!r}"
     assert apply_exclusions(righe, {}, []) == righe,         "senza esclusioni non deve cambiare niente"
 
+    # Una riga scritta a mano porta il suo ID dal file: gli altri nascono dal
+    # contenuto, e cambiando l'importo l'ID cambierebbe staccando la riga dalla
+    # sua categoria e dalla sua quota.
+    mano = [{"ID": "man-20260825-01", "Data": "2026-08-24",
+             "Descrizione": "Cena", "Importo": -84.0, "Conto": "Contanti"}]
+    assign_ids(mano)
+    assert mano[0]["ID"] == "man-20260825-01", "l'ID scritto a mano e' stato sovrascritto"
+    mano[0]["Importo"] = -90.0
+    assign_ids(mano)
+    assert mano[0]["ID"] == "man-20260825-01", "l'ID e' cambiato con l'importo"
+
+    # Le altre righe continuano a prendere l'ID dal contenuto.
+    banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
+              "Conto": "Koala"}]
+    assign_ids(banca)
+    assert banca[0]["ID"] and "#" in banca[0]["ID"], "l'ID automatico non c'e' piu'"
+
     # Un giroconto fra conti propri non deve contare due volte.
     pair = [
         {"Data": "2026-01-15", "Descrizione": "giroconto", "Importo": -200.0, "Conto": "a"},
@@ -2329,6 +2352,37 @@ def read_sources(folder, config, output, include_pending=False, discarded=None):
     return rows
 
 
+def read_manual(folder):
+    """Le transazioni scritte a mano, da transazioni.csv.
+
+    Sono di rango RANK_BANK come gli estratti conto: non vanno mai scartate da
+    drop_covered_by, e possono coprire una riga condivisa (paghi in contanti,
+    la registri qui e su Splitwise: la seconda e' un doppione della prima).
+    """
+    path = Path(folder) / "transazioni.csv"
+    if not path.exists():
+        return []
+    rows = []
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for riga in csv.DictReader(handle, delimiter=";"):
+            data = (riga.get("data") or "").strip()
+            key = (riga.get("id") or "").strip()
+            if not data or not key:
+                continue
+            rows.append({
+                "ID": key,
+                "Data": data,
+                "Descrizione": (riga.get("descrizione") or "").strip(),
+                "Importo": round(parse_amount(riga.get("importo") or ""), 2),
+                "Conto": (riga.get("conto") or "A mano").strip(),
+                "Origine file": "transazioni.csv",
+                "Rango": RANK_BANK,
+            })
+    if rows:
+        print(f"  {len(rows)} transazioni scritte a mano")
+    return rows
+
+
 def read_consolidato(folder, output):
     """Le transazioni gia' elaborate, quando la sorgente non c'e' piu'.
 
@@ -2392,13 +2446,15 @@ def run(folder, use_llm=True, output="consolidato.csv",
 
     scartate = []
     rows = read_sources(folder, config, output, include_pending, scartate)
-    # Il ripiego: gli export cancellati non devono svuotare l'app. In
-    # read_consolidato() il perche' i passi di pulizia non si rifanno.
+    # Il ripiego guarda SOLO gli export: con le righe scritte a mano fra le
+    # sorgenti "rows" non sarebbe mai vuoto, e al riavvio senza export l'app
+    # mostrerebbe tre righe manuali al posto di cinquantasei mesi di storia.
     gia_pulite = False
     if not rows:
         rows = read_consolidato(folder, output)
         gia_pulite = bool(rows)
-    if not rows:
+    manuali = read_manual(folder)
+    if not rows and not manuali:
         raise RuntimeError(
             f"nessuna transazione: metti gli export in {EXPORT_DIR}/ e premi "
             "Carica dati. Se e' la prima volta, esegui prima "
@@ -2410,6 +2466,9 @@ def run(folder, use_llm=True, output="consolidato.csv",
     if not gia_pulite:
         assign_ids(rows)
     apply_corrections(rows, config["corrections"])
+    # Le manuali entrano dopo l'assegnazione degli ID: il loro ID viene dal
+    # file e assign_ids lo rispetta, ma non c'e' motivo di farle passare di li'.
+    rows = rows + manuali
     # Prima di ogni altro scarto: una riga esclusa non deve nemmeno partecipare
     # agli appaiamenti, o consumerebbe la copertura di una riga buona.
     rows = apply_exclusions(rows, config["exclusions"], scartate)

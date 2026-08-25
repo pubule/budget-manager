@@ -52,6 +52,7 @@ SCHEMA = {
     "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
+    "transazioni.csv": ["id", "data", "descrizione", "importo", "conto", "nota"],
 }
 
 # Il PRIMO riquadro acceso prende la colonna larga della dashboard e ne porta
@@ -643,10 +644,37 @@ def load_and_archive(use_llm=True):
             f"(attenzione: restano importi, date e negozi)")
 
 
+def nuova_transazione(payload):
+    """Aggiunge una riga a transazioni.csv, con un ID che non cambiera' mai.
+
+    L'ID lo genera il server e non deriva dal contenuto: cosi' correggere
+    l'importo di una riga scritta a mano non la stacca dalla sua categoria.
+    """
+    data = (payload.get("data") or "").strip()
+    descrizione = (payload.get("descrizione") or "").strip()
+    if not data or not descrizione:
+        raise ValueError("servono data e descrizione")
+    righe = read_rows("transazioni.csv")
+    progressivo = len(righe) + 1
+    while any((r.get("id") or "") == f"man-{data.replace('-','')}-{progressivo:02d}"
+              for r in righe):
+        progressivo += 1
+    righe.append({
+        "id": f"man-{data.replace('-', '')}-{progressivo:02d}",
+        "data": data,
+        "descrizione": descrizione,
+        "importo": (payload.get("importo") or "0").strip(),
+        "conto": (payload.get("conto") or "A mano").strip(),
+        "nota": (payload.get("nota") or "").strip(),
+    })
+    write_rows("transazioni.csv", righe)
+
+
 ACTIONS = {
     "/api/transaction": set_transaction,
     "/api/categories": set_category,
     "/api/rules": set_rule,
+    "/api/nuova": nuova_transazione,
 }
 
 
