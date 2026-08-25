@@ -1425,6 +1425,56 @@ def drop_internal_transfers(rows, days=3, tolerance=0.01, discarded=None):
     return [row for i, row in enumerate(rows) if i not in matched]
 
 
+# Un bonifico che la banca annulla e riaccredita. La descrizione lo dichiara:
+# "STORNO DI OPERAZIONE BONIFICO ISTANTANEO NON ESEGUITO".
+REVERSAL = re.compile(r"(?i)\bstorno\b|non eseguit|\bannullat")
+
+
+def drop_reversals(rows, days=7, discarded=None):
+    """Toglie uno storno e l'operazione che annulla.
+
+    Un bonifico non eseguito torna indietro: sul conto restano due righe di
+    pari importo e segno opposto, e nessuna delle due e' una transazione del
+    bilancio. Lasciarle produce un'asimmetria brutta, perche' l'uscita
+    finisce fra i giroconti ed e' esclusa dai totali mentre il riaccredito
+    resta e viene contato come ENTRATA.
+
+    Vincoli stretti: stesso conto, stesso importo al centesimo, entro pochi
+    giorni, e uno-a-uno. Un rimborso vero non si chiama storno.
+    """
+    negative = defaultdict(list)
+    for position, row in enumerate(rows):
+        if row.get("Importo", 0) < 0:
+            key = (row.get("Conto"), round(abs(row["Importo"]), 2))
+            negative[key].append(position)
+
+    dropped, used = set(), set()
+    for position, row in enumerate(rows):
+        amount = row.get("Importo", 0)
+        if amount <= 0 or not REVERSAL.search(str(row.get("Descrizione", ""))):
+            continue
+        giorno = parse_date(row.get("Data"))
+        for other in negative.get((row.get("Conto"), round(amount, 2)), ()):
+            if other in used or other == position:
+                continue
+            altro = parse_date(rows[other].get("Data"))
+            if giorno and altro and abs((
+                    datetime.fromisoformat(giorno)
+                    - datetime.fromisoformat(altro)).days) > days:
+                continue
+            used.add(other)
+            dropped.update((position, other))
+            break
+
+    if dropped:
+        totale = sum(abs(rows[i]["Importo"]) for i in dropped) / 2
+        print(f"  {len(dropped)} righe rimosse: storni e operazioni annullate "
+              f"({len(dropped) // 2} coppie) per {totale:,.2f}")
+        note_discarded(discarded, "storno annullato",
+                       [rows[i] for i in sorted(dropped)])
+    return [row for i, row in enumerate(rows) if i not in dropped]
+
+
 def drop_import_artifacts(rows, discarded=None):
     """Toglie i residui POSITIVI che l'importazione MoneyWiz si e' lasciata
     dietro a fronte di una spesa condivisa.
@@ -1837,6 +1887,35 @@ def selftest():
                           "01/02/2026;ESSELUNGA;-12,50\n", encoding="utf-8")
         assert len(load_transactions(dritto, "Prova")) == 1
 
+    # Uno storno e l'operazione che annulla se ne vanno insieme. Se restasse
+    # solo il riaccredito verrebbe contato come entrata, mentre l'uscita
+    # finisce fra i giroconti ed e' esclusa dai totali: soldi comparsi dal
+    # nulla nel KPI delle entrate.
+    coppia = [
+        {"Data": "2026-07-27", "Importo": -200.0, "Conto": "UniCredit",
+         "Descrizione": "DISPOSIZIONE DI BONIFICO ISTANTANEO DEL 24.07.2026"},
+        {"Data": "2026-07-27", "Importo": 200.0, "Conto": "UniCredit",
+         "Descrizione": "STORNO DI OPERAZIONE BONIFICO ISTANTANEO NON ESEGUITO"},
+        {"Data": "2026-07-28", "Importo": 200.0, "Conto": "UniCredit",
+         "Descrizione": "BONIFICO A VOSTRO FAVORE DA: QUALCUNO"},
+    ]
+    resto = drop_reversals([dict(r) for r in coppia])
+    assert len(resto) == 1, resto
+    assert resto[0]["Descrizione"].startswith("BONIFICO A VOSTRO FAVORE"),         "e' stata tolta l'entrata vera invece dello storno"
+    # Un conto diverso non e' la stessa operazione.
+    altro = [dict(coppia[0]), dict(coppia[1])]
+    altro[1]["Conto"] = "Hype"
+    assert len(drop_reversals(altro)) == 2, "accoppiati due conti diversi"
+    # E nemmeno un importo diverso.
+    diverso = [dict(coppia[0]), dict(coppia[1])]
+    diverso[1]["Importo"] = 199.0
+    assert len(drop_reversals(diverso)) == 2, "accoppiati importi diversi"
+    # Un rimborso vero non si chiama storno e deve restare.
+    rimborso = [dict(coppia[0]),
+                {"Data": "2026-07-27", "Importo": 200.0, "Conto": "UniCredit",
+                 "Descrizione": "RIMBORSO ASSICURAZIONE"}]
+    assert len(drop_reversals(rimborso)) == 2, "tolto un rimborso vero"
+
     # La scelta delle colonne va per PREFERENZA, non per ordine nel file.
     def scelte(*colonne):
         d, de, i, dare, avere = find_columns(pd.DataFrame(columns=list(colonne)))
@@ -2125,6 +2204,10 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
     # una spesa condivisa "coperta" da una gamba poi annullata spariva del
     # tutto: tre righe dentro, zero fuori.
+    # Prima dei giroconti: un bonifico annullato somiglia a uno spostamento
+    # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
+    # giroconti lasciando il riaccredito a contare come entrata.
+    rows = drop_reversals(rows, discarded=scartate)
     rows = drop_internal_transfers(rows, discarded=scartate)
     rows = drop_import_artifacts(rows, scartate)
     rows = drop_covered_by(rows, discarded=scartate,
