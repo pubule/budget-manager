@@ -1156,6 +1156,48 @@ def quota_columns(frame):
     return quotas.loc[:, (quotas.fillna(0) != 0).any()]
 
 
+# Come si chiama Fabio nelle colonne persona di Splitwise. Serve a sapere
+# quale dei due saldi e' il tuo: gli altri campi sono simmetrici e senza
+# questo non si distingue "ho pagato io" da "ha pagato lei".
+IO = re.compile(r"(?i)fabio")
+
+
+def shares_from_quotas(costo, saldi):
+    """Chi ha pagato e quanto deve l'altro, dai saldi di una riga condivisa.
+
+    Il valore nella colonna di una persona e' il suo saldo su quella riga,
+    cioe' PAGATO MENO DOVUTO, e i due saldi sommano zero. Con due persone e un
+    pagatore solo:
+
+        chi ha pagato              = quello col saldo positivo
+        quota di chi non ha pagato = -saldo
+        quota del pagatore         = costo - quota dell'altro
+
+    Torna None quando la riga non rientra nel modello: tre persone, nessuno in
+    credito, un costo a zero. Inventare una quota li' sarebbe peggio che non
+    averla, perche' finirebbe in un registro di debiti senza dirlo.
+    """
+    vivi = {nome: valore for nome, valore in saldi.items()
+            if valore is not None and not math.isnan(valore)}
+    if len(vivi) != 2 or not costo:
+        return None
+    mio = next((n for n in vivi if IO.search(n)), None)
+    if mio is None:
+        return None
+    altro = next(n for n in vivi if n != mio)
+    if abs(vivi[mio] + vivi[altro]) > 0.01:
+        return None
+    if abs(vivi[mio]) < 0.01:
+        return None
+    pagante = "io" if vivi[mio] > 0 else "lei"
+    dovuta = abs(vivi[mio] if pagante == "lei" else vivi[altro])
+    if abs(dovuta - abs(costo)) < 0.01:
+        return {"Pagato da": pagante, "Quota": "tutto"}
+    if abs(dovuta - abs(costo) / 2) < 0.51:
+        return {"Pagato da": pagante, "Quota": "meta"}
+    return None
+
+
 def is_shared_export(frame):
     """Vero se il file divide ogni spesa fra piu' persone.
 
@@ -1214,6 +1256,9 @@ def load_transactions(path, account=None, discarded=None):
     # In un export condiviso l'importo e' il costo pieno, sempre positivo nel
     # file ma sempre un'uscita; le colonne persona sono saldi e non servono.
     shared = is_shared_export(frame)
+    # Le colonne persona: fino a oggi si buttavano. Contengono chi ha pagato e
+    # quanto deve l'altro, per ogni riga condivisa.
+    quote = quota_columns(frame) if shared else pd.DataFrame()
     category_col = next((c for c in frame.columns
                          if normalize(c) == "categorie"), None)
 
@@ -1245,7 +1290,7 @@ def load_transactions(path, account=None, discarded=None):
             amount = -abs(amount)
         if amount == 0.0:
             continue
-        rows.append({
+        riga = {
             "Data": parse_date(row.get(date_col)),
             "Descrizione": description,
             "Importo": round(amount, 2),
@@ -1254,7 +1299,13 @@ def load_transactions(path, account=None, discarded=None):
             # identiche dentro lo stesso file.
             "Origine file": path.name,
             "Rango": source_rank(path, shared),
-        })
+        }
+        if not quote.empty and row.name in quote.index:
+            dedotta = shares_from_quotas(
+                abs(amount), quote.loc[row.name].to_dict())
+            if dedotta:
+                riga.update(dedotta)
+        rows.append(riga)
 
     print(f"  {path.name}: {len(rows)} transazioni")
     if settled:
@@ -1268,6 +1319,10 @@ def load_transactions(path, account=None, discarded=None):
     if rows and not shared and all(r["Importo"] > 0 for r in rows):
         print(f"    attenzione: {path.name} ha solo importi positivi. "
               "Controlla che la colonna dell'importo sia quella giusta")
+    if shared:
+        dedotte = sum(1 for r in rows if r.get("Quota"))
+        print(f"    {dedotte} righe su {len(rows)} con pagatore e quota "
+              f"dedotti dalle colonne persona")
     return rows
 
 
@@ -1735,6 +1790,29 @@ def selftest():
     assert id_da_escludere not in per_id, "la riga esclusa non e' sparita"
     assert per_id["man-1"]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
     assert "#" in banca[0]["ID"], "la riga di banca non ha preso un ID"
+
+    # Il saldo di una persona su una riga condivisa e' "pagato meno dovuto", e
+    # i due saldi sommano zero. Da li' si ricavano pagatore e quote senza che
+    # nessuno marchi niente a mano.
+    #   Costo 60, Michela +30, Fabio -30  ->  ha pagato lei, meta' ciascuno
+    assert shares_from_quotas(60.0, {"Fabio Stocco": -30.0,
+                                     "Mikela bogoni": 30.0}) == \
+        {"Pagato da": "lei", "Quota": "meta"}, "meta' pagata da lei sbagliata"
+    #   Costo 60, Fabio +30, Michela -30  ->  ha pagato lui, meta' ciascuno
+    assert shares_from_quotas(60.0, {"Fabio Stocco": 30.0,
+                                     "Mikela bogoni": -30.0}) == \
+        {"Pagato da": "io", "Quota": "meta"}, "meta' pagata da me sbagliata"
+    #   Costo 24, Fabio +24, Michela -24  ->  ho pagato io, tutto suo
+    assert shares_from_quotas(24.0, {"Fabio Stocco": 24.0,
+                                     "Mikela bogoni": -24.0}) == \
+        {"Pagato da": "io", "Quota": "tutto"}, "quota intera sbagliata"
+    #   Nessuno in credito: non e' derivabile, e inventarlo sarebbe peggio.
+    assert shares_from_quotas(60.0, {"Fabio Stocco": 0.0,
+                                     "Mikela bogoni": 0.0}) is None, \
+        "una riga senza pagatore non deve produrre una quota"
+    #   Tre persone: fuori dal modello, si lascia stare.
+    assert shares_from_quotas(90.0, {"a": 60.0, "b": -30.0, "c": -30.0}) is None, \
+        "con tre persone la derivazione deve tacere"
 
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
