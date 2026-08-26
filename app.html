@@ -760,6 +760,10 @@ const uncategorized = rows => rows.filter(t => !t.Categoria);
 // riquadri, quindi cambiarlo qui li cambia tutti insieme e nessuno puo'
 // dimenticarsene.
 const sum = rows => rows.reduce((s,t) => s + t.Importo * quotaDi(t), 0);
+// Non tutte le somme rispondono a "quanto e' mio". Questa risponde a "quanti
+// soldi muovono queste righe", punto: quanto passa una regola non dipende da
+// chi ne deve una fetta all'altro, e non deve muoversi col cambio di lettura.
+const sommaPiena = rows => rows.reduce((s,t) => s + t.Importo, 0);
 const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
 
 // I mesi CONTATI COME SONO DAVVERO: l'ultimo vale per la parte trascorsa.
@@ -1839,7 +1843,7 @@ document.addEventListener("click", async ev => {
       aggiorna: v => `${colpite.length} transazioni combaciano`
         + (v === SCEGLI ? "" : `, di cui `
            + `${colpite.filter(t => whole(t) !== v).length} cambierebbero categoria`)
-        + `. In totale ${euro(sum(colpite))}. `
+        + `. In totale ${euro(sommaPiena(colpite))}. `
         + `La regola va sopra tutte le altre, quindi vince su di loro.`,
     });
     if(!valore || valore === SCEGLI) return;

@@ -51,7 +51,7 @@ global.clearTimeout = () => {};
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
- CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
+ CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
@@ -220,6 +220,41 @@ console.log("=== le due letture ===");
   // Ha pagato lei e la quota e' tutta mia: e' mia per intero.
   check("quota intera a carico mio: e' tutta mia", quota("lei","tutto") === 1);
   check("un rimborso non e' una spesa e non pesa", quota("lei","saldo") === 0);
+
+  // Il saldo deve sparire dai totali in ENTRAMBE le letture, non solo in
+  // "mia": quotaDi da solo non basta (in lettura "tutto" ritorna 1 anche per
+  // un saldo), l'esclusione vera avviene a monte in spending().
+  // La riga normale non e' condivisa (Quota vuota): pesa 1 in tutte e due le
+  // letture, cosi' un'eventuale differenza nel totale si puo' addebitare
+  // solo al saldo, non al peso della riga normale.
+  const righeConSaldo = [
+    {Importo:-100, Natura:"Spese", "Pagato da":"", Quota:""},
+    {Importo:-40, Natura:"Spese", "Pagato da":"io", Quota:"saldo"},
+  ];
+  check("spending() toglie il saldo, non solo le spese",
+        !api.spending(righeConSaldo).some(t => t.Quota === "saldo"));
+  F6.lettura = "";
+  const spesaTutto = api.sum(api.outflow(righeConSaldo));
+  F6.lettura = "mia";
+  const spesaMia = api.sum(api.outflow(righeConSaldo));
+  check("il saldo non pesa in nessuna delle due letture",
+        spesaTutto === spesaMia && spesaTutto === -100,
+        `${spesaTutto} vs ${spesaMia}`);
+
+  // L'anteprima di una regola dice quanti soldi muovono le righe, non quanti
+  // sono miei: deve restare ferma anche su righe che portano una quota vera.
+  const righeConQuota = [
+    {Importo:-100, Natura:"Spese", "Pagato da":"io", Quota:"meta"},
+    {Importo:-40, Natura:"Spese", "Pagato da":"lei", Quota:"tutto"},
+  ];
+  F6.lettura = "";
+  const pienaTutto = api.sommaPiena(righeConQuota);
+  F6.lettura = "mia";
+  const pienaMia = api.sommaPiena(righeConQuota);
+  check("l'anteprima di una regola non si sposta col cambio di lettura",
+        pienaTutto === pienaMia && pienaTutto === -140,
+        `${pienaTutto} vs ${pienaMia}`);
+
   F6.lettura = "";
 }
 
