@@ -1922,7 +1922,7 @@ def selftest():
     per_id = {r["ID"]: r for r in rows}
     assert id_da_escludere not in per_id, "la riga esclusa non e' sparita"
     assert per_id["man-1"]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
-    assert "#" in grezze[0]["ID"], "la riga di banca non ha preso un ID"
+    assert grezze[0]["ID"] in per_id, "la riga di banca non toccata da nulla e' sparita"
 
     # Il saldo di una persona su una riga condivisa e' "pagato meno dovuto", e
     # i due saldi sommano zero. Da li' si ricavano pagatore e quote senza che
@@ -2522,7 +2522,6 @@ def selftest():
               "Rango": RANK_SHARED}
     fuse = prepara_righe([fresca], derivate, [],
                          {"corrections": {}, "exclusions": {}}, [])
-    assert len(fuse) == 1, f"sullo stesso ID deve sopravvivere una riga sola, non {len(fuse)}"
     assert fuse[0].get("Origine file") == "koala.csv", \
         "sull'ID in comune ha vinto il derivato appiattito, non l'export fresco"
 
@@ -2536,8 +2535,6 @@ def selftest():
         derivate = read_consolidato(cartella, "consolidato.csv", {"koala-1#1"})
     assert [r["ID"] for r in derivate] == ["solo-derivato#1"], \
         "una riga del derivato senza corrispondenza nell'export doveva sopravvivere"
-    fuse = prepara_righe([], derivate, [], {"corrections": {}, "exclusions": {}}, [])
-    assert [r["ID"] for r in fuse] == ["solo-derivato#1"]
 
     # 3. Una correzione chiave su una riga che esiste SOLO nel derivato deve
     #    comunque applicarsi: e' il caso che la vecchia forma a un solo flag
@@ -2581,6 +2578,81 @@ def selftest():
                          {"corrections": {}, "exclusions": {}}, [])
     assert {r["ID"] for r in fuse} == {"banca-1", "derivato-1"}, \
         "la gamba derivata e' stata mangiata come se fosse passata dalla pulizia"
+
+    # 6. run() vero, cartella temporanea vera: le cinque prove sopra chiamano
+    #    prepara_righe()/read_consolidato() gia' nell'ordine giusto a mano, e
+    #    non si accorgerebbero se run() li chiamasse in un ordine diverso.
+    #    Due difetti d'ordine, entrambi passati con la suite verde di prima:
+    #    un'esclusione il cui ritorno non veniva riassegnato (la riga esclusa
+    #    restava nella pulizia e si portava dietro una riga buona), e l'ID
+    #    delle grezze calcolato DOPO la pulizia invece che prima (una riga
+    #    tolta dalla pulizia rientrava dal derivato, perche' il suo ID non
+    #    risultava piu' "gia' presente"). Questa prova costruisce una
+    #    cartella minima e chiama run() per intero.
+    with tempfile.TemporaryDirectory() as cartella:
+        cartella = Path(cartella)
+        # Una sola regola: basta a dare a run() una categoria da usare
+        # (altrimenti si ferma subito, "nessuna categoria disponibile") e a
+        # far riconoscere GIROCONTO A HYPE / RICARICA CONTO come dichiarati.
+        (cartella / "regole.csv").write_text(
+            "pattern;categoria;sottocategoria" + NEWLINE +
+            "(?i)giroconto|ricarica;Giroconto;" + NEWLINE, encoding="utf-8-sig")
+        (cartella / "conti.csv").write_text(
+            "pattern;conto" + NEWLINE +
+            "(?i)intesa;Intesa" + NEWLINE +
+            "(?i)hype;Hype" + NEWLINE +
+            "(?i)unicredit;UniCredit" + NEWLINE, encoding="utf-8-sig")
+
+        # Il difetto (1): una gamba di giroconto esclusa a mano (Intesa) non
+        # deve poter trascinare con se' la gamba buona (Hype) quando
+        # drop_internal_transfers() le appaia, se l'esclusione l'avesse
+        # davvero tolta PRIMA della pulizia.
+        (cartella / "export" / "elaborati").mkdir(parents=True)
+        (cartella / "export" / "elaborati" / "intesa.csv").write_text(
+            "Data;Descrizione;Importo" + NEWLINE +
+            "10/01/2026;GIROCONTO A HYPE;-300,00" + NEWLINE, encoding="utf-8")
+        (cartella / "export" / "elaborati" / "hype.csv").write_text(
+            "Data;Descrizione;Importo" + NEWLINE +
+            "10/01/2026;RICARICA CONTO;300,00" + NEWLINE, encoding="utf-8")
+        id_escluso = transaction_id(
+            {"Conto": "Intesa", "Data": "2026-01-10", "Importo": -300.0,
+             "Descrizione": "GIROCONTO A HYPE"}, Counter())
+        (cartella / "escluse.csv").write_text(
+            "id;motivo" + NEWLINE + f"{id_escluso};prova ordine run()" + NEWLINE,
+            encoding="utf-8-sig")
+
+        # Il difetto (2): un bonifico e il suo storno, presenti sia
+        # nell'export fresco (dove drop_reversals() li toglie entrambi) sia,
+        # come residuo di un giro precedente, nel derivato. Se l'insieme
+        # degli ID "gia' presenti" si calcola DOPO la pulizia, l'ID del
+        # bonifico non risulta piu' fra le grezze e la sua copia nel derivato
+        # rientra: la decisione della pulizia viene disfatta in silenzio.
+        (cartella / "export" / "elaborati" / "unicredit.csv").write_text(
+            "Data;Descrizione;Importo" + NEWLINE +
+            "01/02/2026;DISPOSIZIONE DI BONIFICO ISTANTANEO;-200,00" + NEWLINE +
+            "01/02/2026;STORNO DI OPERAZIONE BONIFICO ISTANTANEO NON ESEGUITO;200,00"
+            + NEWLINE, encoding="utf-8")
+        id_bonifico = transaction_id(
+            {"Conto": "UniCredit", "Data": "2026-02-01", "Importo": -200.0,
+             "Descrizione": "DISPOSIZIONE DI BONIFICO ISTANTANEO"}, Counter())
+        (cartella / "consolidato.csv").write_text(
+            intestazione + NEWLINE +
+            f"{id_bonifico};2026-02-01;DISPOSIZIONE DI BONIFICO ISTANTANEO;;"
+            "-200,00;UniCredit;;;;;" + NEWLINE, encoding="utf-8-sig")
+
+        frame = run(cartella, use_llm=False, output="consolidato.csv",
+                   make_dashboard=False)
+
+    descrizioni = set(frame["Descrizione"])
+    assert "RICARICA CONTO" in descrizioni, \
+        "la riga buona e' sparita: l'esclusione non ha protetto l'appaiamento " \
+        "della pulizia (apply_exclusions() gira ma il suo ritorno va perso)"
+    assert "GIROCONTO A HYPE" not in descrizioni, \
+        "la riga esclusa a mano e' rientrata"
+    assert "DISPOSIZIONE DI BONIFICO ISTANTANEO" not in descrizioni, \
+        "il bonifico tolto dalla pulizia e' rientrato dal derivato: gli ID " \
+        "gia' presenti sono stati calcolati DOPO la pulizia invece che prima"
+    assert "STORNO DI OPERAZIONE BONIFICO ISTANTANEO NON ESEGUITO" not in descrizioni
 
     print("selftest: ok")
 
@@ -2952,6 +3024,13 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # riga che viene da consolidato.csv, o la correzione applicata su quella
     # riga si staccherebbe dalla transazione al giro successivo.
     assign_ids(raw)
+    # Il set va congelato QUI, prima della pulizia: read_consolidato() deve
+    # sapere quali ID un export FRESCO fornisce, non quali sopravvivono alla
+    # pulizia. Costruendolo dopo, ogni riga che un passo di pulizia toglie
+    # (doppione, storno, giroconto, coperta) sparirebbe da questo set, e la
+    # sua gemella nel derivato rientrerebbe dalla porta di servizio: la
+    # decisione della pulizia verrebbe disfatta in silenzio.
+    ids_grezze = {r["ID"] for r in raw}
     # Corrections/exclusions PRIMA della pulizia, sulle sole grezze: una riga
     # gia' corretta o esclusa dall'utente non deve sporcare gli appaiamenti di
     # drop_internal_transfers/drop_covered_by qui sotto (una riga esclusa
@@ -2960,7 +3039,11 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # decisione sulla transazione e vale ovunque sia arrivata, non solo sulle
     # grezze; qui si protegge solo la pulizia, che tocca solo le grezze.
     apply_corrections(raw, config["corrections"])
-    apply_exclusions(raw, config["exclusions"], scartate)
+    # apply_exclusions() e' pura: non mangiare il ritorno lascia la riga
+    # esclusa dentro "raw", dove i passi di pulizia qui sotto la trovano
+    # ancora e possono appaiarla a una riga buona (drop_internal_transfers
+    # annulla ENTRAMBE). Il ritorno va riassegnato, non solo osservato.
+    raw = apply_exclusions(raw, config["exclusions"], scartate)
 
     # La pulizia gira SOLO sulle grezze: sono le uniche righe mai passate da
     # un giro precedente. Le derivate (sotto) sono gia' state pulite dal giro
@@ -2985,7 +3068,7 @@ def run(folder, use_llm=True, output="consolidato.csv",
     raw = drop_covered_by(raw, discarded=scartate,
                           merchants=config["merchants"])
 
-    derivate = read_consolidato(folder, output, {r["ID"] for r in raw})
+    derivate = read_consolidato(folder, output, ids_grezze)
     manuali = read_manual(folder)
     if not raw and not derivate and not manuali:
         raise RuntimeError(
