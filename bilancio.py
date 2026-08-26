@@ -1809,10 +1809,10 @@ def selftest():
         got = parse_amount(raw)
         assert abs(got - expected) < 0.005, f"{raw!r}: atteso {expected}, ottenuto {got}"
 
-    # Il ripiego su consolidato.csv deve tornare le righe con gli STESSI ID.
-    # Ricalcolarli sui valori gia' corretti li staccherebbe dalle correzioni,
-    # e al riavvio l'importo sistemato a mano tornerebbe quello sbagliato
-    # senza che niente lo dica.
+    # Il supplemento da consolidato.csv deve tornare le righe con gli STESSI
+    # ID. Ricalcolarli sui valori gia' corretti li staccherebbe dalle
+    # correzioni, e al riavvio l'importo sistemato a mano tornerebbe quello
+    # sbagliato senza che niente lo dica.
     with tempfile.TemporaryDirectory() as cartella:
         righe = [
             "ID;Data;Descrizione;Merchant;Importo;Conto;Natura;Categoria;"
@@ -1824,8 +1824,8 @@ def selftest():
         ]
         (Path(cartella) / "consolidato.csv").write_text(
             NEWLINE.join(righe) + NEWLINE, encoding="utf-8-sig")
-        ripescate = read_consolidato(cartella, "consolidato.csv")
-        assert read_consolidato(cartella, "non-esiste.csv") == [], \
+        ripescate = read_consolidato(cartella, "consolidato.csv", set())
+        assert read_consolidato(cartella, "non-esiste.csv", set()) == [], \
             "un file che non c'e' deve dare zero righe, non esplodere"
     assert len(ripescate) == 2, f"ripescate {len(ripescate)} righe invece di 2"
     assert ripescate[0]["ID"] == "abc123#1", "l'ID non e' quello del file"
@@ -1901,27 +1901,28 @@ def selftest():
         lette = read_manual(cartella)
         assert lette[0]["Data"] == "2026-08-24",             f"data non normalizzata: {lette[0]['Data']!r}"
 
-    # prepara_righe() e' la sequenza VERA usata da run(): un test che chiama
-    # merge_manual() e apply_corrections() a mano, nell'ordine che gli pare,
-    # non si accorgerebbe se qualcuno li scambiasse DENTRO prepara_righe().
-    # Tutti e quattro gli ingredienti insieme, quindi, attraverso la funzione
-    # vera: una di banca senza ID, una a mano col suo ID, una correzione
-    # sulla riga a mano, un'esclusione su un'altra riga.
-    banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
-              "Conto": "Koala"}]
-    da_escludere = {"Data": "2026-01-16", "Descrizione": "doppione",
-                    "Importo": -5.0, "Conto": "Koala"}
-    id_da_escludere = transaction_id(da_escludere, Counter())
+    # prepara_righe() e' la sequenza VERA usata da run() DOPO la pulizia sulle
+    # grezze: un test che chiama merge_manual() e apply_corrections() a mano,
+    # nell'ordine che gli pare, non si accorgerebbe se qualcuno li scambiasse
+    # DENTRO prepara_righe(). Tutti gli ingredienti insieme, quindi, attraverso
+    # la funzione vera: una di banca (l'ID lo assegna run() prima di chiamare
+    # prepara_righe, qui lo si simula a mano), una a mano col suo ID, una
+    # correzione sulla riga a mano, un'esclusione su un'altra riga di banca.
+    grezze = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
+              "Conto": "Koala"},
+              {"Data": "2026-01-16", "Descrizione": "doppione",
+               "Importo": -5.0, "Conto": "Koala"}]
+    assign_ids(grezze)
+    id_da_escludere = grezze[1]["ID"]
     riga_mano = {"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
                  "Importo": -84.0, "Conto": "Contanti", "Rango": RANK_BANK}
     config_prova = {"corrections": {"man-1": {"Importo": -90.0}},
                     "exclusions": {id_da_escludere: "doppione"}}
-    rows = prepara_righe(banca + [da_escludere], [riga_mano], config_prova,
-                         [], False)
+    rows = prepara_righe(grezze, [], [riga_mano], config_prova, [])
     per_id = {r["ID"]: r for r in rows}
     assert id_da_escludere not in per_id, "la riga esclusa non e' sparita"
     assert per_id["man-1"]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
-    assert "#" in banca[0]["ID"], "la riga di banca non ha preso un ID"
+    assert "#" in grezze[0]["ID"], "la riga di banca non ha preso un ID"
 
     # Il saldo di una persona su una riga condivisa e' "pagato meno dovuto", e
     # i due saldi sommano zero. Da li' si ricavano pagatore e quote senza che
@@ -2498,6 +2499,89 @@ def selftest():
         # E non devono nemmeno passare per export in attesa di caricamento.
         assert not pending_exports(temporary), pending_exports(temporary)
 
+    # Il supplemento da consolidato.csv non e' piu' un tutto-o-niente: un solo
+    # export ritrovato non deve far sparire tutto il resto della storia. Le
+    # cinque prove sotto sono quelle misurate sul caso vero (un export Koala
+    # ritrovato che aveva cancellato 1.236 movimenti di banca dal consolidato).
+    intestazione = ("ID;Data;Descrizione;Merchant;Importo;Conto;Natura;"
+                    "Categoria;Sottocategoria;Origine;Confidenza")
+
+    # 1. Stesso ID in export e derivato: vince l'export. Si controlla su
+    #    qualcosa che SOLO l'export porta (Rango, Origine file): il derivato
+    #    li appiattisce sempre a RANK_BANK e a niente.
+    with tempfile.TemporaryDirectory() as cartella:
+        (Path(cartella) / "consolidato.csv").write_text(
+            intestazione + NEWLINE +
+            "koala-1#1;2026-08-24;Cena fuori;;-30,00;Koala;;;;;" + NEWLINE,
+            encoding="utf-8-sig")
+        derivate = read_consolidato(cartella, "consolidato.csv", {"koala-1#1"})
+    assert derivate == [], \
+        "una riga del derivato con lo stesso ID di un export presente non e' stata filtrata"
+    fresca = {"ID": "koala-1#1", "Data": "2026-08-24", "Descrizione": "Cena fuori",
+              "Importo": -30.0, "Conto": "Koala", "Origine file": "koala.csv",
+              "Rango": RANK_SHARED}
+    fuse = prepara_righe([fresca], derivate, [],
+                         {"corrections": {}, "exclusions": {}}, [])
+    assert len(fuse) == 1, f"sullo stesso ID deve sopravvivere una riga sola, non {len(fuse)}"
+    assert fuse[0].get("Origine file") == "koala.csv", \
+        "sull'ID in comune ha vinto il derivato appiattito, non l'export fresco"
+
+    # 2. Una riga del derivato il cui ID nessun export fornisce sopravvive:
+    #    e' esattamente il caso dei 1.236 movimenti di banca del bug misurato.
+    with tempfile.TemporaryDirectory() as cartella:
+        (Path(cartella) / "consolidato.csv").write_text(
+            intestazione + NEWLINE +
+            "solo-derivato#1;2024-05-01;Bonifico vecchio;;-500,00;Intesa;;;;;"
+            + NEWLINE, encoding="utf-8-sig")
+        derivate = read_consolidato(cartella, "consolidato.csv", {"koala-1#1"})
+    assert [r["ID"] for r in derivate] == ["solo-derivato#1"], \
+        "una riga del derivato senza corrispondenza nell'export doveva sopravvivere"
+    fuse = prepara_righe([], derivate, [], {"corrections": {}, "exclusions": {}}, [])
+    assert [r["ID"] for r in fuse] == ["solo-derivato#1"]
+
+    # 3. Una correzione chiave su una riga che esiste SOLO nel derivato deve
+    #    comunque applicarsi: e' il caso che la vecchia forma a un solo flag
+    #    "gia_pulite" prendeva bene per caso (le derivate erano l'UNICA cosa
+    #    in "rows"), e una riorganizzazione distratta lo perderebbe.
+    config_corretta = {"corrections": {"solo-derivato#1": {"Importo": -600.0}},
+                       "exclusions": {}}
+    fuse = prepara_righe([], derivate, [], config_corretta, [])
+    assert fuse[0]["Importo"] == -600.0, \
+        "una correzione su una riga che esiste solo nel derivato non si e' applicata"
+
+    # 4. Un'esclusione chiave su una riga che esiste solo nel derivato la toglie.
+    buttate = []
+    config_esclusa = {"corrections": {}, "exclusions": {"solo-derivato#1": "prova"}}
+    fuse = prepara_righe([], derivate, [], config_esclusa, buttate)
+    assert fuse == [], \
+        "un'esclusione su una riga che esiste solo nel derivato non l'ha tolta"
+    assert len(buttate) == 1, "la riga esclusa dal derivato non e' finita fra le scartate"
+
+    # 5. La pulizia non deve MAI vedere le derivate: una gamba di giroconto
+    #    rimasta nel derivato, il cui opposto e' fra le righe fresche, si
+    #    annullerebbe se le due si incontrassero in drop_internal_transfers.
+    #    Prima si prova che il difetto e' vero (le due gambe unite si
+    #    annullano davvero), poi si prova il percorso reale: la pulizia gira
+    #    SOLO sulla grezza (run() lo fa prima di leggere il derivato), quindi
+    #    non la incontra mai, e prepara_righe() la riaggiunge intatta dopo.
+    grezza_giro = {"ID": "banca-1", "Data": "2026-03-10",
+                   "Descrizione": "GIROCONTO A HYPE", "Importo": -300.0,
+                   "Conto": "Intesa", "Rango": RANK_BANK}
+    derivata_giro = {"ID": "derivato-1", "Data": "2026-03-10",
+                     "Descrizione": "RICARICA DA INTESA", "Importo": 300.0,
+                     "Conto": "Hype", "Rango": RANK_BANK}
+    insieme = drop_internal_transfers([dict(grezza_giro), dict(derivata_giro)],
+                                      transfers=GIRO)
+    assert insieme == [], \
+        "prova non significativa: le due gambe non si appaiano nemmeno se unite"
+    pulita = drop_internal_transfers([dict(grezza_giro)], transfers=GIRO)
+    assert pulita == [grezza_giro], \
+        "la pulizia sulla sola grezza ha comunque tolto la riga: non c'e' con chi appaiarla"
+    fuse = prepara_righe(pulita, [derivata_giro], [],
+                         {"corrections": {}, "exclusions": {}}, [])
+    assert {r["ID"] for r in fuse} == {"banca-1", "derivato-1"}, \
+        "la gamba derivata e' stata mangiata come se fosse passata dalla pulizia"
+
     print("selftest: ok")
 
 
@@ -2687,9 +2771,14 @@ def read_sources(folder, config, output, include_pending=False, discarded=None):
 def read_manual(folder):
     """Le transazioni scritte a mano, da transazioni.csv.
 
-    Sono di rango RANK_BANK come gli estratti conto: non vanno mai scartate da
-    drop_covered_by, e possono coprire una riga condivisa (paghi in contanti,
-    la registri qui e su Splitwise: la seconda e' un doppione della prima).
+    Sono di rango RANK_BANK come gli estratti conto, ma entrano nel lotto
+    DOPO la pulizia (dentro prepara_righe(), non fra le grezze che run() pulisce):
+    non passano mai da drop_internal_transfers/drop_covered_by. Prima di
+    questa scelta una riga a mano poteva coprire una riga condivisa (paghi in
+    contanti, la registri qui e su Splitwise: la seconda diventava un
+    doppione della prima); ora quel caso non si annulla piu' da solo e va
+    escluso a mano, come ogni doppione fra sorgenti diverse che la pulizia
+    non vede.
     """
     path = Path(folder) / "transazioni.csv"
     if not path.exists():
@@ -2723,10 +2812,11 @@ def read_manual(folder):
 def merge_manual(rows, manuali):
     """Fonde le righe scritte a mano con le altre, senza doppioni.
 
-    Il tranello: quando le manuali sono passate da "rows" in un giro con
-    export, finiscono scritte anche loro dentro consolidato.csv. Al giro
-    successivo senza export, read_consolidato() le rilegge da li' - e
-    sommare "manuali" sopra le raddoppierebbe. transazioni.csv resta la
+    Il tranello: quando le manuali sono passate da "rows" in un giro, finiscono
+    scritte anche loro dentro consolidato.csv. Un giro successivo dove quella
+    riga non e' piu' coperta da nessun export presente se la ritrova fra le
+    derivate lette da read_consolidato() - e sommare "manuali" sopra le
+    raddoppierebbe. transazioni.csv resta la
     fonte autorevole delle SUE righe: si toglie da rows ogni ID che compare
     fra le manuali, poi si aggiungono le manuali. Cosi' anche una riga
     corretta a mano nel file vince sulla copia ferma nel derivato.
@@ -2735,24 +2825,36 @@ def merge_manual(rows, manuali):
     return [r for r in rows if r["ID"] not in manuali_ids] + manuali
 
 
-def read_consolidato(folder, output):
-    """Le transazioni gia' elaborate, quando la sorgente non c'e' piu'.
+def read_consolidato(folder, output, gia_presenti):
+    """Le transazioni del derivato che nessun export presente fornisce piu'.
 
     Chi carica un estratto conto e poi lo cancella fa la cosa giusta: quel
     file contiene IBAN, numeri di carta e ogni movimento. Ma la pipeline
-    ricostruisce sempre tutto dalla sorgente, e al riavvio successivo l'app
-    apriva vuota con dentro cinquantasei mesi di lavoro.
+    ricostruisce sempre tutto dalla sorgente, e senza questa funzione un solo
+    export ritrovato bastava a far sparire dal consolidato tutti i movimenti
+    di banca i cui export non ci sono piu': read_sources() non tornava piu'
+    vuoto, quindi il ripiego (un tempo un tutto-o-niente su "rows" vuoto) non
+    scattava affatto.
+
+    Non e' piu' un ripiego per quando gli export mancano DEL TUTTO: e' un
+    supplemento sempre attivo. gia_presenti sono gli ID gia' letti da un
+    export fresco in QUESTO giro (calcolati PRIMA di chiamare questa
+    funzione: vedi run()). Una riga del derivato con quell'ID e' la STESSA
+    transazione - l'ID e' content-derived, quindi una riga Koala o un
+    movimento di banca riletti dall'export producono lo stesso digest della
+    copia gia' scritta qui - e si scarta: vince la copia fresca, che porta il
+    vero Rango e la vera Origine file al posto dei due valori che questa
+    funzione appiattisce sotto.
 
     consolidato.csv resta un DERIVATO: nessuno lo modifica a mano, e ogni giro
-    lo riscrive da capo. Solo che, quando la sorgente e' sparita, e' l'unica
-    copia rimasta di cio' che la sorgente diceva.
+    lo riscrive da capo.
 
-    Le righe tornano gia' ripulite: doppioni, storni, giroconti e coperture li
-    ha tolti il giro che le ha scritte. Rifare quei passi su di loro non
-    toglierebbe niente di nuovo, ma potrebbe togliere di troppo: un giroconto
-    rimasto spaiato si appaierebbe con una spesa qualsiasi di pari importo. La
-    categorizzazione invece si rifa' sempre, cosi' una regola aggiunta oggi
-    vale anche su questi dati.
+    Le righe che restano sono gia' ripulite: doppioni, storni, giroconti e
+    coperture li ha tolti il giro che le ha scritte. Rifare quei passi su di
+    loro non toglierebbe niente di nuovo, ma potrebbe togliere di troppo: un
+    giroconto rimasto spaiato si appaierebbe con una riga fresca qualsiasi di
+    pari importo (vedi prepara_righe()). La categorizzazione invece si rifa'
+    sempre, cosi' una regola aggiunta oggi vale anche su questi dati.
     """
     path = Path(folder) / output
     if not path.exists():
@@ -2764,11 +2866,14 @@ def read_consolidato(folder, output):
     for _, riga in frame.iterrows():
         if not _text(riga.get("Data")):
             continue
+        # L'ID viene dal file e non si ricalcola: sui valori gia' corretti
+        # darebbe un id diverso, e ogni correzione si staccherebbe dalla sua
+        # transazione al primo riavvio.
+        id_ = _text(riga.get("ID"))
+        if id_ in gia_presenti:
+            continue
         rows.append({
-            # L'ID viene dal file e non si ricalcola: sui valori gia' corretti
-            # darebbe un id diverso, e ogni correzione si staccherebbe dalla
-            # sua transazione al primo riavvio.
-            "ID": _text(riga.get("ID")),
+            "ID": id_,
             "Data": _text(riga.get("Data")),
             "Descrizione": _text(riga.get("Descrizione")),
             "Importo": parse_amount(_text(riga.get("Importo"))),
@@ -2778,33 +2883,47 @@ def read_consolidato(folder, output):
             "Rango": RANK_BANK,
         })
     if rows:
-        print(f"  export non trovati: riparto da {output}, "
-              f"{len(rows)} transazioni gia' elaborate")
+        print(f"  {output}: {len(rows)} transazioni riprese, nessun export "
+              "presente le fornisce piu'")
     return rows
 
 
-def prepara_righe(rows, manuali, config, scartate, gia_pulite):
-    """Mette insieme le righe prima di categorizzarle. L'ORDINE e' il punto:
+def prepara_righe(rows, derivate, manuali, config, scartate):
+    """Aggiunge al lotto gia' pulito quel che la pulizia non doveva vedere.
 
-    1. assign_ids(), ma solo se le righe non arrivano gia' pulite da
-       consolidato.csv: al contrario correggere un importo cambierebbe l'ID
-       della sua riga e la correzione si staccherebbe dalla transazione al
-       giro successivo.
+    "rows" arriva qui gia' con l'ID assegnato e gia' pulito (doppioni,
+    storni, giroconti, coperture: run() lo fa PRIMA di chiamarci, con
+    apply_corrections()/apply_exclusions() gia' passate una volta sulle sole
+    grezze per proteggere quegli appaiamenti - vedi run() per il perche').
+    Da qui l'ORDINE e' il punto:
+
+    1. si aggiungono le derivate: read_consolidato() le ha gia' filtrate per
+       ID contro "rows", quindi qui non c'e' scelta da fare - sono
+       esattamente le transazioni che nessun export presente fornisce piu'.
+       Non passano dalla pulizia: sono gia' state pulite dal giro che le ha
+       scritte, e ripassarle rischierebbe di togliere di troppo (un giroconto
+       spaiato del derivato si appaierebbe con una riga fresca; drop_covered_by
+       scarterebbe una derivata contro l'export che di fatto e' gia' la
+       stessa transazione che rappresenta).
     2. merge_manual(), che porta dentro le righe scritte a mano (il loro ID
-       viene dal file, non passano mai da assign_ids) e toglie prima
-       l'eventuale copia gia' ferma in "rows" (consolidato.csv puo' averla
-       scritta il giro precedente: vedi merge_manual() per il perche').
+       viene dal file, non passa mai da assign_ids) e toglie prima
+       l'eventuale copia gia' ferma fra le derivate (consolidato.csv puo'
+       averla scritta il giro precedente: vedi merge_manual() per il
+       perche').
     3. apply_corrections(), DOPO le manuali: una correzione in
        correzioni.csv e' chiave sull'ID, e apply_corrections() scorre solo
        le righe che gli si passano. Prima delle manuali, una correzione
        scritta per una riga a mano non troverebbe mai la sua riga e
-       resterebbe inerte per sempre.
-    4. apply_exclusions(), per ultima: una riga esclusa non deve nemmeno
-       partecipare agli appaiamenti dei passi successivi (giroconti,
-       coperture), o consumerebbe la copertura di una riga buona.
+       resterebbe inerte per sempre. Si ripete qui (era gia' passata sulle
+       grezze in run()) perche' una correzione e' una decisione sulla
+       transazione, non sulla sorgente da cui e' arrivata: deve valere anche
+       su una riga scritta a mano o rimasta solo nel derivato.
+    4. apply_exclusions(), per lo stesso motivo e per ultima: un'esclusione
+       decisa su una riga che esiste solo nel derivato o solo a mano deve
+       toglierla comunque, anche se la pulizia sulle grezze non l'ha mai
+       vista passare.
     """
-    if not gia_pulite:
-        assign_ids(rows)
+    rows = rows + derivate
     rows = merge_manual(rows, manuali)
     apply_corrections(rows, config["corrections"])
     return apply_exclusions(rows, config["exclusions"], scartate)
@@ -2826,42 +2945,56 @@ def run(folder, use_llm=True, output="consolidato.csv",
                            "MoneyWiz in backup/ oppure un regole.csv")
 
     scartate = []
-    rows = read_sources(folder, config, output, include_pending, scartate)
-    # Il ripiego guarda SOLO gli export: con le righe scritte a mano fra le
-    # sorgenti "rows" non sarebbe mai vuoto, e al riavvio senza export l'app
-    # mostrerebbe tre righe manuali al posto di cinquantasei mesi di storia.
-    gia_pulite = False
-    if not rows:
-        rows = read_consolidato(folder, output)
-        gia_pulite = bool(rows)
+    raw = read_sources(folder, config, output, include_pending, scartate)
+    # L'ID serve gia' qui, prima di leggere il derivato: read_consolidato usa
+    # gli ID delle grezze per sapere quali sue righe sono ancora coperte da un
+    # export presente (vedi la sua docstring), e non va mai ricalcolato su una
+    # riga che viene da consolidato.csv, o la correzione applicata su quella
+    # riga si staccherebbe dalla transazione al giro successivo.
+    assign_ids(raw)
+    # Corrections/exclusions PRIMA della pulizia, sulle sole grezze: una riga
+    # gia' corretta o esclusa dall'utente non deve sporcare gli appaiamenti di
+    # drop_internal_transfers/drop_covered_by qui sotto (una riga esclusa
+    # rimasta dentro consumerebbe la copertura di una riga buona). Si ripetono
+    # su tutto dentro prepara_righe(): una correzione o un'esclusione e' una
+    # decisione sulla transazione e vale ovunque sia arrivata, non solo sulle
+    # grezze; qui si protegge solo la pulizia, che tocca solo le grezze.
+    apply_corrections(raw, config["corrections"])
+    apply_exclusions(raw, config["exclusions"], scartate)
+
+    # La pulizia gira SOLO sulle grezze: sono le uniche righe mai passate da
+    # un giro precedente. Le derivate (sotto) sono gia' state pulite dal giro
+    # che le ha scritte in consolidato.csv, e le manuali si aggiungono dopo,
+    # dentro prepara_righe() - vedi la sua docstring per il perche'.
+    raw = drop_cross_file_duplicates(raw, scartate)
+    # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
+    # tocca solo il rango 0, anticiparlo non cambia niente per la banca e
+    # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
+    # una spesa condivisa "coperta" da una gamba poi annullata spariva del
+    # tutto: tre righe dentro, zero fuori.
+    # Prima dei giroconti: un bonifico annullato somiglia a uno spostamento
+    # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
+    # giroconti lasciando il riaccredito a contare come entrata.
+    raw = drop_reversals(raw, discarded=scartate)
+    # Le regole con categoria Giroconto sono gia' il posto dove vive la
+    # conoscenza di quali conti e quali persone sono "in famiglia".
+    giroconti = [p for p, c in config["rules"] if c == TRANSFER]
+    raw = drop_internal_transfers(raw, discarded=scartate,
+                                  transfers=giroconti)
+    raw = drop_import_artifacts(raw, scartate)
+    raw = drop_covered_by(raw, discarded=scartate,
+                          merchants=config["merchants"])
+
+    derivate = read_consolidato(folder, output, {r["ID"] for r in raw})
     manuali = read_manual(folder)
-    if not rows and not manuali:
+    if not raw and not derivate and not manuali:
         raise RuntimeError(
             f"nessuna transazione: metti gli export in {EXPORT_DIR}/ e premi "
             "Carica dati. Se e' la prima volta, esegui prima "
             "python bilancio.py --migra-storico")
 
     # Vedi prepara_righe() per il perche' di questo ordine esatto.
-    rows = prepara_righe(rows, manuali, config, scartate, gia_pulite)
-    if not gia_pulite:
-        rows = drop_cross_file_duplicates(rows, scartate)
-        # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
-        # tocca solo il rango 0, anticiparlo non cambia niente per la banca e
-        # toglie le gambe di giroconto dall'indice delle coperture. Al contrario,
-        # una spesa condivisa "coperta" da una gamba poi annullata spariva del
-        # tutto: tre righe dentro, zero fuori.
-        # Prima dei giroconti: un bonifico annullato somiglia a uno spostamento
-        # fra conti propri, e senza questo passo l'uscita sparirebbe fra i
-        # giroconti lasciando il riaccredito a contare come entrata.
-        rows = drop_reversals(rows, discarded=scartate)
-        # Le regole con categoria Giroconto sono gia' il posto dove vive la
-        # conoscenza di quali conti e quali persone sono "in famiglia".
-        giroconti = [p for p, c in config["rules"] if c == TRANSFER]
-        rows = drop_internal_transfers(rows, discarded=scartate,
-                                       transfers=giroconti)
-        rows = drop_import_artifacts(rows, scartate)
-        rows = drop_covered_by(rows, discarded=scartate,
-                               merchants=config["merchants"])
+    rows = prepara_righe(raw, derivate, manuali, config, scartate)
 
     # Prima della categorizzazione: il guardiano sui rimborsi qui sotto legge
     # row["Quota"], e deve trovarla gia' scritta su ogni riga.
