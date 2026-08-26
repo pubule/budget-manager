@@ -55,7 +55,7 @@ ${js}
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
- registro,
+ registro, quotaPayload,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -336,6 +336,26 @@ console.log("=== il registro con Michela ===");
   const ultima = r.righe[r.righe.length - 1];
   check("il saldo progressivo dell'ultima riga e' il totale",
         ultima.saldo === r.saldo, `${ultima.saldo} contro ${r.saldo}`);
+}
+
+console.log("=== svuotare un menu svuota la coppia ===");
+{
+  // Meta' quota non e' uno stato: senza sapere chi ha pagato, "meta'" non
+  // dice da che parte va il debito, e infatti il server la rifiuta. Quindi
+  // svuotare UN SOLO menu deve mandare la coppia vuota, non una meta' che il
+  // server scarterebbe in silenzio lasciando risorgere il valore vecchio.
+  check("entrambi pieni restano pieni",
+        JSON.stringify(api.quotaPayload("io", "meta")) ===
+        JSON.stringify({pagato_da: "io", quota: "meta"}));
+  check("chi vuoto svuota anche la quota",
+        JSON.stringify(api.quotaPayload("", "meta")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
+  check("quota vuota svuota anche chi",
+        JSON.stringify(api.quotaPayload("io", "")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
+  check("entrambi vuoti restano vuoti",
+        JSON.stringify(api.quotaPayload("", "")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
 }
 
 console.log("=== filtri ===");

@@ -1972,6 +1972,17 @@ async function handleRule(d){
   reload();
 }
 
+// Meta' quota non e' uno stato che l'app sostiene: "meta'" senza sapere chi
+// ha pagato non dice da che parte va il debito, e il server la rifiuta a
+// ragione (vedi set_transaction in server.py). Percio' svuotare UN SOLO
+// menu deve svuotare la coppia: e' l'unico modo per cui la lapide "niente"
+// diventi raggiungibile dai due menu invece che solo dall'API diretta --
+// altrimenti il POST porta una meta' che il server scarta in silenzio, e la
+// quota vecchia (dal derivato, quando l'export e' sparito) resta li'.
+function quotaPayload(chi, q){
+  return (chi && q) ? {pagato_da: chi, quota: q} : {pagato_da: "", quota: ""};
+}
+
 document.addEventListener("change", async ev => {
   const d = ev.target.dataset;
   if(d.setcat){
@@ -1984,12 +1995,10 @@ document.addEventListener("change", async ev => {
     return reload();
   }
   if(d.quota !== undefined || d.quotaChi !== undefined){
-    // Servono tutti e due: "meta'" senza sapere chi ha pagato non dice da che
-    // parte va il debito, quindi si mandano sempre insieme.
     const id = d.quota || d.quotaChi;
     const chi = document.querySelector(`[data-quota-chi="${id}"]`).value;
     const q = document.querySelector(`[data-quota="${id}"]`).value;
-    await post("/api/transaction", {id, pagato_da:chi, quota:q});
+    await post("/api/transaction", {id, ...quotaPayload(chi, q)});
     return reload();
   }
   if(d.fix){
