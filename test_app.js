@@ -255,6 +255,53 @@ console.log("=== le due letture ===");
         pienaTutto === pienaMia && pienaTutto === -140,
         `${pienaTutto} vs ${pienaMia}`);
 
+  // groupSum alimenta le righe di "Dove finiscono i soldi": deve pesare
+  // come sum, altrimenti la tabella e la percentuale sopra di lei
+  // raccontano due storie diverse.
+  const righePerCategoria = [
+    {Importo:-100, Natura:"Spese", Categoria:"Casa", "Pagato da":"io", Quota:"meta"},
+    {Importo:-50, Natura:"Spese", Categoria:"Casa", "Pagato da":"", Quota:""},
+  ];
+  F6.lettura = "";
+  const grpTutto = api.groupSum(righePerCategoria, "Categoria")[0].total;
+  F6.lettura = "mia";
+  const grpMia = api.groupSum(righePerCategoria, "Categoria")[0].total;
+  check("groupSum si restringe in la mia quota, come sum",
+        grpTutto === -150 && grpMia === -100, `${grpTutto} vs ${grpMia}`);
+
+  // La mappa dei negozi in CARDS.dove e' scritta a mano, non passa da
+  // groupSum: stesso obbligo, verificato sul totale che finisce in tabella.
+  const rigaNegozio = [{Importo:-200, Natura:"Spese", Merchant:"Negozio Test",
+                        Data:"2025-06-10", "Pagato da":"io", Quota:"meta"}];
+  F6.vista = "negozio";
+  F6.lettura = "";
+  const mNeg = api.mesiEffettivi(api.spending(rigaNegozio));
+  check("il totale per negozio pesa per intero in lettura tutto",
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-200/mNeg)}<`));
+  F6.lettura = "mia";
+  check("il totale per negozio si dimezza in lettura la mia quota",
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-100/mNeg)}<`));
+  F6.vista = "";
+
+  // L'invariante che si era rotto: la percentuale di ogni riga divide il suo
+  // totale per lo stesso denominatore con cui e' stata costruita la riga.
+  // Se groupSum e sum pesassero in modo diverso, le righe non sommerebbero
+  // piu' al denominatore in nessuna delle due letture.
+  const righeInvariante = [
+    {Importo:-100, Natura:"Spese", Categoria:"Casa", "Pagato da":"io", Quota:"meta"},
+    {Importo:-60, Natura:"Spese", Categoria:"Trasporti", "Pagato da":"lei", Quota:"tutto"},
+    {Importo:-40, Natura:"Spese", Categoria:"Casa", "Pagato da":"", Quota:""},
+  ];
+  for(const lettura of ["", "mia"]){
+    F6.lettura = lettura;
+    const denominatore = api.sum(righeInvariante);
+    const righeTabella = api.groupSum(righeInvariante, "Categoria");
+    const totaleRighe = righeTabella.reduce((s,g) => s + g.total, 0);
+    check(`le righe della tabella sommano alla quota totale (lettura "${lettura||"tutto"}")`,
+          Math.abs(totaleRighe - denominatore) < 1e-9,
+          `${totaleRighe} vs ${denominatore}`);
+  }
+
   F6.lettura = "";
 }
 

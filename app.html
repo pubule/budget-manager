@@ -810,12 +810,16 @@ function filtered(conPeriodo){
   });
 }
 
+// Stessa regola di sum: ogni chiamante raggruppa spese o entrate per dire
+// "quanto ho speso in questa categoria/natura", quindi passa dal
+// moltiplicatore. Se un domani un chiamante volesse i soldi mossi e basta,
+// gli serve una funzione a parte come sommaPiena, non un flag qui dentro.
 function groupSum(rows, key){
   const map = new Map();
   for(const t of rows){
     const k = t[key] || "Senza categoria";
     const cur = map.get(k) || {total:0, n:0};
-    cur.total += t.Importo || 0; cur.n++;
+    cur.total += (t.Importo || 0) * quotaDi(t); cur.n++;
     map.set(k, cur);
   }
   return [...map.entries()].map(([name,v]) => ({name, ...v}))
@@ -1294,7 +1298,9 @@ CARDS.dove = rows => {
     for(const r of out){
       const k = r.Merchant; if(!k) continue;
       const cur = mappa.get(k) || {total:0, n:0, mesi:new Set()};
-      cur.total += r.Importo; cur.n++; cur.mesi.add(month(r));
+      // Stessa vista per negozio della tabella per area sopra: quanto ho
+      // speso li', non quanto e' passato di li'. Stesso moltiplicatore.
+      cur.total += r.Importo * quotaDi(r); cur.n++; cur.mesi.add(month(r));
       mappa.set(k, cur);
     }
     let elenco = [...mappa.entries()]
@@ -1658,7 +1664,12 @@ function render(){
 
   const ETICHETTE = {from:"dal", to:"al", account:"conto", nature:"natura",
                      category:"categoria", sub:"sotto", text:"cerca"};
-  el("crumbs").innerHTML = Object.entries(F).filter(([,v]) => v)
+  // I crumbs rispondono a "quali righe sto guardando": confronto, vista e
+  // lettura non tolgono ne' aggiungono righe, cambiano solo come le leggo, e
+  // hanno gia' il loro pulsante acceso altrove. Mescolarli coi filtri veri
+  // farebbe sembrare il toggle un filtro sui dati, che non e'.
+  el("crumbs").innerHTML = Object.entries(F)
+    .filter(([k,v]) => v && k !== "confronto" && k !== "vista" && k !== "lettura")
     .map(([k,v]) => `<span class="chip" data-clear="${k}">`
                     + `${esc(ETICHETTE[k]||k)}: ${esc(v)} ×</span>`)
     .join("");
