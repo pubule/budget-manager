@@ -745,6 +745,121 @@ identico** a quello prodotto dagli export.
 L'interfaccia lo dichiara (`derivato` nel payload): *"sorgente: consolidato.csv
 (gli export non ci sono più)"*.
 
+### 4octies. Il conto fra due persone (26/08/2026, ramo `conto-fra-due`)
+
+Ogni transazione porta due colonne nuove: **`Pagato da`** (`io` / `lei`) e
+**`Quota`** (`meta` / `tutto` / `saldo`), cioè chi ha anticipato una spesa
+condivisa e quanto ne deve l'altro. Una spesa condivisa resta **una riga sola**
+al costo pieno: a cambiare è come la si legge.
+
+L'idea di partenza era due conti separati, uno per ciascuno. La misura l'ha
+scartata: spaccare ogni riga condivisa porterebbe le 657 righe Splitwise a
+1.314, e con loro i conteggi `tx` e la coda di revisione — lo stesso raddoppio
+che la migrazione MoneyWiz aveva tolto. La domanda dietro resta giusta e si
+risponde con **due letture**, non due insiemi di righe:
+
+| lettura | somma | risponde a |
+|---|---|---|
+| `tutto` (predefinita) | il costo pieno | quanto è costato vivere, per la coppia |
+| `la mia quota` | ogni riga × la tua parte | quanto di quella spesa è tuo |
+
+Il moltiplicatore (`quotaDi`) vive **nel browser** e non tocca la pipeline: è un
+modo di leggere, non un fatto sui dati.
+
+**I quattro pesi, e quello controintuitivo**: ho pagato io + metà a lei → 0,5;
+ho pagato io + **tutto a lei → 0**, l'ho solo anticipata; ha pagato lei + metà a
+me → 0,5; ha pagato lei + tutto a me → 1.
+
+#### I file nuovi
+
+| file | cosa |
+|---|---|
+| `quote.csv` | `id;pagato_da;quota;nota` — la quota di una riga qualunque |
+| `transazioni.csv` | `id;data;descrizione;importo;conto;nota` — le righe scritte a mano |
+| `escluse.csv` | `id;motivo` — quello che non deve comparire, ripescabile |
+| `partita.csv` | `dal;saldo;controparte;nota` — una riga, il punto di partenza del registro |
+
+#### Cinque trappole, tutte pagate
+
+- **Cancellare una riga di banca sarebbe una bugia**: il caricamento dopo la
+  riporterebbe. Esiste solo l'esclusione, registrata con un motivo, e vale sia
+  per le righe di banca sia per quelle scritte a mano — un meccanismo solo.
+- **L'ordine dentro `run()` è portante**, e vive in `prepara_righe()` con la
+  docstring che numera ogni passo e il difetto che ne motiva la posizione:
+  `assign_ids` → `merge_manual` → `apply_corrections` → `apply_exclusions`.
+  Prima le correzioni giravano prima che le righe manuali entrassero, quindi
+  una correzione su una riga scritta a mano **restava inerte per sempre**.
+- **Il ripiego non deve essere disattivato dalle righe manuali**: guarda solo
+  gli export. Con `transazioni.csv` fra le sorgenti non sarebbe mai più
+  scattato, e al riavvio senza export si sarebbero visti tre movimenti al posto
+  di 56 mesi.
+- **La quota si travasa quando `drop_covered_by` scarta la riga condivisa**:
+  quella che se ne va è l'unica che sapeva com'era divisa la spesa.
+- **Una quota tolta non deve risorgere.** `setdefault` è giusto — le quote
+  dedotte da Splitwise vivono solo nel consolidato dopo che l'export sparisce —
+  quindi azzerare al silenzio cancellerebbe quattro anni di storia. Serviva un
+  modo di dire «no» ad alta voce: `quota = niente`, una **lapide**. Un file che
+  sa dire solo «sì» non può esprimere «no».
+
+#### Le colonne persona di Splitwise bastano da sole
+
+Il saldo di una persona su una riga è `pagato − dovuto`, e i due saldi sommano
+zero. Quindi da `Costo` più i due saldi si ricavano **pagatore e quote**, per
+tutte le 669 righe, senza marcare niente a mano:
+
+```
+Costo 60,00   Michela +30,00   Fabio −30,00
+→ ha pagato Michela, quota Fabio 30, quota Michela 30
+```
+
+La tolleranza con cui si riconosce «metà» è **0,02 €**, non un valore comodo:
+Splitwise divide al centesimo, e l'unico scarto legittimo da metà è il mezzo
+centesimo di un importo dispari (60,01 → 30,01/30,00). Con la tolleranza di
+0,51 che c'era prima, una spesa da 1,00 € divisa 90/10 usciva come «metà».
+
+> **Da fare al primo caricamento.** La derivazione non è mai stata eseguita sui
+> dati veri: senza export in `export/` non c'è niente da leggere. Il primo giro
+> stampa quante righe sono derivabili. **Se sono meno del 90%, il modello a due
+> persone non descrive quel file** e va ripensato prima di fidarsi delle quote.
+
+#### Il registro, e perché non usa `quotaDi`
+
+```
+saldo positivo = la controparte deve a te
+effetto = segno × quota × |importo|      segno = +1 se hai pagato tu
+```
+
+Un `saldo` non è una divisione: quella riga **è** il rimborso, e il suo effetto
+è l'importo cambiato di segno — chi ha pagato non c'entra. Se 500 entrano sul
+tuo conto lei ti deve 500 di meno; se escono, hai saldato tu e il conto risale.
+
+`registro()` **non** usa `quotaDi()`, e sembra logica duplicata senza esserlo:
+`quotaDi` risponde a «quanto di questa spesa è mia» per le due letture della
+dashboard, il registro è sempre in euro interi, perché quello che ti deve è
+quello che ti deve comunque tu stia leggendo il cruscotto.
+
+Il registro **ignora il filtro del periodo**: un saldo progressivo è cumulativo
+per costruzione, e filtrarlo mostrerebbe il saldo di partenza più un
+sottoinsieme arbitrario degli effetti.
+
+#### Una lezione di metodo, più importante del codice
+
+Durante questo lavoro **sei asserzioni sono state scritte senza poter fallire**
+se la cosa che sorvegliavano si rompeva: chiamavano i pezzi in un ordine scelto
+dal test, o riprovavano una funzione che non era quella cambiata. Ognuna è
+stata pescata solo in revisione.
+
+Il rimedio, applicato tre volte (`prepara_righe`, `categoria_finale`,
+`mesiPeriodo`), è sempre lo stesso: **una decisione sepolta dentro una funzione
+lunga non può essere tenuta da un test**. Le si dà un nome e un posto, e il
+test tiene quella. Prima di credere a un controllo nuovo, la domanda è una
+sola: *se rompo la cosa che sorveglia, questa riga fallisce?*
+
+E il corollario, scoperto due volte su questo ramo: una correzione può essere
+giusta in ogni riga di codice e non risolvere niente, se **il gesto che la
+attiva non è un gesto che qualcuno può fare**. La lapide funzionava dall'API ed
+era irraggiungibile dai due menu dell'interfaccia.
+
 ### 5. Gli indicatori cambiano quando filtri
 
 Filtrando su una natura, "tasso di risparmio" mostrava `-760%`. Il risparmio

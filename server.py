@@ -48,9 +48,13 @@ SCHEMA = {
     "override.csv": ["id", "data", "importo", "categoria", "sottocategoria",
                      "nota"],
     "correzioni.csv": ["id", "campo", "valore", "nota"],
+    "escluse.csv": ["id", "motivo"],
+    "quote.csv": ["id", "pagato_da", "quota", "nota"],
+    "partita.csv": ["dal", "saldo", "controparte", "nota"],
     "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
+    "transazioni.csv": ["id", "data", "descrizione", "importo", "conto", "nota"],
 }
 
 # Il PRIMO riquadro acceso prende la colonna larga della dashboard e ne porta
@@ -311,6 +315,7 @@ class State:
             "overrides": read_rows("override.csv"),
             "corrections": read_rows("correzioni.csv"),
             "layout": read_layout(),
+            "partita": bilancio.load_partita(FOLDER / "partita.csv"),
             "has_exports": self.has_exports(),
             # Se i dati vengono dal derivato invece che dagli export,
             # l'interfaccia deve dirlo: non e' un errore, ma neanche
@@ -358,6 +363,37 @@ def set_transaction(payload):
                                     if (r.get("id") or "").strip() != key])
         write_rows("correzioni.csv", [r for r in read_rows("correzioni.csv")
                                       if (r.get("id") or "").strip() != key])
+        return
+
+    if "escludi" in payload:
+        # Un motivo vuoto vuol dire "ripesca": la riga torna nel consolidato.
+        rows = [r for r in read_rows("escluse.csv")
+                if (r.get("id") or "").strip() != key]
+        motivo = (payload.get("escludi") or "").strip()
+        if motivo:
+            rows.append({"id": key, "motivo": motivo})
+        write_rows("escluse.csv", rows)
+        return
+
+    if "quota" in payload or "pagato_da" in payload:
+        righe = [r for r in read_rows("quote.csv")
+                 if (r.get("id") or "").strip() != key]
+        quota = (payload.get("quota") or "").strip().lower()
+        pagante = (payload.get("pagato_da") or "").strip().lower()
+        # Servono tutti e due: "meta'" senza sapere chi ha pagato non dice da
+        # che parte va il debito.
+        if quota and pagante:
+            righe.append({"id": key, "pagato_da": pagante, "quota": quota,
+                          "nota": (payload.get("nota") or "").strip()})
+        elif not quota and not pagante:
+            # Svuotare i due menu e' una decisione, non un vuoto: se la riga
+            # viene da un estratto conto ormai sparito, senza questa lapide
+            # una quota dedotta da Splitwise nel derivato tornerebbe da sola
+            # (vedi QUOTE in bilancio.py). Si scrive solo qui, non per le
+            # righe che nessuno ha mai toccato.
+            righe.append({"id": key, "pagato_da": "", "quota": "niente",
+                          "nota": ""})
+        write_rows("quote.csv", righe)
         return
 
     if "categoria" in payload:
@@ -632,10 +668,37 @@ def load_and_archive(use_llm=True):
             f"(attenzione: restano importi, date e negozi)")
 
 
+def nuova_transazione(payload):
+    """Aggiunge una riga a transazioni.csv, con un ID che non cambiera' mai.
+
+    L'ID lo genera il server e non deriva dal contenuto: cosi' correggere
+    l'importo di una riga scritta a mano non la stacca dalla sua categoria.
+    """
+    data = (payload.get("data") or "").strip()
+    descrizione = (payload.get("descrizione") or "").strip()
+    if not data or not descrizione:
+        raise ValueError("servono data e descrizione")
+    righe = read_rows("transazioni.csv")
+    progressivo = len(righe) + 1
+    while any((r.get("id") or "") == f"man-{data.replace('-','')}-{progressivo:02d}"
+              for r in righe):
+        progressivo += 1
+    righe.append({
+        "id": f"man-{data.replace('-', '')}-{progressivo:02d}",
+        "data": data,
+        "descrizione": descrizione,
+        "importo": (payload.get("importo") or "0").strip(),
+        "conto": (payload.get("conto") or "A mano").strip(),
+        "nota": (payload.get("nota") or "").strip(),
+    })
+    write_rows("transazioni.csv", righe)
+
+
 ACTIONS = {
     "/api/transaction": set_transaction,
     "/api/categories": set_category,
     "/api/rules": set_rule,
+    "/api/nuova": nuova_transazione,
 }
 
 

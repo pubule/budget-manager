@@ -669,9 +669,13 @@ In `load_config()`, dopo `"exclusions": ...`:
         "shares": load_shares(folder / "quote.csv"),
 ```
 
-In `run()`, dopo il ciclo di categorizzazione e prima di `categorizer.save_cache()`:
+In `run()`, subito dopo `rows = drop_covered_by(...)` e **prima** del ciclo di
+categorizzazione: la guardia del passo 7 legge `row["Quota"]` mentre quel ciclo
+gira, quindi le colonne devono esistere gia'.
 
 ```python
+    # Prima della categorizzazione: la guardia sui rimborsi legge "Quota"
+    # mentre categorizza, e metterla dopo sarebbe troppo tardi.
     apply_shares(rows, config["shares"])
 ```
 
@@ -811,10 +815,12 @@ In `app.html`, subito dopo la definizione di `spesa`:
 //   ha pagato lei + tutto a me    -> e' tutta mia
 //   un saldo                      -> non e' una spesa, non pesa
 function quotaDi(t){
-  if(F.lettura !== "mia") return 1;
   const quota = t.Quota || "";
-  if(!quota) return 1;
+  // Il saldo esce dai totali sempre: e' un rimborso, non una spesa e non
+  // un'entrata. E' l'unico caso in cui la lettura predefinita si muove, ed e'
+  // il gesto stesso di marcare la riga a chiederlo.
   if(quota === "saldo") return 0;
+  if(F.lettura !== "mia" || !quota) return 1;
   const mia = t["Pagato da"] === "io"
     ? (quota === "tutto" ? 0 : 0.5)
     : (quota === "tutto" ? 1 : 0.5);
@@ -952,12 +958,13 @@ function registro(rows, partita){
     .sort((a,b) => (a.Data||"").localeCompare(b.Data||""));
   let saldo = (partita && partita.saldo) || 0;
   const righe = dentro.map(t => {
-    const pieno = Math.abs(t.Importo);
-    const segno = t["Pagato da"] === "io" ? 1 : -1;
-    const parte = t.Quota === "saldo" ? 1 : (t.Quota === "tutto" ? 1 : 0.5);
+    // Un rimborso e' l'importo cambiato di segno, e chi ha pagato non
+    // c'entra: se 500 entrano sul tuo conto lei ti deve 500 di meno, se
+    // escono sei tu ad aver saldato e il conto risale.
     const effetto = t.Quota === "saldo"
-      ? -segno * pieno * (t.Importo > 0 ? 1 : -1) * (t["Pagato da"] === "lei" ? 1 : -1)
-      : segno * parte * pieno;
+      ? -t.Importo
+      : (t["Pagato da"] === "io" ? 1 : -1)
+        * (t.Quota === "tutto" ? 1 : 0.5) * Math.abs(t.Importo);
     saldo = Math.round((saldo + effetto) * 100) / 100;
     return {...t, effetto, saldo};
   });
@@ -965,11 +972,6 @@ function registro(rows, partita){
           controparte: (partita && partita.controparte) || "la controparte"};
 }
 ```
-
-> Nota per chi implementa: la formula del `saldo` sopra e' scritta a passi
-> perche' i controlli dicano cosa vuole. Semplificala **solo** se i controlli
-> restano verdi: il caso `d` del test (rimborso da lei, importo positivo,
-> effetto −500) e' quello che tiene insieme i segni.
 
 - [ ] **Step 4: Fallo girare per vedere che passa**
 

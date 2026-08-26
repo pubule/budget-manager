@@ -41,3 +41,7 @@ design/layout-dashboard-bilancio.html
 .agents/
 .claude/
 
+
+# Lo scratch del lavoro a task: ledger, brief e pacchetti di revisione.
+# Si rigenera, e non racconta niente che git non sappia gia'.
+.superpowers/

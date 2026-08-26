@@ -8,10 +8,11 @@ al periodo di un conto, coppie che dovrebbero annullarsi e non lo fanno,
 la stessa voce classificata in due modi diversi.
 
 Non tocca i file originali della banca: legge solo consolidato.csv, che il
-motore riscrive da capo a ogni giro, e i file di configurazione.
+motore riscrive da capo a ogni giro.
 """
 import csv
 import math
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import date
@@ -45,6 +46,34 @@ def giorni_fra(a, b):
 
 def mese(riga):
     return (riga.get("Data") or "")[:7]
+
+
+def conti_bancari(righe):
+    """I conti dove i soldi sono DAVVERO usciti dal conto di chi tiene i libri.
+
+    Prima leggeva l'elenco da conti.csv: una lista fissa di sei nomi
+    (UniCredit, Intesa Sanpaolo, Fineco, Hype, Fideuram, Splitwise) che pero'
+    non sono i nomi che finiscono nella colonna Conto di consolidato.csv oggi
+    (Storico, Koala, Hype, UniCredit, Fideuram). Il risultato: "Storico", che
+    e' l'intero storico MoneyWiz migrato - il blocco piu' grosso di righe di
+    banca vere che ci sia - non veniva mai controllato. E togliere
+    "Splitwise" dall'elenco non toglieva niente per davvero, perche' le righe
+    Splitwise arrivano col nome di conto "Koala" (bilancio.py,
+    is_shared_export: "Splitwise lo chiama koala_<data>_export.csv"), non
+    "Splitwise". Una lista fissa copiata qui e' esattamente il difetto che
+    questo stesso docstring, nella versione precedente, descriveva: scade in
+    silenzio alla prima banca aggiunta o rinominata.
+
+    Quello che la chiamante vuole non e' un elenco di nomi di banche, ma il
+    suo complemento: ogni conto DIVERSO dalla fonte che si limita a
+    registrare chi deve cosa a chi, senza che soldi lascino nessun conto
+    proprio. Quella fonte oggi ha un nome solo, "Koala", e non vive in
+    nessun CSV di configurazione (conti.csv la chiama ancora "Splitwise", il
+    nome della app, non il nome che finisce nella colonna Conto) - e' scritto
+    qui a mano proprio per questo, cosi' resta visibile invece di sparire
+    dentro un file che nessuno rilegge insieme a questo controllo.
+    """
+    return {(x.get("Conto") or "").strip() for x in righe} - {"", "Koala"}
 
 
 class Referto:
@@ -269,6 +298,58 @@ def controlla_giroconti(righe, r):
                 f"le manda prima che fosse caricato"])
 
 
+def controlla_quote(righe, r):
+    """Le quote che non tornano: orfane, incomplete, o in contraddizione."""
+    quote = [x for x in righe if (x.get("Quota") or "")]
+    r.aggiungi("nota", "righe con una quota", len(quote),
+               [f"{sum(1 for x in quote if x.get('Quota') == q)} {q}"
+                for q in ("meta", "tutto", "saldo")])
+
+    # Meta' di che, pagata da chi? Una quota senza pagatore non dice da che
+    # parte va il debito, e nel registro sparisce in silenzio.
+    monche = [x for x in quote if not (x.get("Pagato da") or "")]
+    r.aggiungi("errore", "quote senza chi ha pagato", len(monche),
+               [f"{x.get('Data')} {(x.get('Descrizione') or '')[:40]}"
+                for x in monche])
+
+    # Una riga arrivata dall'estratto conto dice gia' chi ha pagato: sei stato
+    # tu, e' il tuo conto. Marcarla "pagata da lei" e' una contraddizione, ma
+    # ha una spiegazione vera (carta tua, spesa sua) e una sbagliata (un clic
+    # di troppo). Non si vieta e non si corregge: si conta.
+    banca = conti_bancari(righe)
+    contrarie = [x for x in quote
+                 if x.get("Pagato da") == "lei" and x.get("Conto") in banca]
+    r.aggiungi("sospetto", "righe di banca marcate 'pagata da lei'",
+               len(contrarie),
+               [f"{x.get('Data')} {x.get('Conto')} "
+                f"{(x.get('Descrizione') or '')[:34]}" for x in contrarie],
+               "se sono tre e' un refuso, se sono trenta e' un modo di usare "
+               "l'app che il modello deve descrivere")
+
+
+def controlla_entrate_rovesciate(righe, r):
+    """Righe che si DICHIARANO entrate ma hanno il segno di un'uscita.
+
+    Un estratto conto scrive "bonifico a vostro favore DA:" quando i soldi
+    arrivano. Se quella riga e' negativa, o il segno e' sbagliato o la
+    descrizione mente, e in tutti e due i casi il totale della sua categoria
+    e' falso del doppio dell'importo.
+
+    Trovato sui dati veri: otto bonifici in entrata da un familiare, fra
+    dicembre 2023 e giugno 2024, registrati come uscite dallo storico MoneyWiz.
+    Le stesse identiche righe prima e dopo quel periodo erano positive.
+    """
+    dice_entrata = re.compile(r"(?i)a vostro favore|accredito|vs favore")
+    sospette = [x for x in righe
+                if dice_entrata.search(x.get("Descrizione") or "")
+                and importo(x) < 0]
+    r.aggiungi("errore", "entrate col segno di un'uscita", len(sospette),
+               [f"{x.get('Data')} {importo(x):+,.0f} "
+                f"{(x.get('Descrizione') or '')[:44]}" for x in sospette],
+               "la descrizione dice che i soldi sono entrati: il totale della "
+               "categoria sbaglia del doppio")
+
+
 def controlla_merchant(righe, r):
     """Lo stesso negozio scritto in due modi si spezza in due voci."""
     forme = defaultdict(set)
@@ -307,7 +388,8 @@ def main():
     r = Referto()
     for controllo in (controlla_forma, controlla_doppioni, controlla_buchi,
                       controlla_tassonomia, controlla_segni,
-                      controlla_giroconti, controlla_merchant,
+                      controlla_giroconti, controlla_quote,
+                      controlla_entrate_rovesciate, controlla_merchant,
                       controlla_estremi):
         controllo(righe, r)
     errori = r.stampa()

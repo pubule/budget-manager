@@ -51,10 +51,11 @@ global.clearTimeout = () => {};
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
- CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
+ CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
- indicatori, spesa, scarto, VISTE,
+ indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
+ registro, quotaPayload,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -94,6 +95,33 @@ console.log("=== entrate contro uscite ===");
   check("i rimborsi stanno fra le uscite, dove riducono la voce",
         rimborsi.every(t => t.Natura !== "Entrate"),
         `${rimborsi.length} rimborsi`);
+}
+
+console.log("=== i mesi contati come sono davvero ===");
+{
+  // Un agosto fermo al 25 non e' un mese intero. Contandolo per uno, ogni
+  // media "al mese" scende: sul mutuo diceva 733 euro invece dei 786 veri, e
+  // per capire perche' bisognava aprire il consolidato.
+  const mese = r => ({Data: r});
+  check("un mese intero vale uno",
+        Math.abs(api.mesiEffettivi([mese("2026-01-31")]) - 1) < 0.001,
+        String(api.mesiEffettivi([mese("2026-01-31")])));
+  const meta = api.mesiEffettivi([mese("2026-08-01"), mese("2026-08-25")]);
+  check("un mese fermo al 25 vale 25/31", Math.abs(meta - 25/31) < 0.001,
+        String(meta));
+  const due = api.mesiEffettivi([mese("2026-07-10"), mese("2026-08-25")]);
+  check("solo l'ULTIMO mese si ritaglia", Math.abs(due - (1 + 25/31)) < 0.001,
+        String(due));
+  // Un mese vuoto in mezzo e' un mese in cui non hai speso, e vale uno:
+  // toglierlo alzerebbe la media di un dato che non esiste.
+  const buco = api.mesiEffettivi([mese("2026-01-15"), mese("2026-03-31")]);
+  check("un mese vuoto in mezzo non si toglie", Math.abs(buco - 2) < 0.001,
+        String(buco));
+  check("senza righe non si divide per zero", api.mesiEffettivi([]) === 1);
+  // Su febbraio il denominatore deve seguire i giorni veri del mese.
+  const feb = api.mesiEffettivi([mese("2024-02-14")]);
+  check("febbraio bisestile ha 29 giorni", Math.abs(feb - 14/29) < 0.001,
+        String(feb));
 }
 
 console.log("=== il metro del confronto ===");
@@ -175,6 +203,190 @@ console.log("=== il metro del confronto ===");
         api.confrontoScelto().chiave);
 
   F0.from = ""; F0.to = ""; F0.confronto = "";
+}
+
+console.log("=== le due letture ===");
+{
+  const F6 = api.getF();
+  const quota = (pagante, q) => api.quotaDi({"Pagato da":pagante, Quota:q});
+  F6.lettura = "";
+  check("nella lettura predefinita ogni riga pesa per intero",
+        quota("io","meta") === 1 && quota("","") === 1);
+  F6.lettura = "mia";
+  check("a meta' la riga pesa la meta'", quota("io","meta") === 0.5);
+  check("una riga non condivisa pesa uguale in tutte e due le letture",
+        quota("","") === 1);
+  // Ho pagato io e la quota e' tutta sua: di quella spesa non e' mio niente.
+  check("quota intera a carico suo: non e' mia", quota("io","tutto") === 0);
+  // Ha pagato lei e la quota e' tutta mia: e' mia per intero.
+  check("quota intera a carico mio: e' tutta mia", quota("lei","tutto") === 1);
+  check("un rimborso non e' una spesa e non pesa", quota("lei","saldo") === 0);
+
+  // Il saldo deve sparire dai totali in ENTRAMBE le letture, non solo in
+  // "mia": quotaDi da solo non basta (in lettura "tutto" ritorna 1 anche per
+  // un saldo), l'esclusione vera avviene a monte in spending().
+  // La riga normale non e' condivisa (Quota vuota): pesa 1 in tutte e due le
+  // letture, cosi' un'eventuale differenza nel totale si puo' addebitare
+  // solo al saldo, non al peso della riga normale.
+  const righeConSaldo = [
+    {Importo:-100, Natura:"Spese", "Pagato da":"", Quota:""},
+    {Importo:-40, Natura:"Spese", "Pagato da":"io", Quota:"saldo"},
+  ];
+  check("spending() toglie il saldo, non solo le spese",
+        !api.spending(righeConSaldo).some(t => t.Quota === "saldo"));
+  F6.lettura = "";
+  const spesaTutto = api.sum(api.outflow(righeConSaldo));
+  F6.lettura = "mia";
+  const spesaMia = api.sum(api.outflow(righeConSaldo));
+  check("il saldo non pesa in nessuna delle due letture",
+        spesaTutto === spesaMia && spesaTutto === -100,
+        `${spesaTutto} vs ${spesaMia}`);
+
+  // L'anteprima di una regola dice quanti soldi muovono le righe, non quanti
+  // sono miei: deve restare ferma anche su righe che portano una quota vera.
+  const righeConQuota = [
+    {Importo:-100, Natura:"Spese", "Pagato da":"io", Quota:"meta"},
+    {Importo:-40, Natura:"Spese", "Pagato da":"lei", Quota:"tutto"},
+  ];
+  F6.lettura = "";
+  const pienaTutto = api.sommaPiena(righeConQuota);
+  F6.lettura = "mia";
+  const pienaMia = api.sommaPiena(righeConQuota);
+  check("l'anteprima di una regola non si sposta col cambio di lettura",
+        pienaTutto === pienaMia && pienaTutto === -140,
+        `${pienaTutto} vs ${pienaMia}`);
+
+  // groupSum alimenta le righe di "Dove finiscono i soldi": deve pesare
+  // come sum, altrimenti la tabella e la percentuale sopra di lei
+  // raccontano due storie diverse.
+  const righePerCategoria = [
+    {Importo:-100, Natura:"Spese", Categoria:"Casa", "Pagato da":"io", Quota:"meta"},
+    {Importo:-50, Natura:"Spese", Categoria:"Casa", "Pagato da":"", Quota:""},
+  ];
+  F6.lettura = "";
+  const grpTutto = api.groupSum(righePerCategoria, "Categoria")[0].total;
+  F6.lettura = "mia";
+  const grpMia = api.groupSum(righePerCategoria, "Categoria")[0].total;
+  check("groupSum si restringe in la mia quota, come sum",
+        grpTutto === -150 && grpMia === -100, `${grpTutto} vs ${grpMia}`);
+
+  // La mappa dei negozi in CARDS.dove e' scritta a mano, non passa da
+  // groupSum: stesso obbligo, verificato sul totale che finisce in tabella.
+  const rigaNegozio = [{Importo:-200, Natura:"Spese", Merchant:"Negozio Test",
+                        Data:"2025-06-10", "Pagato da":"io", Quota:"meta"}];
+  F6.vista = "negozio";
+  F6.lettura = "";
+  const mNeg = api.mesiEffettivi(api.spending(rigaNegozio));
+  check("il totale per negozio pesa per intero in lettura tutto",
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-200/mNeg)}<`));
+  F6.lettura = "mia";
+  check("il totale per negozio si dimezza in lettura la mia quota",
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-100/mNeg)}<`));
+  F6.vista = "";
+
+  // L'invariante che si era rotto: la percentuale di ogni riga divide il suo
+  // totale per lo stesso denominatore con cui e' stata costruita la riga.
+  // Se groupSum e sum pesassero in modo diverso, le righe non sommerebbero
+  // piu' al denominatore in nessuna delle due letture.
+  const righeInvariante = [
+    {Importo:-100, Natura:"Spese", Categoria:"Casa", "Pagato da":"io", Quota:"meta"},
+    {Importo:-60, Natura:"Spese", Categoria:"Trasporti", "Pagato da":"lei", Quota:"tutto"},
+    {Importo:-40, Natura:"Spese", Categoria:"Casa", "Pagato da":"", Quota:""},
+  ];
+  for(const lettura of ["", "mia"]){
+    F6.lettura = lettura;
+    const denominatore = api.sum(righeInvariante);
+    const righeTabella = api.groupSum(righeInvariante, "Categoria");
+    const totaleRighe = righeTabella.reduce((s,g) => s + g.total, 0);
+    check(`le righe della tabella sommano alla quota totale (lettura "${lettura||"tutto"}")`,
+          Math.abs(totaleRighe - denominatore) < 1e-9,
+          `${totaleRighe} vs ${denominatore}`);
+  }
+
+  F6.lettura = "";
+}
+
+console.log("=== il registro con Michela ===");
+{
+  const finte = [
+    // Prima della data di partenza: non deve entrare.
+    {ID:"a", Data:"2025-12-31", Descrizione:"vecchia", Importo:-100,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"b", Data:"2026-01-12", Descrizione:"Eurospin", Importo:-60,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"c", Data:"2026-01-20", Descrizione:"Farmacia", Importo:-24,
+     "Pagato da":"lei", Quota:"tutto"},
+    {ID:"d", Data:"2026-02-03", Descrizione:"Bonifico", Importo:500,
+     "Pagato da":"lei", Quota:"saldo"},
+    {ID:"e", Data:"2026-02-04", Descrizione:"Spesa mia", Importo:-30},
+  ];
+  const r = api.registro(finte, {dal:"2026-01-01", saldo:0});
+  check("il registro parte dalla data di partita.csv",
+        !r.righe.some(x => x.ID === "a"), "c'e' una riga di prima");
+  check("una riga senza quota non entra nel registro",
+        !r.righe.some(x => x.ID === "e"));
+  check("pago io la meta' sua: lei mi deve 30",
+        r.righe.find(x => x.ID === "b").effetto === 30);
+  check("paga lei una cosa tutta mia: le devo 24",
+        r.righe.find(x => x.ID === "c").effetto === -24);
+  check("il rimborso abbassa il debito di tutto l'importo",
+        r.righe.find(x => x.ID === "d").effetto === -500);
+  check("il saldo finale e' la somma degli effetti", r.saldo === 30 - 24 - 500,
+        String(r.saldo));
+  const ultima = r.righe[r.righe.length - 1];
+  check("il saldo progressivo dell'ultima riga e' il totale",
+        ultima.saldo === r.saldo, `${ultima.saldo} contro ${r.saldo}`);
+}
+
+console.log("=== il registro con Michela ignora il periodo ===");
+{
+  // Il saldo e' cumulativo per costruzione: filtrarlo per periodo stampa il
+  // saldo di partenza piu' un sottoinsieme arbitrario degli effetti. Con il
+  // periodo che taglia via pf1 (10/1) il saldo vero (-10) diventerebbe -40
+  // se VIEWS.partita tornasse a leggere le righe filtrate per data.
+  const Fptn = api.getF();
+  const salvaFptn = {...Fptn};
+  Object.assign(Fptn, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"", lettura:""});
+  const finteFiltro = [
+    {ID:"pf1", Data:"2026-01-10", Descrizione:"A", Importo:-60,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"pf2", Data:"2026-03-05", Descrizione:"B", Importo:-40,
+     "Pagato da":"lei", Quota:"tutto"},
+  ];
+  api.setState(Object.assign({}, state, {transactions: finteFiltro,
+    partita: {dal:"2026-01-01", saldo:0, controparte:"Lei"}}));
+  // Passa esattamente cio' che render() passa a VIEWS[TAB]: filtered(). Se
+  // VIEWS.partita tornasse a usare quell'argomento invece di filtered(false)
+  // al suo interno, il periodo lo taglierebbe di nuovo per davvero.
+  const senzaPeriodo = api.VIEWS.partita(api.filtered());
+  Fptn.from = "2026-02-01"; // se il periodo contasse, escluderebbe pf1
+  const conPeriodo = api.VIEWS.partita(api.filtered());
+  check("il registro con la controparte ignora il filtro del periodo",
+        senzaPeriodo === conPeriodo,
+        senzaPeriodo === conPeriodo ? "" : "l'output cambia col periodo");
+  Object.assign(Fptn, salvaFptn);
+  api.setState(state);
+}
+
+console.log("=== svuotare un menu svuota la coppia ===");
+{
+  // Meta' quota non e' uno stato: senza sapere chi ha pagato, "meta'" non
+  // dice da che parte va il debito, e infatti il server la rifiuta. Quindi
+  // svuotare UN SOLO menu deve mandare la coppia vuota, non una meta' che il
+  // server scarterebbe in silenzio lasciando risorgere il valore vecchio.
+  check("entrambi pieni restano pieni",
+        JSON.stringify(api.quotaPayload("io", "meta")) ===
+        JSON.stringify({pagato_da: "io", quota: "meta"}));
+  check("chi vuoto svuota anche la quota",
+        JSON.stringify(api.quotaPayload("", "meta")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
+  check("quota vuota svuota anche chi",
+        JSON.stringify(api.quotaPayload("io", "")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
+  check("entrambi vuoti restano vuoti",
+        JSON.stringify(api.quotaPayload("", "")) ===
+        JSON.stringify({pagato_da: "", quota: ""}));
 }
 
 console.log("=== filtri ===");
@@ -533,6 +745,76 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         celle.startsWith('<div class="kpi') && !celle.includes('class="kpis"'));
   check("gli indicatori non portano note a pie' di pagina",
         !celle.includes('class="note"'));
+}
+
+// La barra degli indicatori e "Dove finiscono i soldi" devono dividere ogni
+// "al mese" per LO STESSO numero di mesi sulle stesse righe: nel caso reale
+// che ha fatto scoprire il bug la barra diceva "1 mese" e la tabella sotto
+// "0.806", il 24% di scarto, sempre a favore di un falso miglioramento.
+// Con una sola categoria di uscite il totale della barra e quello della riga
+// di categoria sono lo STESSO numero diviso per lo STESSO denominatore:
+// devono comparire identici a schermo. Il confronto e' fra le due uscite
+// vere, non fra due ricalcoli della formula - cosi' fallisce se un domani
+// una delle due tornasse a usare monthsOf da sola.
+{
+  const Fden = api.getF();
+  const salvaFden = {...Fden};
+  Object.assign(Fden, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"", lettura:""});
+  const righeKpi = [
+    {Importo:-100, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-01"},
+    {Importo:-50, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-25"},
+  ];
+  const m = api.mesiPeriodo(righeKpi);
+  check("un agosto fermo al 25 non vale un mese intero (sanity)",
+        Math.abs(m - 25/31) < 0.001, String(m));
+  const barraHtml = api.indicatori(righeKpi);
+  const tabellaHtml = api.CARDS.dove(righeKpi);
+  const uscite = barraHtml.match(/<span>uscite \/ mese<\/span><b>([^<]*)<\/b>/);
+  const rigaCategoria = tabellaHtml.match(/>KpiTest<\/button><\/td><td>([^<]*)<\/td>/);
+  check("la barra usa mesiEffettivi, non monthsOf, per 'uscite / mese'",
+        !!uscite && uscite[1] === api.spesa(150/m), uscite && uscite[1]);
+  check("la barra e la tabella sotto dividono per lo stesso numero di mesi",
+        !!uscite && !!rigaCategoria && uscite[1] === rigaCategoria[1],
+        JSON.stringify([uscite && uscite[1], rigaCategoria && rigaCategoria[1]]));
+
+  // Lo stesso passaggio a mesiEffettivi tocca anche il ramo "partial" (un
+  // filtro categoria/natura/testo acceso), che scrive "mesi coperti" come
+  // testo grezzo: senza arrotondare qui si rivedeva a schermo lo stesso
+  // difetto di "14/55.806451612903224 mesi" (Task 2), ma in barra.
+  Fden.category = "KpiTest";
+  const barraFiltrata = api.indicatori(righeKpi);
+  const mesiCoperti = barraFiltrata.match(/<span>mesi coperti<\/span><b>([^<]*)<\/b>/);
+  check("'mesi coperti' nella barra filtrata e' un intero, non un float grezzo",
+        !!mesiCoperti && !mesiCoperti[1].includes("."), mesiCoperti && mesiCoperti[1]);
+  Fden.category = "";
+
+  Object.assign(Fden, salvaFden);
+}
+
+// Il ramo "ricorrenti" di CARDS.dove e' l'unico che scrive m come testo, ed
+// e' rimasto scoperto: gli altri test lo esercitano solo in vista
+// "negozio". Sullo schermo vero si leggeva "14/55.806451612903224 mesi".
+{
+  const Fric = api.getF();
+  const salvaFric = {...Fric};
+  Object.assign(Fric, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"ricorrenti",
+                        lettura:""});
+  const righeRicorrenti = [
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-01-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-02-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-03-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-04-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-05-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-06-10"},
+  ];
+  const tabellaRic = api.CARDS.dove(righeRicorrenti);
+  const nota = tabellaRic.match(/(\d+)\/([\d.]+) mesi/);
+  check("il ramo ricorrenti compare con la sua nota", !!nota, tabellaRic);
+  check("i mesi nella nota sono un numero intero, non un float grezzo",
+        !!nota && !nota[2].includes("."), nota && nota[0]);
+  Object.assign(Fric, salvaFric);
 }
 
 // I campi correggibili sono un contratto fra due file: l'interfaccia scrive
