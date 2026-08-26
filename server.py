@@ -49,6 +49,7 @@ SCHEMA = {
                      "nota"],
     "correzioni.csv": ["id", "campo", "valore", "nota"],
     "escluse.csv": ["id", "motivo"],
+    "quote.csv": ["id", "pagato_da", "quota", "nota"],
     "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
@@ -370,6 +371,19 @@ def set_transaction(payload):
         if motivo:
             rows.append({"id": key, "motivo": motivo})
         write_rows("escluse.csv", rows)
+        return
+
+    if "quota" in payload or "pagato_da" in payload:
+        righe = [r for r in read_rows("quote.csv")
+                 if (r.get("id") or "").strip() != key]
+        quota = (payload.get("quota") or "").strip().lower()
+        pagante = (payload.get("pagato_da") or "").strip().lower()
+        # Servono tutti e due: "meta'" senza sapere chi ha pagato non dice da
+        # che parte va il debito.
+        if quota and pagante:
+            righe.append({"id": key, "pagato_da": pagante, "quota": quota,
+                          "nota": (payload.get("nota") or "").strip()})
+        write_rows("quote.csv", righe)
         return
 
     if "categoria" in payload:

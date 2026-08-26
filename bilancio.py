@@ -447,6 +447,46 @@ def apply_exclusions(rows, exclusions, discarded=None):
     return [r for r in rows if r.get("ID") not in exclusions]
 
 
+# I valori ammessi per la quota. "saldo" non e' una divisione: dice che QUELLA
+# riga e' il rimborso, e muove il conto per intero.
+QUOTE = ("meta", "tutto", "saldo")
+
+
+def load_shares(path):
+    """quote.csv: id -> {"Pagato da": ..., "Quota": ...}."""
+    if not path.exists():
+        return {}
+    quote = {}
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter=";"):
+            key = (row.get("id") or "").strip()
+            quota = (row.get("quota") or "").strip().lower()
+            pagante = (row.get("pagato_da") or "").strip().lower()
+            if not key or quota not in QUOTE or pagante not in ("io", "lei"):
+                continue
+            quote[key] = {"Pagato da": pagante, "Quota": quota}
+    if quote:
+        print(f"  {len(quote)} quote dichiarate a mano")
+    return quote
+
+
+def apply_shares(rows, quote):
+    """Mette "Pagato da" e "Quota" su ogni riga, con le colonne sempre presenti.
+
+    quote.csv vince sulla deduzione dalle colonne di Splitwise: la prima e' una
+    decisione presa da una persona guardando la riga, la seconda un'inferenza
+    su un file. Le righe senza niente prendono due stringhe vuote, cosi' il
+    consolidato ha sempre le stesse colonne.
+    """
+    for row in rows:
+        dichiarata = quote.get(row.get("ID"))
+        if dichiarata:
+            row.update(dichiarata)
+        row.setdefault("Pagato da", "")
+        row.setdefault("Quota", "")
+    return rows
+
+
 def load_overrides(path):
     """override.csv: categoria decisa a mano per una singola transazione.
 
@@ -1469,6 +1509,13 @@ def drop_covered_by(rows, days=3, discarded=None, merchants=()):
             ambiguous += 1
         candidates.sort()
         # Uno-a-uno: la riga che copre non puo' coprirne una seconda.
+        superstite = rows[candidates[0][1]]
+        # La riga condivisa se ne va, ma e' l'unica a sapere com'era divisa la
+        # spesa: senza il travaso la quota si perderebbe proprio sulle spese
+        # fatte con la carta, che sono la maggioranza.
+        if row.get("Quota") and not superstite.get("Quota"):
+            superstite["Quota"] = row["Quota"]
+            superstite["Pagato da"] = row.get("Pagato da", "")
         used.add(candidates[0][1])
         dropped.add(position)
         counts[row.get("Conto", "?")] += 1
@@ -1738,6 +1785,8 @@ def selftest():
     assert transfer_out(TRANSFER, 200.0, "regola") == TRANSFER,         "l'entrata scoperta e' diventata spesa"
     assert transfer_out(TRANSFER, -3829.0, "override") == TRANSFER,         "l'override non ha retto"
     assert transfer_out("Casa > Luce e gas", -50.0, "regola") == "Casa > Luce e gas",         "una spesa qualsiasi e' stata scambiata per un giroconto"
+    assert transfer_out(TRANSFER, -500.0, "regola") == TRANSFER_OUT, \
+        "senza quota un giroconto in uscita spaiato resta una spesa"
 
     # Escludere e' l'unica forma di cancellazione: una riga di banca tornerebbe
     # comunque al caricamento dopo, quindi sparire davvero sarebbe una bugia.
@@ -1827,6 +1876,31 @@ def selftest():
     #   e indovinare significherebbe scambiare chi paga con chi riceve.
     assert shares_from_quotas(60.0, {"Michela": 30.0, "Anna": -30.0}) is None, \
         "senza una colonna riconoscibile come Fabio non deve inventare"
+
+    # quote.csv vince sulla deduzione: e' una decisione presa da una persona
+    # guardando la riga, la deduzione e' un'inferenza su un file.
+    righe = [{"ID": "x#1", "Pagato da": "lei", "Quota": "meta"},
+             {"ID": "y#1"}]
+    apply_shares(righe, {"x#1": {"Pagato da": "io", "Quota": "tutto"}})
+    assert righe[0]["Quota"] == "tutto", "quote.csv non ha vinto sulla deduzione"
+    assert righe[0]["Pagato da"] == "io", "il pagatore di quote.csv non ha vinto"
+    assert righe[1]["Quota"] == "", "una riga senza quota deve avere le colonne vuote"
+    assert righe[1]["Pagato da"] == "", "il pagatore vuoto deve esserci comunque"
+
+    # Il travaso: drop_covered_by tiene la riga di banca e butta quella
+    # condivisa, che pero' e' l'unica a sapere com'era divisa la spesa.
+    coppia = [
+        {"Data": "2026-02-10", "Descrizione": "Eurospin", "Importo": -60.0,
+         "Conto": "UniCredit", "Rango": RANK_BANK},
+        {"Data": "2026-02-10", "Descrizione": "Eurospin", "Importo": -60.0,
+         "Conto": "Koala", "Rango": RANK_SHARED,
+         "Pagato da": "io", "Quota": "meta"},
+    ]
+    resto = drop_covered_by(coppia)
+    assert len(resto) == 1 and resto[0]["Conto"] == "UniCredit", \
+        "la copertura non ha funzionato"
+    assert resto[0].get("Quota") == "meta", "la quota si e' persa nel travaso"
+    assert resto[0].get("Pagato da") == "io", "il pagatore si e' perso nel travaso"
 
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
@@ -2371,6 +2445,7 @@ def load_config(folder):
         "natura": load_natura(folder / "natura.csv"),
         "corrections": load_corrections(folder / "correzioni.csv"),
         "exclusions": load_exclusions(folder / "escluse.csv"),
+        "shares": load_shares(folder / "quote.csv"),
         "accounts": load_accounts(folder / "conti.csv"),
     }
     # Il sqlite estratto pesa ~5 MB: tienilo fuori dalla cartella iCloud,
@@ -2561,6 +2636,8 @@ def read_consolidato(folder, output):
             "Descrizione": _text(riga.get("Descrizione")),
             "Importo": parse_amount(_text(riga.get("Importo"))),
             "Conto": _text(riga.get("Conto")),
+            "Pagato da": _text(riga.get("Pagato da")),
+            "Quota": _text(riga.get("Quota")),
             "Rango": RANK_BANK,
         })
     if rows:
@@ -2649,6 +2726,10 @@ def run(folder, use_llm=True, output="consolidato.csv",
         rows = drop_covered_by(rows, discarded=scartate,
                                merchants=config["merchants"])
 
+    # Prima della categorizzazione: il guardiano sui rimborsi qui sotto legge
+    # row["Quota"], e deve trovarla gia' scritta su ogni riga.
+    apply_shares(rows, config["shares"])
+
     print("")
     print("categorizzazione")
     categorizer = Categorizer(config["history"], config["rules"],
@@ -2664,7 +2745,10 @@ def run(folder, use_llm=True, output="consolidato.csv",
         # Un giroconto in uscita sopravvissuto all'appaiamento e' una spesa,
         # non uno spostamento: si veda TRANSFER_OUT. Un override no: quello
         # l'ha deciso una persona guardando la riga.
-        if transfer_out(category, row["Importo"], source) != category:
+        # Un rimborso in uscita ha la stessa forma di un giroconto spaiato, e
+        # senza questa guardia finirebbe in "Da identificare".
+        if (row.get("Quota") != "saldo"
+                and transfer_out(category, row["Importo"], source) != category):
             category, source = TRANSFER_OUT, "giroconto senza ritorno"
             # Confidenza sotto 1: la riga va in da_rivedere. "Da identificare"
             # e' un parcheggio, non una risposta -- solo tu sai se quel
@@ -2688,7 +2772,8 @@ def run(folder, use_llm=True, output="consolidato.csv",
         print(f"  {count:>6}  {source}")
 
     columns = ["ID", "Data", "Descrizione", "Merchant", "Importo", "Conto",
-               "Natura", "Categoria", "Sottocategoria", "Origine", "Confidenza"]
+               "Natura", "Categoria", "Sottocategoria", "Pagato da", "Quota",
+               "Origine", "Confidenza"]
     frame = pd.DataFrame(rows)[columns].sort_values(["Data", "Descrizione"])
     frame.to_csv(folder / output, index=False, sep=";", encoding="utf-8-sig")
 
