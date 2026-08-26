@@ -792,6 +792,13 @@ function mesiEffettivi(rows){
   return mesi.length - 1 + trascorsi / giorniDelMese;
 }
 
+// Il denominatore di OGNI "al mese": barra degli indicatori e tabelle sotto
+// devono dividere per lo stesso numero, altrimenti raccontano due storie
+// sulle stesse righe (la barra diceva "1 mese", la tabella "0.806" - 24% di
+// scarto, tutto a favore di un falso miglioramento). Un solo punto di
+// passaggio e chi lo cambia lo cambia per tutti insieme.
+const mesiPeriodo = rows => mesiEffettivi(spending(rows));
+
 // Il periodo si puo' escludere. Serve all'andamento, che vive sullo storico:
 // ritagliato al mese scelto si riduceva a un punto solo, cioe' a niente. Gli
 // altri filtri restano, perche' quelli dicono DI COSA si sta parlando.
@@ -951,7 +958,7 @@ const CARDS = {};
 // riquadro sotto ai filtri la faceva leggere due volte. Torna solo le celle;
 // e' render() a metterle in #kpibar.
 function indicatori(rows){
-  const out = outflow(rows), inc = inflow(rows), m = monthsOf(spending(rows));
+  const out = outflow(rows), inc = inflow(rows), m = mesiPeriodo(rows);
   const spent = sum(out), earned = sum(inc), saved = earned + spent;
   const ordinary = sum(out.filter(t => t.Natura !== "Straordinarie"));
 
@@ -967,7 +974,10 @@ function indicatori(rows){
       + kpi("quota sulle uscite",
             whole ? Math.round(spent/whole*100) + "%" : "—")
       + kpi("transazioni", String(out.length))
-      + kpi("mesi coperti", String(m));
+      // m e' passato a mesiEffettivi (frazionario) col resto della barra:
+      // senza arrotondare qui si rivedeva a schermo lo stesso raw float
+      // gia' trovato in CARDS.dove ("14/55.806451612903224 mesi").
+      + kpi("mesi coperti", String(Math.round(m)));
   }
 
   const rate = earned ? saved/earned : 0;
@@ -1241,7 +1251,7 @@ function anniAConfronto(out){
 
 CARDS.dove = rows => {
   const vista = VISTE.some(v => v[0] === F.vista) ? F.vista : "area";
-  const m = mesiEffettivi(spending(rows));
+  const m = mesiPeriodo(rows);
   const out = outflow(rows);
   const conf = anniAConfronto(out);
   const totale = Math.abs(sum(out)) || 1;
@@ -1318,7 +1328,10 @@ CARDS.dove = rows => {
     }
     for(const v of elenco.slice(0, 22))
       corpo += riga(v.name, v.total, v.n, {
-        drill:"text", nota: vista === "ricorrenti" ? `${v.mesi}/${m} mesi` : "",
+        // m e' frazionario (l'ultimo mese si ritaglia ai giorni trascorsi):
+        // senza arrotondare si leggeva "14/55.806451612903224 mesi" a schermo.
+        drill:"text", nota: vista === "ricorrenti"
+          ? `${v.mesi}/${Math.round(m)} mesi` : "",
         scarto: scartoDi(r => r.Merchant === v.name)});
     if(!elenco.length)
       corpo = `<tr><td colspan="6" class="dove">nessuna voce nel periodo `
@@ -1335,7 +1348,7 @@ CARDS.dove = rows => {
 // La leva e' il motivo per cui la natura esiste; senza, restano sei parole e
 // il lettore indovina cosa farne.
 CARDS.leve = rows => {
-  const m = mesiEffettivi(spending(rows));
+  const m = mesiPeriodo(rows);
   const items = groupSum(outflow(rows), "Natura")
     .filter(g => Math.abs(g.total/m) >= 1);
   return '<div class="leve">' + items.map(g => {
@@ -1600,7 +1613,12 @@ VIEWS.transazioni = rows => {
 };
 
 VIEWS.partita = rows => {
-  const r = registro(rows, S.partita);
+  // Il saldo e' cumulativo per costruzione: filtrarlo per periodo stampa il
+  // saldo di partenza piu' un sottoinsieme arbitrario degli effetti, un
+  // numero che non risponde a niente. filtered(false) tiene gli altri
+  // filtri (conto, categoria...), che sul registro restano una domanda
+  // sensata; solo il periodo va ignorato, come gia' fa l'andamento.
+  const r = registro(filtered(false), S.partita);
   if(!r.righe.length)
     return '<div class="card"><div class="head"><h2>Con '
       + esc(r.controparte) + '</h2></div><p class="note">Nessuna spesa '
@@ -1625,7 +1643,9 @@ VIEWS.partita = rows => {
         [2,5,6])
     + '<p class="note">Positivo vuol dire che '
     + esc(r.controparte) + ' deve a te. Un <b>saldo</b> e\' il rimborso '
-    + 'stesso: non e\' una spesa, e muove il conto per intero.</p></div>';
+    + 'stesso: non e\' una spesa, e muove il conto per intero. Il periodo qui '
+    + 'sopra non conta: il saldo e\' cumulativo da sempre, e filtrarlo per '
+    + 'data lo spezzerebbe a meta\'.</p></div>';
 };
 
 VIEWS.categorie = () => {

@@ -53,7 +53,7 @@ ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
- indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf, quotaDi,
+ indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  registro, quotaPayload,
  setState: s => { S = s; }, getF: () => F,
@@ -336,6 +336,37 @@ console.log("=== il registro con Michela ===");
   const ultima = r.righe[r.righe.length - 1];
   check("il saldo progressivo dell'ultima riga e' il totale",
         ultima.saldo === r.saldo, `${ultima.saldo} contro ${r.saldo}`);
+}
+
+console.log("=== il registro con Michela ignora il periodo ===");
+{
+  // Il saldo e' cumulativo per costruzione: filtrarlo per periodo stampa il
+  // saldo di partenza piu' un sottoinsieme arbitrario degli effetti. Con il
+  // periodo che taglia via pf1 (10/1) il saldo vero (-10) diventerebbe -40
+  // se VIEWS.partita tornasse a leggere le righe filtrate per data.
+  const Fptn = api.getF();
+  const salvaFptn = {...Fptn};
+  Object.assign(Fptn, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"", lettura:""});
+  const finteFiltro = [
+    {ID:"pf1", Data:"2026-01-10", Descrizione:"A", Importo:-60,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"pf2", Data:"2026-03-05", Descrizione:"B", Importo:-40,
+     "Pagato da":"lei", Quota:"tutto"},
+  ];
+  api.setState(Object.assign({}, state, {transactions: finteFiltro,
+    partita: {dal:"2026-01-01", saldo:0, controparte:"Lei"}}));
+  // Passa esattamente cio' che render() passa a VIEWS[TAB]: filtered(). Se
+  // VIEWS.partita tornasse a usare quell'argomento invece di filtered(false)
+  // al suo interno, il periodo lo taglierebbe di nuovo per davvero.
+  const senzaPeriodo = api.VIEWS.partita(api.filtered());
+  Fptn.from = "2026-02-01"; // se il periodo contasse, escluderebbe pf1
+  const conPeriodo = api.VIEWS.partita(api.filtered());
+  check("il registro con la controparte ignora il filtro del periodo",
+        senzaPeriodo === conPeriodo,
+        senzaPeriodo === conPeriodo ? "" : "l'output cambia col periodo");
+  Object.assign(Fptn, salvaFptn);
+  api.setState(state);
 }
 
 console.log("=== svuotare un menu svuota la coppia ===");
@@ -714,6 +745,76 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         celle.startsWith('<div class="kpi') && !celle.includes('class="kpis"'));
   check("gli indicatori non portano note a pie' di pagina",
         !celle.includes('class="note"'));
+}
+
+// La barra degli indicatori e "Dove finiscono i soldi" devono dividere ogni
+// "al mese" per LO STESSO numero di mesi sulle stesse righe: nel caso reale
+// che ha fatto scoprire il bug la barra diceva "1 mese" e la tabella sotto
+// "0.806", il 24% di scarto, sempre a favore di un falso miglioramento.
+// Con una sola categoria di uscite il totale della barra e quello della riga
+// di categoria sono lo STESSO numero diviso per lo STESSO denominatore:
+// devono comparire identici a schermo. Il confronto e' fra le due uscite
+// vere, non fra due ricalcoli della formula - cosi' fallisce se un domani
+// una delle due tornasse a usare monthsOf da sola.
+{
+  const Fden = api.getF();
+  const salvaFden = {...Fden};
+  Object.assign(Fden, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"", lettura:""});
+  const righeKpi = [
+    {Importo:-100, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-01"},
+    {Importo:-50, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-25"},
+  ];
+  const m = api.mesiPeriodo(righeKpi);
+  check("un agosto fermo al 25 non vale un mese intero (sanity)",
+        Math.abs(m - 25/31) < 0.001, String(m));
+  const barraHtml = api.indicatori(righeKpi);
+  const tabellaHtml = api.CARDS.dove(righeKpi);
+  const uscite = barraHtml.match(/<span>uscite \/ mese<\/span><b>([^<]*)<\/b>/);
+  const rigaCategoria = tabellaHtml.match(/>KpiTest<\/button><\/td><td>([^<]*)<\/td>/);
+  check("la barra usa mesiEffettivi, non monthsOf, per 'uscite / mese'",
+        !!uscite && uscite[1] === api.spesa(150/m), uscite && uscite[1]);
+  check("la barra e la tabella sotto dividono per lo stesso numero di mesi",
+        !!uscite && !!rigaCategoria && uscite[1] === rigaCategoria[1],
+        JSON.stringify([uscite && uscite[1], rigaCategoria && rigaCategoria[1]]));
+
+  // Lo stesso passaggio a mesiEffettivi tocca anche il ramo "partial" (un
+  // filtro categoria/natura/testo acceso), che scrive "mesi coperti" come
+  // testo grezzo: senza arrotondare qui si rivedeva a schermo lo stesso
+  // difetto di "14/55.806451612903224 mesi" (Task 2), ma in barra.
+  Fden.category = "KpiTest";
+  const barraFiltrata = api.indicatori(righeKpi);
+  const mesiCoperti = barraFiltrata.match(/<span>mesi coperti<\/span><b>([^<]*)<\/b>/);
+  check("'mesi coperti' nella barra filtrata e' un intero, non un float grezzo",
+        !!mesiCoperti && !mesiCoperti[1].includes("."), mesiCoperti && mesiCoperti[1]);
+  Fden.category = "";
+
+  Object.assign(Fden, salvaFden);
+}
+
+// Il ramo "ricorrenti" di CARDS.dove e' l'unico che scrive m come testo, ed
+// e' rimasto scoperto: gli altri test lo esercitano solo in vista
+// "negozio". Sullo schermo vero si leggeva "14/55.806451612903224 mesi".
+{
+  const Fric = api.getF();
+  const salvaFric = {...Fric};
+  Object.assign(Fric, {from:"", to:"", account:"", nature:"", category:"",
+                        sub:"", text:"", confronto:"", vista:"ricorrenti",
+                        lettura:""});
+  const righeRicorrenti = [
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-01-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-02-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-03-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-04-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-05-05"},
+    {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-06-10"},
+  ];
+  const tabellaRic = api.CARDS.dove(righeRicorrenti);
+  const nota = tabellaRic.match(/(\d+)\/([\d.]+) mesi/);
+  check("il ramo ricorrenti compare con la sua nota", !!nota, tabellaRic);
+  check("i mesi nella nota sono un numero intero, non un float grezzo",
+        !!nota && !nota[2].includes("."), nota && nota[0]);
+  Object.assign(Fric, salvaFric);
 }
 
 // I campi correggibili sono un contratto fra due file: l'interfaccia scrive

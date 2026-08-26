@@ -8,7 +8,7 @@ al periodo di un conto, coppie che dovrebbero annullarsi e non lo fanno,
 la stessa voce classificata in due modi diversi.
 
 Non tocca i file originali della banca: legge solo consolidato.csv, che il
-motore riscrive da capo a ogni giro, e i file di configurazione.
+motore riscrive da capo a ogni giro.
 """
 import csv
 import math
@@ -18,7 +18,6 @@ from collections import Counter, defaultdict
 from datetime import date
 
 CONSOLIDATO = "consolidato.csv"
-CONTI = "conti.csv"
 SEP = ";"
 
 
@@ -49,20 +48,32 @@ def mese(riga):
     return (riga.get("Data") or "")[:7]
 
 
-def conti_bancari():
-    """I nomi dei conti bancari, presi da conti.csv, non scritti qui a mano.
+def conti_bancari(righe):
+    """I conti dove i soldi sono DAVVERO usciti dal conto di chi tiene i libri.
 
-    conti.csv e' il file che decide come si chiama un conto: una lista fissa
-    copiata qui scadrebbe, in silenzio, alla prima banca aggiunta o rinominata
-    (continuerebbe a girare, e a non segnalare piu' niente). Splitwise vive
-    nello stesso file ma non e' una banca: e' la fonte delle quote stesse, non
-    un estratto conto, quindi resta fuori a mano.
+    Prima leggeva l'elenco da conti.csv: una lista fissa di sei nomi
+    (UniCredit, Intesa Sanpaolo, Fineco, Hype, Fideuram, Splitwise) che pero'
+    non sono i nomi che finiscono nella colonna Conto di consolidato.csv oggi
+    (Storico, Koala, Hype, UniCredit, Fideuram). Il risultato: "Storico", che
+    e' l'intero storico MoneyWiz migrato - il blocco piu' grosso di righe di
+    banca vere che ci sia - non veniva mai controllato. E togliere
+    "Splitwise" dall'elenco non toglieva niente per davvero, perche' le righe
+    Splitwise arrivano col nome di conto "Koala" (bilancio.py,
+    is_shared_export: "Splitwise lo chiama koala_<data>_export.csv"), non
+    "Splitwise". Una lista fissa copiata qui e' esattamente il difetto che
+    questo stesso docstring, nella versione precedente, descriveva: scade in
+    silenzio alla prima banca aggiunta o rinominata.
+
+    Quello che la chiamante vuole non e' un elenco di nomi di banche, ma il
+    suo complemento: ogni conto DIVERSO dalla fonte che si limita a
+    registrare chi deve cosa a chi, senza che soldi lascino nessun conto
+    proprio. Quella fonte oggi ha un nome solo, "Koala", e non vive in
+    nessun CSV di configurazione (conti.csv la chiama ancora "Splitwise", il
+    nome della app, non il nome che finisce nella colonna Conto) - e' scritto
+    qui a mano proprio per questo, cosi' resta visibile invece di sparire
+    dentro un file che nessuno rilegge insieme a questo controllo.
     """
-    try:
-        righe = leggi(CONTI)
-    except FileNotFoundError:
-        return set()
-    return {(x.get("conto") or "").strip() for x in righe} - {"", "Splitwise"}
+    return {(x.get("Conto") or "").strip() for x in righe} - {"", "Koala"}
 
 
 class Referto:
@@ -305,7 +316,7 @@ def controlla_quote(righe, r):
     # tu, e' il tuo conto. Marcarla "pagata da lei" e' una contraddizione, ma
     # ha una spiegazione vera (carta tua, spesa sua) e una sbagliata (un clic
     # di troppo). Non si vieta e non si corregge: si conta.
-    banca = conti_bancari()
+    banca = conti_bancari(righe)
     contrarie = [x for x in quote
                  if x.get("Pagato da") == "lei" and x.get("Conto") in banca]
     r.aggiungi("sospetto", "righe di banca marcate 'pagata da lei'",

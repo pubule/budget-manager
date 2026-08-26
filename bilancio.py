@@ -1886,6 +1886,21 @@ def selftest():
     assert len(fuso) == 1, "la riga scritta a mano si e' duplicata"
     assert fuso[0]["Importo"] == -90.0,         "transazioni.csv non ha vinto sulla copia ferma nel derivato"
 
+    # transazioni.csv nasce da un prompt di testo libero, senza validazione ne'
+    # sul modale ne' sul server: e' l'unico ingresso che puo' ammettere una
+    # data non-ISO in un sistema che le confronta COME STRINGHE ovunque
+    # (ordinamento, month(), i filtri di periodo, mesiEffettivi, il ">= dal"
+    # del registro). read_manual deve passare da parse_date come tutti gli
+    # altri lettori, non scrivere la cella cosi' com'e'.
+    with tempfile.TemporaryDirectory() as cartella:
+        percorso = Path(cartella) / "transazioni.csv"
+        percorso.write_text(
+            "id;data;descrizione;importo;conto\n"
+            "man-1;24/08/2026;Cena;-30;Contanti\n",
+            encoding="utf-8")
+        lette = read_manual(cartella)
+        assert lette[0]["Data"] == "2026-08-24",             f"data non normalizzata: {lette[0]['Data']!r}"
+
     # prepara_righe() e' la sequenza VERA usata da run(): un test che chiama
     # merge_manual() e apply_corrections() a mano, nell'ordine che gli pare,
     # non si accorgerebbe se qualcuno li scambiasse DENTRO prepara_righe().
@@ -2688,7 +2703,12 @@ def read_manual(folder):
                 continue
             rows.append({
                 "ID": key,
-                "Data": data,
+                # Sole senza validazione a monte: e' l'unico posto dove una
+                # data non-ISO puo' entrare in un sistema che confronta le
+                # date COME STRINGHE ovunque (ordinamento, month(), i filtri
+                # di periodo, mesiEffettivi, il ">= dal" del registro). Senza
+                # parse_date, "24/08/2026" ordina prima di ogni riga vera.
+                "Data": parse_date(data),
                 "Descrizione": (riga.get("descrizione") or "").strip(),
                 "Importo": round(parse_amount(riga.get("importo") or ""), 2),
                 "Conto": (riga.get("conto") or "A mano").strip(),
