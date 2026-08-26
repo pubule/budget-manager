@@ -466,12 +466,24 @@ def apply_exclusions(rows, exclusions, discarded=None):
 
 
 # I valori ammessi per la quota. "saldo" non e' una divisione: dice che QUELLA
-# riga e' il rimborso, e muove il conto per intero.
-QUOTE = ("meta", "tutto", "saldo")
+# riga e' il rimborso, e muove il conto per intero. "niente" e' una lapide:
+# dice che questa riga NON ha una quota, una scelta esplicita -- diversa dal
+# non avere affatto una riga in quote.csv, che vuol dire "nessuno l'ha mai
+# guardata". Serve perche' apply_shares() usa row.setdefault() apposta (una
+# quota dedotta dalle colonne di Splitwise resta scritta nel derivato anche
+# quando l'export sparisce, e setdefault() non deve mai cancellarla in
+# silenzio): l'unico modo di togliere una quota e' scriverlo a voce alta.
+QUOTE = ("meta", "tutto", "saldo", "niente")
 
 
 def load_shares(path):
-    """quote.csv: id -> {"Pagato da": ..., "Quota": ...}."""
+    """quote.csv: id -> {"Pagato da": ..., "Quota": ...}.
+
+    Una riga "niente" torna stringhe vuote (non "niente": quella parola non
+    deve mai finire in "Quota", o il filtro del registro la scambierebbe per
+    una quota vera). apply_shares() poi la applica con row.update(), che a
+    differenza di setdefault() sovrascrive anche una quota gia' dedotta.
+    """
     if not path.exists():
         return {}
     quote = {}
@@ -479,8 +491,13 @@ def load_shares(path):
         for row in csv.DictReader(handle, delimiter=";"):
             key = (row.get("id") or "").strip()
             quota = (row.get("quota") or "").strip().lower()
+            if not key or quota not in QUOTE:
+                continue
+            if quota == "niente":
+                quote[key] = {"Pagato da": "", "Quota": ""}
+                continue
             pagante = (row.get("pagato_da") or "").strip().lower()
-            if not key or quota not in QUOTE or pagante not in ("io", "lei"):
+            if pagante not in ("io", "lei"):
                 continue
             quote[key] = {"Pagato da": pagante, "Quota": quota}
     if quote:
@@ -1942,6 +1959,35 @@ def selftest():
     apply_shares(dedotta, {})
     assert dedotta[0]["Quota"] == "meta", "la quota dedotta e' sparita senza quote.csv"
     assert dedotta[0]["Pagato da"] == "io", "il pagatore dedotto e' sparito senza quote.csv"
+
+    # La lapide "niente": load_shares() non deve far trapelare la parola
+    # "niente" stessa ne' un None, o finirebbe in "Quota" e il filtro del
+    # registro la scambierebbe per una quota vera.
+    with tempfile.TemporaryDirectory() as cartella:
+        percorso = Path(cartella) / "quote.csv"
+        percorso.write_text(
+            "id;pagato_da;quota;nota" + NEWLINE +
+            "w#1;;niente;" + NEWLINE, encoding="utf-8-sig")
+        lapide = load_shares(percorso)
+    assert lapide == {"w#1": {"Pagato da": "", "Quota": ""}}, \
+        f"la lapide non e' tornata vuota: {lapide}"
+
+    # Il caso che avrebbe dovuto fallire senza la lapide: una riga con una
+    # quota gia' DEDOTTA (come "dedotta" sopra, stesso ID) ma con un "niente"
+    # esplicito in quote.csv per quell'ID. Il dizionario delle quote viene da
+    # load_shares() vero, non costruito a mano: senza il ramo "niente" li'
+    # dentro, "z#1" non ci finirebbe proprio, e setdefault() in apply_shares()
+    # lascerebbe risorgere "meta"/"io" -- il bug esatto segnalato.
+    with tempfile.TemporaryDirectory() as cartella:
+        percorso = Path(cartella) / "quote.csv"
+        percorso.write_text(
+            "id;pagato_da;quota;nota" + NEWLINE +
+            "z#1;;niente;" + NEWLINE, encoding="utf-8-sig")
+        quote_lapide = load_shares(percorso)
+    lapidata = [{"ID": "z#1", "Pagato da": "io", "Quota": "meta"}]
+    apply_shares(lapidata, quote_lapide)
+    assert lapidata[0]["Quota"] == "", "la lapide non ha cancellato la quota dedotta"
+    assert lapidata[0]["Pagato da"] == "", "la lapide non ha cancellato il pagatore dedotto"
 
     # Il punto di partenza del registro: senza il file non deve esplodere, e
     # deve dare un saldo zero, non un buco che rompe la somma piu' avanti.

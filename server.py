@@ -385,6 +385,14 @@ def set_transaction(payload):
         if quota and pagante:
             righe.append({"id": key, "pagato_da": pagante, "quota": quota,
                           "nota": (payload.get("nota") or "").strip()})
+        elif not quota and not pagante:
+            # Svuotare i due menu e' una decisione, non un vuoto: se la riga
+            # viene da un estratto conto ormai sparito, senza questa lapide
+            # una quota dedotta da Splitwise nel derivato tornerebbe da sola
+            # (vedi QUOTE in bilancio.py). Si scrive solo qui, non per le
+            # righe che nessuno ha mai toccato.
+            righe.append({"id": key, "pagato_da": "", "quota": "niente",
+                          "nota": ""})
         write_rows("quote.csv", righe)
         return
 
