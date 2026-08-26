@@ -1193,7 +1193,12 @@ def shares_from_quotas(costo, saldi):
     dovuta = abs(vivi[mio] if pagante == "lei" else vivi[altro])
     if abs(dovuta - abs(costo)) < 0.01:
         return {"Pagato da": pagante, "Quota": "tutto"}
-    if abs(dovuta - abs(costo) / 2) < 0.51:
+    # Splitwise divide al centesimo, non all'euro: l'unico scarto legittimo
+    # da meta' esatta e' il mezzo centesimo di un importo dispari (60,01 fa
+    # 30,01 / 30,00, scarto 0,005). 0,02 e' largo per quello e stretto per
+    # tutto il resto: una tolleranza piu' larga (es. 0,51) etichetterebbe
+    # come "meta'" anche uno split 90/10 su un 1,00 euro.
+    if abs(dovuta - abs(costo) / 2) < 0.02:
         return {"Pagato da": pagante, "Quota": "meta"}
     return None
 
@@ -1813,6 +1818,15 @@ def selftest():
     #   Tre persone: fuori dal modello, si lascia stare.
     assert shares_from_quotas(90.0, {"a": 60.0, "b": -30.0, "c": -30.0}) is None, \
         "con tre persone la derivazione deve tacere"
+    #   1,00 euro diviso 90/10: e' uno split vero, non una meta'. Con la
+    #   tolleranza stretta (0,02) non deve piu' passare per "meta'".
+    assert shares_from_quotas(1.0, {"Fabio Stocco": 0.10,
+                                     "Mikela bogoni": -0.10}) is None, \
+        "uno split 90/10 su un euro e' stato letto come meta'"
+    #   Nessuna delle due colonne e' Fabio: non si sa quale saldo e' il tuo,
+    #   e indovinare significherebbe scambiare chi paga con chi riceve.
+    assert shares_from_quotas(60.0, {"Michela": 30.0, "Anna": -30.0}) is None, \
+        "senza una colonna riconoscibile come Fabio non deve inventare"
 
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
