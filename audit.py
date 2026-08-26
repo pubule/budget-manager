@@ -18,6 +18,7 @@ from collections import Counter, defaultdict
 from datetime import date
 
 CONSOLIDATO = "consolidato.csv"
+CONTI = "conti.csv"
 SEP = ";"
 
 
@@ -46,6 +47,22 @@ def giorni_fra(a, b):
 
 def mese(riga):
     return (riga.get("Data") or "")[:7]
+
+
+def conti_bancari():
+    """I nomi dei conti bancari, presi da conti.csv, non scritti qui a mano.
+
+    conti.csv e' il file che decide come si chiama un conto: una lista fissa
+    copiata qui scadrebbe, in silenzio, alla prima banca aggiunta o rinominata
+    (continuerebbe a girare, e a non segnalare piu' niente). Splitwise vive
+    nello stesso file ma non e' una banca: e' la fonte delle quote stesse, non
+    un estratto conto, quindi resta fuori a mano.
+    """
+    try:
+        righe = leggi(CONTI)
+    except FileNotFoundError:
+        return set()
+    return {(x.get("conto") or "").strip() for x in righe} - {"", "Splitwise"}
 
 
 class Referto:
@@ -270,6 +287,35 @@ def controlla_giroconti(righe, r):
                 f"le manda prima che fosse caricato"])
 
 
+def controlla_quote(righe, r):
+    """Le quote che non tornano: orfane, incomplete, o in contraddizione."""
+    quote = [x for x in righe if (x.get("Quota") or "")]
+    r.aggiungi("nota", "righe con una quota", len(quote),
+               [f"{sum(1 for x in quote if x.get('Quota') == q)} {q}"
+                for q in ("meta", "tutto", "saldo")])
+
+    # Meta' di che, pagata da chi? Una quota senza pagatore non dice da che
+    # parte va il debito, e nel registro sparisce in silenzio.
+    monche = [x for x in quote if not (x.get("Pagato da") or "")]
+    r.aggiungi("errore", "quote senza chi ha pagato", len(monche),
+               [f"{x.get('Data')} {(x.get('Descrizione') or '')[:40]}"
+                for x in monche])
+
+    # Una riga arrivata dall'estratto conto dice gia' chi ha pagato: sei stato
+    # tu, e' il tuo conto. Marcarla "pagata da lei" e' una contraddizione, ma
+    # ha una spiegazione vera (carta tua, spesa sua) e una sbagliata (un clic
+    # di troppo). Non si vieta e non si corregge: si conta.
+    banca = conti_bancari()
+    contrarie = [x for x in quote
+                 if x.get("Pagato da") == "lei" and x.get("Conto") in banca]
+    r.aggiungi("sospetto", "righe di banca marcate 'pagata da lei'",
+               len(contrarie),
+               [f"{x.get('Data')} {x.get('Conto')} "
+                f"{(x.get('Descrizione') or '')[:34]}" for x in contrarie],
+               "se sono tre e' un refuso, se sono trenta e' un modo di usare "
+               "l'app che il modello deve descrivere")
+
+
 def controlla_entrate_rovesciate(righe, r):
     """Righe che si DICHIARANO entrate ma hanno il segno di un'uscita.
 
@@ -331,7 +377,7 @@ def main():
     r = Referto()
     for controllo in (controlla_forma, controlla_doppioni, controlla_buchi,
                       controlla_tassonomia, controlla_segni,
-                      controlla_giroconti,
+                      controlla_giroconti, controlla_quote,
                       controlla_entrate_rovesciate, controlla_merchant,
                       controlla_estremi):
         controllo(righe, r)
