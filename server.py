@@ -50,6 +50,7 @@ SCHEMA = {
     "correzioni.csv": ["id", "campo", "valore", "nota"],
     "escluse.csv": ["id", "motivo"],
     "quote.csv": ["id", "pagato_da", "quota", "nota"],
+    "partita.csv": ["dal", "saldo", "controparte", "nota"],
     "categorie_merge.csv": ["categoria_attuale", "sottocategoria_attuale",
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
@@ -314,6 +315,7 @@ class State:
             "overrides": read_rows("override.csv"),
             "corrections": read_rows("correzioni.csv"),
             "layout": read_layout(),
+            "partita": bilancio.load_partita(FOLDER / "partita.csv"),
             "has_exports": self.has_exports(),
             # Se i dati vengono dal derivato invece che dagli export,
             # l'interfaccia deve dirlo: non e' un errore, ma neanche

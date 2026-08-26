@@ -488,6 +488,26 @@ def load_shares(path):
     return quote
 
 
+def load_partita(path):
+    """partita.csv: da quando conta il conto fra due persone, e da quanto.
+
+    Ricostruirlo da tutto lo storico sarebbe piu' completo ma non verificabile:
+    dove un estratto conto ha coperto una riga condivisa, la quota si e' persa
+    prima che il travaso esistesse. Un punto di partenza scelto e' un numero di
+    cui si risponde.
+    """
+    vuota = {"dal": "", "saldo": 0.0, "controparte": "la controparte"}
+    if not path.exists():
+        return vuota
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle, delimiter=";"):
+            return {"dal": (row.get("dal") or "").strip(),
+                    "saldo": parse_amount(row.get("saldo") or ""),
+                    "controparte": (row.get("controparte")
+                                    or "la controparte").strip()}
+    return vuota
+
+
 def apply_shares(rows, quote):
     """Mette "Pagato da" e "Quota" su ogni riga, con le colonne sempre presenti.
 
@@ -1923,6 +1943,20 @@ def selftest():
     assert dedotta[0]["Quota"] == "meta", "la quota dedotta e' sparita senza quote.csv"
     assert dedotta[0]["Pagato da"] == "io", "il pagatore dedotto e' sparito senza quote.csv"
 
+    # Il punto di partenza del registro: senza il file non deve esplodere, e
+    # deve dare un saldo zero, non un buco che rompe la somma piu' avanti.
+    assert load_partita(Path("non-esiste-partita.csv")) == \
+        {"dal": "", "saldo": 0.0, "controparte": "la controparte"}, \
+        "senza partita.csv il punto di partenza deve essere neutro"
+    with tempfile.TemporaryDirectory() as cartella:
+        percorso = Path(cartella) / "partita.csv"
+        percorso.write_text(
+            "dal;saldo;controparte;nota" + NEWLINE +
+            "2026-01-01;0,00;Michela;" + NEWLINE, encoding="utf-8-sig")
+        letta = load_partita(percorso)
+    assert letta == {"dal": "2026-01-01", "saldo": 0.0, "controparte": "Michela"}, \
+        f"partita.csv letto male: {letta}"
+
     # Il travaso: drop_covered_by tiene la riga di banca e butta quella
     # condivisa, che pero' e' l'unica a sapere com'era divisa la spesa.
     coppia = [
@@ -2482,6 +2516,7 @@ def load_config(folder):
         "corrections": load_corrections(folder / "correzioni.csv"),
         "exclusions": load_exclusions(folder / "escluse.csv"),
         "shares": load_shares(folder / "quote.csv"),
+        "partita": load_partita(folder / "partita.csv"),
         "accounts": load_accounts(folder / "conti.csv"),
     }
     # Il sqlite estratto pesa ~5 MB: tienilo fuori dalla cartella iCloud,

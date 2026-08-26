@@ -55,6 +55,7 @@ ${js}
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
+ registro,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -303,6 +304,38 @@ console.log("=== le due letture ===");
   }
 
   F6.lettura = "";
+}
+
+console.log("=== il registro con Michela ===");
+{
+  const finte = [
+    // Prima della data di partenza: non deve entrare.
+    {ID:"a", Data:"2025-12-31", Descrizione:"vecchia", Importo:-100,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"b", Data:"2026-01-12", Descrizione:"Eurospin", Importo:-60,
+     "Pagato da":"io", Quota:"meta"},
+    {ID:"c", Data:"2026-01-20", Descrizione:"Farmacia", Importo:-24,
+     "Pagato da":"lei", Quota:"tutto"},
+    {ID:"d", Data:"2026-02-03", Descrizione:"Bonifico", Importo:500,
+     "Pagato da":"lei", Quota:"saldo"},
+    {ID:"e", Data:"2026-02-04", Descrizione:"Spesa mia", Importo:-30},
+  ];
+  const r = api.registro(finte, {dal:"2026-01-01", saldo:0});
+  check("il registro parte dalla data di partita.csv",
+        !r.righe.some(x => x.ID === "a"), "c'e' una riga di prima");
+  check("una riga senza quota non entra nel registro",
+        !r.righe.some(x => x.ID === "e"));
+  check("pago io la meta' sua: lei mi deve 30",
+        r.righe.find(x => x.ID === "b").effetto === 30);
+  check("paga lei una cosa tutta mia: le devo 24",
+        r.righe.find(x => x.ID === "c").effetto === -24);
+  check("il rimborso abbassa il debito di tutto l'importo",
+        r.righe.find(x => x.ID === "d").effetto === -500);
+  check("il saldo finale e' la somma degli effetti", r.saldo === 30 - 24 - 500,
+        String(r.saldo));
+  const ultima = r.righe[r.righe.length - 1];
+  check("il saldo progressivo dell'ultima riga e' il totale",
+        ultima.saldo === r.saldo, `${ultima.saldo} contro ${r.saldo}`);
 }
 
 console.log("=== filtri ===");
