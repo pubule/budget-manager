@@ -409,6 +409,8 @@ button:disabled{opacity:.45;cursor:default}
         <div class="quick" id="f-quick"></div>
         <label id="f-confronto-eti">confronta con</label>
         <div class="quick confronto" id="f-confronto"></div>
+        <label id="f-lettura-eti">leggi</label>
+        <div class="quick" id="f-lettura"></div>
       </div>
       <div class="bar ui" id="filters">
         <label>dal</label><input type="date" id="f-from">
@@ -467,7 +469,7 @@ let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
 const F = {from:"", to:"", account:"", nature:"", category:"", sub:"",
-           text:"", confronto:"", vista:""};
+           text:"", confronto:"", vista:"", lettura:""};
 
 // Le categorie hanno due livelli. Dentro al motore viaggiano unite
 // ("Casa > Casalinghi"), qui arrivano gia' divise in Categoria e
@@ -737,7 +739,10 @@ function post(route, body){
 }
 
 // Solo le uscite vere: i giroconti non impoveriscono, includerli falsa tutto.
-const spending = rows => rows.filter(t => t.Natura !== "Non spesa");
+// Un saldo e' lo stesso genere di cosa: e' un rimborso fra le due persone, non
+// una spesa ne' un'entrata, e questo vale in entrambe le letture. E' l'unico
+// caso in cui marcare una riga sposta un numero anche nella lettura tutto.
+const spending = rows => rows.filter(t => t.Natura !== "Non spesa" && t.Quota !== "saldo");
 // Il reddito vero e' quello di natura "Entrate": stipendio e affitti. Tutto
 // il resto col segno positivo e' un rimborso o uno storno, e non e' guadagno:
 // scala dalla spesa a cui appartiene, dove riduce quella voce.
@@ -751,7 +756,10 @@ const outflow = rows => spending(rows).filter(t => t.Natura !== "Entrate");
 // uniche su cui l'LLM abbia qualcosa da dire, quindi sono la misura che dice
 // se vale la pena aspettare i minuti che ci mette.
 const uncategorized = rows => rows.filter(t => !t.Categoria);
-const sum = rows => rows.reduce((a,t) => a + (t.Importo||0), 0);
+// La somma passa dal moltiplicatore: e' l'unico punto da cui passano tutti i
+// riquadri, quindi cambiarlo qui li cambia tutti insieme e nessuno puo'
+// dimenticarsene.
+const sum = rows => rows.reduce((s,t) => s + t.Importo * quotaDi(t), 0);
 const monthsOf = rows => Math.max(uniq(rows.map(month)).length, 1);
 
 // I mesi CONTATI COME SONO DAVVERO: l'ultimo vale per la parte trascorsa.
@@ -1169,6 +1177,26 @@ const VISTE = [["area", "area"], ["negozio", "negozio"],
 // il segno su ogni riga non aggiunge niente da leggere. Resta dove un valore
 // puo' davvero essere positivo -- risparmio, rimborsi, differenze.
 const spesa = v => euro(Math.abs(v));
+
+// Quanto di una riga e' tuo. Nella lettura predefinita tutto: e' il costo
+// pieno, ed e' quello che l'app ha sempre mostrato. Nella seconda lettura
+// dipende da chi ha pagato e da quanto ne deve l'altro.
+//
+//   ho pagato io + meta' a lei    -> meta' e' mia
+//   ho pagato io + tutto a lei    -> niente e' mio, l'ho solo anticipato
+//   ha pagato lei + meta' a me    -> meta' e' mia
+//   ha pagato lei + tutto a me    -> e' tutta mia
+//   un saldo                      -> non e' una spesa, non pesa
+function quotaDi(t){
+  if(F.lettura !== "mia") return 1;
+  const quota = t.Quota || "";
+  if(!quota) return 1;
+  if(quota === "saldo") return 0;
+  const mia = t["Pagato da"] === "io"
+    ? (quota === "tutto" ? 0 : 0.5)
+    : (quota === "tutto" ? 1 : 0.5);
+  return mia;
+}
 
 // Il confronto fra due periodi, a parole. Il segno da solo mentiva: in
 // "differenza -3.996" il meno voleva dire "hai speso di PIU'", l'opposto di
@@ -1609,6 +1637,11 @@ function render(){
 
   renderQuick();
   renderConfronti();
+  // Due letture degli stessi euro: quanto e' costato, e quanto e' tuo.
+  el("f-lettura").innerHTML = [["", "tutto"], ["mia", "la mia quota"]]
+    .map(([k, eti]) => `<button data-lettura="${k}" `
+      + `class="${(F.lettura||"") === k ? "on" : ""}">${esc(eti)}</button>`)
+    .join("");
   fillSelect("f-account", S.accounts, F.account, "tutti");
   fillSelect("f-nature", S.nature, F.nature, "tutte");
   const aree = uniq(S.categories.map(c => c.categoria)).filter(Boolean).sort();
@@ -1696,7 +1729,7 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
-    + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova]");
+    + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova],[data-lettura]");
   if(!t) return;
   const d = t.dataset;
 
@@ -1704,6 +1737,7 @@ document.addEventListener("click", async ev => {
   if(d.clear){ F[d.clear] = ""; render(); return; }
   if(d.confronto !== undefined){ F.confronto = d.confronto; render(); return; }
   if(d.vista !== undefined){ F.vista = d.vista; render(); return; }
+  if(d.lettura !== undefined){ F.lettura = d.lettura; render(); return; }
   if(d.quick !== undefined){
     const [from, to] = QUICK[+d.quick][1]();
     if(!from) return;

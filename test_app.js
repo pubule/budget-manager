@@ -53,7 +53,7 @@ ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  CARDS, VIEWS, outflow, inflow, sum, monthsOf, spending, uncategorized,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
- indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf,
+ indicatori, spesa, scarto, VISTE, mesiEffettivi, monthsOf, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
@@ -202,6 +202,25 @@ console.log("=== il metro del confronto ===");
         api.confrontoScelto().chiave);
 
   F0.from = ""; F0.to = ""; F0.confronto = "";
+}
+
+console.log("=== le due letture ===");
+{
+  const F6 = api.getF();
+  const quota = (pagante, q) => api.quotaDi({"Pagato da":pagante, Quota:q});
+  F6.lettura = "";
+  check("nella lettura predefinita ogni riga pesa per intero",
+        quota("io","meta") === 1 && quota("","") === 1);
+  F6.lettura = "mia";
+  check("a meta' la riga pesa la meta'", quota("io","meta") === 0.5);
+  check("una riga non condivisa pesa uguale in tutte e due le letture",
+        quota("","") === 1);
+  // Ho pagato io e la quota e' tutta sua: di quella spesa non e' mio niente.
+  check("quota intera a carico suo: non e' mia", quota("io","tutto") === 0);
+  // Ha pagato lei e la quota e' tutta mia: e' mia per intero.
+  check("quota intera a carico mio: e' tutta mia", quota("lei","tutto") === 1);
+  check("un rimborso non e' una spesa e non pesa", quota("lei","saldo") === 0);
+  F6.lettura = "";
 }
 
 console.log("=== filtri ===");
