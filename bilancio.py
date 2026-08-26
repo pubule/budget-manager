@@ -84,6 +84,24 @@ def transfer_out(category, amount, source):
         return TRANSFER_OUT
     return category
 
+
+def categoria_finale(category, row, source):
+    """La categoria dopo l'unica eccezione che vale sulla singola riga.
+
+    Un rimborso in uscita ha la stessa forma di un giroconto spaiato, e senza
+    questa guardia finirebbe in "Da identificare": la quota "saldo" dice che
+    quella riga NON e' una spesa, e' il conto che si pareggia fra le due
+    persone, quindi la categoria del categorizzatore resta quella che e'.
+    Fuori da questo caso decide transfer_out(): un giroconto in uscita
+    sopravvissuto all'appaiamento e' una spesa, non uno spostamento. Un
+    override non ci finisce mai dentro: quello l'ha deciso una persona
+    guardando la riga, e transfer_out() lo sa gia' dalla source.
+    """
+    if row.get("Quota") == "saldo":
+        return category
+    return transfer_out(category, row["Importo"], source)
+
+
 # Le categorie hanno due livelli: "Casa > Casalinghi" e' l'area Casa e la
 # sottocategoria Casalinghi. Dentro al motore viaggiano unite in una stringa
 # sola - lo storico, il voto per token e la cache sono tutti indicizzati cosi',
@@ -1785,7 +1803,15 @@ def selftest():
     assert transfer_out(TRANSFER, 200.0, "regola") == TRANSFER,         "l'entrata scoperta e' diventata spesa"
     assert transfer_out(TRANSFER, -3829.0, "override") == TRANSFER,         "l'override non ha retto"
     assert transfer_out("Casa > Luce e gas", -50.0, "regola") == "Casa > Luce e gas",         "una spesa qualsiasi e' stata scambiata per un giroconto"
-    assert transfer_out(TRANSFER, -500.0, "regola") == TRANSFER_OUT, \
+    # categoria_finale() e' la sola porta per le due eccezioni di riga: un
+    # test sul solo transfer_out() non vedrebbe mai la guardia sul rimborso,
+    # perche' quella guardia vive fuori da transfer_out().
+    saldo = {"Importo": -500.0, "Quota": "saldo"}
+    assert categoria_finale(TRANSFER, saldo, "regola") == TRANSFER, \
+        "un rimborso (Quota 'saldo') non deve diventare 'Da identificare'"
+    #   La stessa riga, ma senza la quota: il comportamento di prima resta.
+    senza_saldo = {"Importo": -500.0, "Quota": ""}
+    assert categoria_finale(TRANSFER, senza_saldo, "regola") == TRANSFER_OUT, \
         "senza quota un giroconto in uscita spaiato resta una spesa"
 
     # Escludere e' l'unica forma di cancellazione: una riga di banca tornerebbe
@@ -1886,6 +1912,16 @@ def selftest():
     assert righe[0]["Pagato da"] == "io", "il pagatore di quote.csv non ha vinto"
     assert righe[1]["Quota"] == "", "una riga senza quota deve avere le colonne vuote"
     assert righe[1]["Pagato da"] == "", "il pagatore vuoto deve esserci comunque"
+
+    # La terza gamba: una riga con una quota gia' DEDOTTA da Splitwise (Task 3)
+    # e nessuna voce in quote.csv per quell'ID. setdefault() non deve toccarla:
+    # e' il caso che un refuso su row.update()/setdefault() romperebbe per
+    # primo, in silenzio, perche' non tocca ne' il ramo "vince quote.csv" ne'
+    # il ramo "riga del tutto vuota".
+    dedotta = [{"ID": "z#1", "Pagato da": "io", "Quota": "meta"}]
+    apply_shares(dedotta, {})
+    assert dedotta[0]["Quota"] == "meta", "la quota dedotta e' sparita senza quote.csv"
+    assert dedotta[0]["Pagato da"] == "io", "il pagatore dedotto e' sparito senza quote.csv"
 
     # Il travaso: drop_covered_by tiene la riga di banca e butta quella
     # condivisa, che pero' e' l'unica a sapere com'era divisa la spesa.
@@ -2742,13 +2778,10 @@ def run(folder, use_llm=True, output="consolidato.csv",
             categorizer.stats["override"] += 1
         else:
             category, source, score = categorizer.categorize(row["Descrizione"])
-        # Un giroconto in uscita sopravvissuto all'appaiamento e' una spesa,
-        # non uno spostamento: si veda TRANSFER_OUT. Un override no: quello
-        # l'ha deciso una persona guardando la riga.
-        # Un rimborso in uscita ha la stessa forma di un giroconto spaiato, e
-        # senza questa guardia finirebbe in "Da identificare".
-        if (row.get("Quota") != "saldo"
-                and transfer_out(category, row["Importo"], source) != category):
+        # Le due eccezioni che riguardano solo questa riga vivono in
+        # categoria_finale(): un rimborso ("saldo") o un giroconto senza
+        # ritorno. Vedi la sua docstring per il perche' di entrambe.
+        if categoria_finale(category, row, source) != category:
             category, source = TRANSFER_OUT, "giroconto senza ritorno"
             # Confidenza sotto 1: la riga va in da_rivedere. "Da identificare"
             # e' un parcheggio, non una risposta -- solo tu sai se quel
