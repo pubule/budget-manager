@@ -65,15 +65,23 @@ def conti_bancari(righe):
     silenzio alla prima banca aggiunta o rinominata.
 
     Quello che la chiamante vuole non e' un elenco di nomi di banche, ma il
-    suo complemento: ogni conto DIVERSO dalla fonte che si limita a
-    registrare chi deve cosa a chi, senza che soldi lascino nessun conto
-    proprio. Quella fonte oggi ha un nome solo, "Koala", e non vive in
-    nessun CSV di configurazione (conti.csv la chiama ancora "Splitwise", il
-    nome della app, non il nome che finisce nella colonna Conto) - e' scritto
-    qui a mano proprio per questo, cosi' resta visibile invece di sparire
-    dentro un file che nessuno rilegge insieme a questo controllo.
+    suo complemento: ogni conto DIVERSO dalle fonti che non sono estratti
+    conto. Sono due, e nessuna delle due vive in un CSV di configurazione:
+
+    - "Koala", le righe che arrivano da Splitwise, che si limitano a
+      registrare chi deve cosa a chi senza che i soldi lascino un conto
+      proprio (conti.csv la chiama ancora "Splitwise", il nome della app, non
+      il nome che finisce nella colonna Conto);
+    - "A mano", il conto predefinito delle righe scritte a mano. Su quelle la
+      contraddizione che questo controllo cerca non e' una contraddizione: se
+      scrivi tu una spesa e dici che l'ha pagata lei, e' esattamente quello
+      che volevi dire, non un clic di troppo.
+
+    I due nomi stanno scritti qui apposta, cosi' restano visibili accanto al
+    ragionamento invece di sparire dentro un file che nessuno rilegge insieme
+    a questo controllo.
     """
-    return {(x.get("Conto") or "").strip() for x in righe} - {"", "Koala"}
+    return {(x.get("Conto") or "").strip() for x in righe} - {"", "Koala", "A mano"}
 
 
 class Referto:

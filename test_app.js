@@ -375,18 +375,26 @@ console.log("=== svuotare un menu svuota la coppia ===");
   // dice da che parte va il debito, e infatti il server la rifiuta. Quindi
   // svuotare UN SOLO menu deve mandare la coppia vuota, non una meta' che il
   // server scarterebbe in silenzio lasciando risorgere il valore vecchio.
+  // Il terzo argomento dice se la riga AVEVA gia' una quota: senza qualcosa da
+  // cancellare non c'e' nessuna decisione da registrare.
   check("entrambi pieni restano pieni",
-        JSON.stringify(api.quotaPayload("io", "meta")) ===
+        JSON.stringify(api.quotaPayload("io", "meta", false)) ===
         JSON.stringify({pagato_da: "io", quota: "meta"}));
   check("chi vuoto svuota anche la quota",
-        JSON.stringify(api.quotaPayload("", "meta")) ===
+        JSON.stringify(api.quotaPayload("", "meta", true)) ===
         JSON.stringify({pagato_da: "", quota: ""}));
   check("quota vuota svuota anche chi",
-        JSON.stringify(api.quotaPayload("io", "")) ===
+        JSON.stringify(api.quotaPayload("io", "", true)) ===
         JSON.stringify({pagato_da: "", quota: ""}));
-  check("entrambi vuoti restano vuoti",
-        JSON.stringify(api.quotaPayload("", "")) ===
+  check("entrambi vuoti su una riga che aveva una quota la cancellano",
+        JSON.stringify(api.quotaPayload("", "", true)) ===
         JSON.stringify({pagato_da: "", quota: ""}));
+  // Su una riga che non ha mai avuto niente non si scrive una lapide: quote.csv
+  // si legge a occhio, e una riga per una decisione mai presa e' solo rumore.
+  check("su una riga senza quota non si scrive niente",
+        api.quotaPayload("", "", false) === null);
+  check("scegliere un solo menu su una riga vergine non scrive niente",
+        api.quotaPayload("io", "", false) === null);
 }
 
 console.log("=== filtri ===");
