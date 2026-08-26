@@ -2703,7 +2703,7 @@ def read_manual(folder):
                 continue
             rows.append({
                 "ID": key,
-                # Sole senza validazione a monte: e' l'unico posto dove una
+                # Solo qui, senza validazione a monte: e' l'unico posto dove una
                 # data non-ISO puo' entrare in un sistema che confronta le
                 # date COME STRINGHE ovunque (ordinamento, month(), i filtri
                 # di periodo, mesiEffettivi, il ">= dal" del registro). Senza

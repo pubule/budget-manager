@@ -1612,7 +1612,7 @@ VIEWS.transazioni = rows => {
     + 'tutte le righe di quella voce.</p></div>';
 };
 
-VIEWS.partita = rows => {
+VIEWS.partita = () => {
   // Il saldo e' cumulativo per costruzione: filtrarlo per periodo stampa il
   // saldo di partenza piu' un sottoinsieme arbitrario degli effetti, un
   // numero che non risponde a niente. filtered(false) tiene gli altri
@@ -1897,7 +1897,10 @@ document.addEventListener("click", async ev => {
     return reload();
   }
   if(d.escludi){
-    const motivo = await domanda("Perche' questa riga non deve comparire?", "");
+    const motivo = (await domanda("Perche' questa riga non deve comparire?", "") || "").trim();
+    // Le sole spaziature passavano di qui e venivano scartate dal server: la
+    // riga restava, ma la pagina si ricaricava come se l'esclusione fosse
+    // andata a buon fine. Meglio non chiedere niente che mentire.
     if(!motivo) return;
     await post("/api/transaction", {id:d.escludi, escludi:motivo});
     return reload();
@@ -1999,8 +2002,13 @@ async function handleRule(d){
 // diventi raggiungibile dai due menu invece che solo dall'API diretta --
 // altrimenti il POST porta una meta' che il server scarta in silenzio, e la
 // quota vecchia (dal derivato, quando l'export e' sparito) resta li'.
-function quotaPayload(chi, q){
-  return (chi && q) ? {pagato_da: chi, quota: q} : {pagato_da: "", quota: ""};
+function quotaPayload(chi, q, aveva){
+  if(chi && q) return {pagato_da: chi, quota: q};
+  // Mezza quota non e' uno stato: svuotare un menu vuol dire cancellare la
+  // coppia. Ma se la riga non aveva niente da cancellare, non c'e' niente da
+  // decidere e non si scrive la lapide: quote.csv si legge a occhio, e una
+  // riga per una decisione che nessuno ha preso e' solo rumore.
+  return aveva ? {pagato_da: "", quota: ""} : null;
 }
 
 document.addEventListener("change", async ev => {
@@ -2018,7 +2026,10 @@ document.addEventListener("change", async ev => {
     const id = d.quota || d.quotaChi;
     const chi = document.querySelector(`[data-quota-chi="${id}"]`).value;
     const q = document.querySelector(`[data-quota="${id}"]`).value;
-    await post("/api/transaction", {id, ...quotaPayload(chi, q)});
+    const riga = (S.transactions || []).find(t => t.ID === id) || {};
+    const corpo = quotaPayload(chi, q, !!(riga.Quota || riga["Pagato da"]));
+    if(!corpo) return;
+    await post("/api/transaction", {id, ...corpo});
     return reload();
   }
   if(d.fix){

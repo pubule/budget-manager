@@ -380,6 +380,13 @@ def set_transaction(payload):
                  if (r.get("id") or "").strip() != key]
         quota = (payload.get("quota") or "").strip().lower()
         pagante = (payload.get("pagato_da") or "").strip().lower()
+        # Un valore che non esiste non deve poter CANCELLARE quello buono: la
+        # riga vecchia e' gia' stata tolta qui sopra, e nessuno dei due rami
+        # seguenti la riscriverebbe. Si rifiuta prima di toccare il file.
+        if quota and quota not in bilancio.QUOTE:
+            raise ValueError(f"quota sconosciuta: {quota!r}")
+        if pagante and pagante not in ("io", "lei"):
+            raise ValueError(f"pagatore sconosciuto: {pagante!r}")
         # Servono tutti e due: "meta'" senza sapere chi ha pagato non dice da
         # che parte va il debito.
         if quota and pagante:
