@@ -1714,15 +1714,27 @@ def selftest():
     assert len(fuso) == 1, "la riga scritta a mano si e' duplicata"
     assert fuso[0]["Importo"] == -90.0,         "transazioni.csv non ha vinto sulla copia ferma nel derivato"
 
-    # merge_manual() PRIMA di apply_corrections(): al contrario una
-    # correzione scritta per l'ID di una riga a mano non troverebbe mai la
-    # riga (apply_corrections scorre solo cio' che gli si passa) e resterebbe
-    # inerte per sempre, anche se corretto in correzioni.csv.
-    riga_mano = [{"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
-                  "Importo": -84.0, "Conto": "Contanti", "Rango": RANK_BANK}]
-    sequenza = merge_manual([], riga_mano)
-    apply_corrections(sequenza, {"man-1": {"Importo": -90.0}})
-    assert sequenza[0]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
+    # prepara_righe() e' la sequenza VERA usata da run(): un test che chiama
+    # merge_manual() e apply_corrections() a mano, nell'ordine che gli pare,
+    # non si accorgerebbe se qualcuno li scambiasse DENTRO prepara_righe().
+    # Tutti e quattro gli ingredienti insieme, quindi, attraverso la funzione
+    # vera: una di banca senza ID, una a mano col suo ID, una correzione
+    # sulla riga a mano, un'esclusione su un'altra riga.
+    banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
+              "Conto": "Koala"}]
+    da_escludere = {"Data": "2026-01-16", "Descrizione": "doppione",
+                    "Importo": -5.0, "Conto": "Koala"}
+    id_da_escludere = transaction_id(da_escludere, Counter())
+    riga_mano = {"ID": "man-1", "Data": "2026-08-24", "Descrizione": "Cena",
+                 "Importo": -84.0, "Conto": "Contanti", "Rango": RANK_BANK}
+    config_prova = {"corrections": {"man-1": {"Importo": -90.0}},
+                    "exclusions": {id_da_escludere: "doppione"}}
+    rows = prepara_righe(banca + [da_escludere], [riga_mano], config_prova,
+                         [], False)
+    per_id = {r["ID"]: r for r in rows}
+    assert id_da_escludere not in per_id, "la riga esclusa non e' sparita"
+    assert per_id["man-1"]["Importo"] == -90.0,         "la correzione su una riga scritta a mano non si applica"
+    assert "#" in banca[0]["ID"], "la riga di banca non ha preso un ID"
 
     # Le altre righe continuano a prendere l'ID dal contenuto.
     banca = [{"Data": "2026-01-15", "Descrizione": "spesa", "Importo": -12.0,
@@ -2465,6 +2477,33 @@ def read_consolidato(folder, output):
     return rows
 
 
+def prepara_righe(rows, manuali, config, scartate, gia_pulite):
+    """Mette insieme le righe prima di categorizzarle. L'ORDINE e' il punto:
+
+    1. assign_ids(), ma solo se le righe non arrivano gia' pulite da
+       consolidato.csv: al contrario correggere un importo cambierebbe l'ID
+       della sua riga e la correzione si staccherebbe dalla transazione al
+       giro successivo.
+    2. merge_manual(), che porta dentro le righe scritte a mano (il loro ID
+       viene dal file, non passano mai da assign_ids) e toglie prima
+       l'eventuale copia gia' ferma in "rows" (consolidato.csv puo' averla
+       scritta il giro precedente: vedi merge_manual() per il perche').
+    3. apply_corrections(), DOPO le manuali: una correzione in
+       correzioni.csv e' chiave sull'ID, e apply_corrections() scorre solo
+       le righe che gli si passano. Prima delle manuali, una correzione
+       scritta per una riga a mano non troverebbe mai la sua riga e
+       resterebbe inerte per sempre.
+    4. apply_exclusions(), per ultima: una riga esclusa non deve nemmeno
+       partecipare agli appaiamenti dei passi successivi (giroconti,
+       coperture), o consumerebbe la copertura di una riga buona.
+    """
+    if not gia_pulite:
+        assign_ids(rows)
+    rows = merge_manual(rows, manuali)
+    apply_corrections(rows, config["corrections"])
+    return apply_exclusions(rows, config["exclusions"], scartate)
+
+
 def run(folder, use_llm=True, output="consolidato.csv",
         make_dashboard=True, config=None, include_pending=False):
     """L'intera pipeline, chiamabile da codice. Ritorna il DataFrame finale.
@@ -2496,24 +2535,8 @@ def run(folder, use_llm=True, output="consolidato.csv",
             "Carica dati. Se e' la prima volta, esegui prima "
             "python bilancio.py --migra-storico")
 
-    # L'ordine conta: prima gli ID sui valori originali, poi le correzioni.
-    # Al contrario, correggere un importo cambierebbe l'ID della sua riga e
-    # la correzione si staccherebbe dalla transazione al giro successivo.
-    if not gia_pulite:
-        assign_ids(rows)
-    # Le manuali entrano DOPO l'assegnazione degli ID (il loro ID viene dal
-    # file, non passano mai da assign_ids) ma PRIMA delle correzioni: una
-    # correzione in correzioni.csv e' chiave sull'ID, e apply_corrections()
-    # scorre solo le righe che gli si passano. Entrando dopo, una correzione
-    # scritta per una riga a mano non troverebbe mai la sua riga e resterebbe
-    # inerte per sempre. merge_manual() toglie prima l'eventuale copia gia'
-    # ferma in "rows": vedi li' il perche' (consolidato.csv puo' averla
-    # scritta il giro precedente).
-    rows = merge_manual(rows, manuali)
-    apply_corrections(rows, config["corrections"])
-    # Prima di ogni altro scarto: una riga esclusa non deve nemmeno partecipare
-    # agli appaiamenti, o consumerebbe la copertura di una riga buona.
-    rows = apply_exclusions(rows, config["exclusions"], scartate)
+    # Vedi prepara_righe() per il perche' di questo ordine esatto.
+    rows = prepara_righe(rows, manuali, config, scartate, gia_pulite)
     if not gia_pulite:
         rows = drop_cross_file_duplicates(rows, scartate)
         # I giroconti PRIMA delle coperture: da quando drop_internal_transfers()
