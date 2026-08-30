@@ -2717,6 +2717,7 @@ GENERATED = {
     "categorie_merge.csv", "regole.csv", "merchant.csv", "override.csv",
     "natura.csv", "correzioni.csv", "categorie_cache.json",
     "dashboard_layout.json", "conti.csv", "scartate.csv",
+    "escluse.csv", "partita.csv", "quote.csv", "transazioni.csv",
 }
 
 

@@ -12,6 +12,10 @@
 --bg:#16161a;--card:#1e1e24;--ink:#eceaf0;--dim:#9c96a3;--line:#31313a;
 --accent:#6fae99;--warn:#d98a6a;--soft:#26262e}}
 *{box-sizing:border-box}
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+*::-webkit-scrollbar{width:10px;height:10px;background:transparent}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
 body{margin:0;background:var(--bg);color:var(--ink);
 font:15px/1.55 "Iowan Old Style",Georgia,serif}
 /* Tre zone che non si mescolano mai: la SPALLA dice dove sono e cosa posso
@@ -117,13 +121,10 @@ padding:11px 20px;flex:1 1 168px;text-align:right;background:none}
    fra due tabelle affiancate restavano 400px di vuoto. */
 .pannello{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(316px,1fr);
 gap:14px;align-items:stretch}
-.pannello>.card{margin:0;display:flex;flex-direction:column;min-height:0}
+.pannello>.card{margin:0;display:flex;flex-direction:column;min-height:0;min-width:0}
 .pannello .pila{display:flex;flex-direction:column;gap:14px;min-width:0}
 .pannello .pila>.card{margin:0;padding:11px 15px}
 .pannello .pila .head{margin-bottom:8px}
-/* Il grafico in colonna stretta non ha bisogno di essere alto: qui serve la
-   forma della curva, non leggerci sopra i valori. */
-.pannello .pila svg{max-height:118px}
 .pannello .pila .note{margin:6px 0 0;font-size:12px}
 @media (max-width:1150px){.pannello{grid-template-columns:1fr}}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
@@ -163,6 +164,8 @@ color:var(--dim);font-family:ui-sans-serif,system-ui,sans-serif}
 font-family:ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
 .delta.meglio{color:var(--accent)}
 .delta.peggio{color:var(--warn)}
+.importo-spesa{color:var(--warn)}
+.importo-entrata{color:var(--accent)}
 .delta.pari{color:var(--dim)}
 /* Le leve: cosa si puo' fare per abbassare ogni natura, e in quanto tempo.
    La leva e' il motivo per cui la natura esiste. */
@@ -427,6 +430,7 @@ button:disabled{opacity:.45;cursor:default}
     </div>
 
     <div class="kpibar ui" id="kpibar"></div>
+    <p class="note" id="periodo-nota"></p>
 
     <div id="error" class="err hide"></div>
     <div class="chips" id="crumbs"></div>
@@ -470,8 +474,28 @@ button:disabled{opacity:.45;cursor:default}
 let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
-const F = {from:"", to:"", account:"", nature:"", category:"", sub:"",
+// Di default si parte sull'anno in corso: confrontoScelto() ricade gia' da
+// solo su "anno prima" quando il periodo e' un anno intero, quindi basta il
+// periodo per avere anche il confronto giusto acceso.
+const ANNO_DEFAULT = new Date().getFullYear();
+const F = {from:`${ANNO_DEFAULT}-01-01`, to:`${ANNO_DEFAULT}-12-31`,
+           account:"", nature:"", category:"", sub:"",
            text:"", confronto:"", vista:"", lettura:""};
+// Ordinamento della tabella Transazioni: piu' recenti prima, cosi' non serve
+// scorrere 1900 righe per vedere l'ultima spesa fatta.
+const SORT = {col:"Data", dir:-1};
+// La finestra del grafico "uscite mese per mese" e' indipendente dal periodo
+// scelto in alto: quel filtro sceglie COSA sommano gli indicatori, questo
+// sceglie quanta storia disegnare. Di default l'anno in corso fino a oggi;
+// "tutta la storia" la svuota per tornare a vedere tutti i mesi.
+const OGGI = new Date();
+const ANDAMENTO = {da:`${ANNO_DEFAULT}-01`,
+                   a:`${ANNO_DEFAULT}-${String(OGGI.getMonth()+1).padStart(2,"0")}`};
+// Quante righe mostrare nella tabella Transazioni, e con quale filtro/ordine
+// era stata caricata l'ultima volta: cambiare filtro o colonna deve ripartire
+// da 100, altrimenti "carica altre" sommerebbe pagine di ricerche diverse.
+const PAGE_SIZE = 100;
+let PAGE = {n:1, sig:""};
 
 // Le categorie hanno due livelli. Dentro al motore viaggiano unite
 // ("Casa > Casalinghi"), qui arrivano gia' divise in Categoria e
@@ -872,7 +896,7 @@ function meseLeggibile(etichetta){
 
 function lineChart(labels, series, dentro){
   if(!labels.length) return '<p class="note">nessun dato</p>';
-  const W = 760, H = 230, LEFT = 56, BASE = H - 26;
+  const W = 760, H = 340, LEFT = 56, BASE = H - 26;
   const flat = series.flatMap(s => s.values).concat([0]);
   const top = Math.max(...flat) || 1, bottom = Math.min(...flat);
   const span = (top - bottom) || 1;
@@ -938,10 +962,10 @@ function lineChart(labels, series, dentro){
 const legend = series => '<div class="legend">' + series.map(s =>
   `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("") + "</div>";
 
-function tableHTML(headers, rows, right){
+function tableHTML(headers, rows, right, rawHeaders){
   right = right || [];
   return '<div class="scroll"><table><thead><tr>'
-    + headers.map(h => `<th>${esc(h)}</th>`).join("")
+    + headers.map(h => `<th>${rawHeaders ? h : esc(h)}</th>`).join("")
     + "</tr></thead><tbody>"
     + rows.map(r => "<tr>" + r.map((c,i) =>
         `<td${right.includes(i)?' class="num"':""}>${c}</td>`).join("") + "</tr>").join("")
@@ -1252,8 +1276,19 @@ function anniAConfronto(out){
 CARDS.dove = rows => {
   const vista = VISTE.some(v => v[0] === F.vista) ? F.vista : "area";
   const m = mesiPeriodo(rows);
+  // Quando il periodo scelto e' gia' un anno (in corso o passato), "all'anno"
+  // deve essere il totale vero di quell'anno, non una proiezione: su "Anno in
+  // corso" con 8 mesi veri, media*12 inventava gli altri 4 che non sono
+  // ancora successi. Sugli altri periodi (un mese, tre mesi...) la proiezione
+  // resta quello che "all'anno" ha sempre voluto dire: a questo ritmo, un anno.
+  const annoIntero = (formaDelPeriodo() || {}).tipo === "anno";
   const out = outflow(rows);
-  const conf = anniAConfronto(out);
+  // Il confronto anno su anno guarda sempre tutto lo storico (rispetto agli
+  // altri filtri, non al periodo): filtrato a "Anno in corso" out ha un anno
+  // solo dentro, e "gli ultimi due anni presenti in out" ne trovava uno --
+  // la colonna restava vuota proprio quando il periodo la rendeva piu' utile.
+  const fuoriPeriodo = outflow(filtered(false));
+  const conf = anniAConfronto(fuoriPeriodo);
   const totale = Math.abs(sum(out)) || 1;
 
   const scelta = '<div class="viste">' + VISTE.map(([k, eti]) =>
@@ -1264,8 +1299,8 @@ CARDS.dove = rows => {
   // in un riquadro tutto suo con le stesse identiche voci.
   const scartoDi = filtro => {
     if(!conf) return null;
-    const a = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
-    const b = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
+    const a = sum(fuoriPeriodo.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
+    const b = sum(fuoriPeriodo.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
     return scarto(a, b);
   };
 
@@ -1279,7 +1314,7 @@ CARDS.dove = rows => {
       + `data-value="${esc(nome)}">${esc(nome)}</button>`
       + (o.nota ? ` <span class="dove">${esc(o.nota)}</span>` : "")
       + `</td>`
-      + `<td>${spesa(tot/m)}</td><td>${spesa(tot/m*12)}</td>`
+      + `<td>${spesa(tot/m)}</td><td>${spesa(annoIntero ? tot : tot/m*12)}</td>`
       + `<td class="dove">${quota}%</td>`
       + `<td class="${s ? "delta " + s.verso : "dove"}">`
       + `${s ? esc(s.testo) : "—"}</td>`
@@ -1371,16 +1406,19 @@ CARDS.leve = rows => {
 // tabella intera non serve piu': ogni riga di "Dove vanno i soldi" porta gia'
 // il suo scarto. Qui restano solo i primi cinque, che sono la notizia.
 CARDS.anno = rows => {
-  const out = outflow(rows);
-  const conf = anniAConfronto(out);
+  // Vedi CARDS.dove: il confronto anno su anno ignora il periodo scelto per
+  // lo stesso motivo, o "Anno in corso" gli lascerebbe un anno solo da
+  // confrontare con se stesso.
+  const fuoriPeriodo = outflow(filtered(false));
+  const conf = anniAConfronto(fuoriPeriodo);
   if(!conf) return '<p class="note">serve piu\' di un anno di dati</p>';
   const MESI = ["","gen","feb","mar","apr","mag","giu","lug","ago","set","ott",
                 "nov","dic"];
-  const aree = uniq(out.map(t => t.Categoria || "Senza categoria"));
+  const aree = uniq(fuoriPeriodo.map(t => t.Categoria || "Senza categoria"));
   const mosse = aree.map(n => {
     const filtro = t => (t.Categoria || "Senza categoria") === n;
-    const a = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
-    const b = sum(out.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
+    const a = sum(fuoriPeriodo.filter(t => filtro(t) && conf.dentro(t, conf.anni[0])));
+    const b = sum(fuoriPeriodo.filter(t => filtro(t) && conf.dentro(t, conf.anni[1])));
     return {n, d: Math.abs(b) - Math.abs(a), s: scarto(a, b)};
   }).filter(r => r.s && r.s.verso !== "pari")
     .sort((x,y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 5);
@@ -1402,7 +1440,11 @@ CARDS.anno = rows => {
 CARDS.andamento = () => {
   const rows = filtered(false);
   const out = outflow(rows), inc = inflow(rows);
-  const labels = uniq(spending(rows).map(month));
+  // La finestra del grafico e' un filtro tutto suo (ANDAMENTO), non il
+  // periodo scelto in alto: quello resta la fascia disegnata sopra i dati.
+  const tutti = uniq(spending(rows).map(month));
+  const labels = tutti.filter(l => (!ANDAMENTO.da || l >= ANDAMENTO.da)
+                                && (!ANDAMENTO.a || l <= ANDAMENTO.a));
   const dentro = F.from || F.to
     ? labels.filter(l => (!F.from || l >= F.from.slice(0,7))
                       && (!F.to || l <= F.to.slice(0,7)))
@@ -1415,7 +1457,15 @@ CARDS.andamento = () => {
     {name:"uscite ordinarie",
      values:by(out, t => t.Natura!=="Straordinarie").map(v => -v), color:"#d99442"},
   ];
-  return lineChart(labels, series, dentro) + legend(series)
+  const range = `<div class="bar" style="margin-bottom:10px">`
+    + `<label>dal</label><input type="month" data-andamento="da" `
+    + `value="${esc(ANDAMENTO.da)}" min="${esc(tutti[0]||"")}" max="${esc(tutti[tutti.length-1]||"")}">`
+    + `<label>al</label><input type="month" data-andamento="a" `
+    + `value="${esc(ANDAMENTO.a)}" min="${esc(tutti[0]||"")}" max="${esc(tutti[tutti.length-1]||"")}">`
+    + (ANDAMENTO.da || ANDAMENTO.a
+       ? `<button class="link" data-andamento-reset="1">tutta la storia</button>` : "")
+    + `</div>`;
+  return range + lineChart(labels, series, dentro) + legend(series)
     + (dentro.length
        ? '<p class="note">La linea copre tutto lo storico: il periodo scelto e' + "'"
          + ' la parte in chiaro. Un mese da solo non fa un andamento.</p>'
@@ -1570,20 +1620,52 @@ VIEWS.revisione = rows => {
     + "</div>";
 };
 
+// Chiave di ordinamento per colonna: la categoria ordina su area+sottocategoria
+// unite, cosi' "Casa > Arredamento" e "Casa > Condominio" restano vicine.
+const SORT_KEYS = {
+  Data: t => t.Data || "", Descrizione: t => t.Descrizione || "",
+  Merchant: t => t.Merchant || "", Importo: t => t.Importo || 0,
+  Conto: t => t.Conto || "", Natura: t => t.Natura || "",
+  Categoria: t => whole(t), "Pagato da": t => t["Pagato da"] || "",
+  Quota: t => t.Quota || "", Origine: t => t.Origine || ""};
+
+function sortedRows(rows){
+  const key = SORT_KEYS[SORT.col];
+  if(!key) return rows;
+  return [...rows].sort((a,b) => {
+    const x = key(a), y = key(b);
+    return (x < y ? -1 : x > y ? 1 : 0) * SORT.dir;
+  });
+}
+
+function sortHeader(label, col){
+  const attivo = SORT.col === col;
+  return `<button class="link" data-sort="${col}">${esc(label)}`
+    + (attivo ? (SORT.dir === 1 ? " ↑" : " ↓") : "") + "</button>";
+}
+
 VIEWS.transazioni = rows => {
-  const shown = rows.slice(0, 500);
+  const sig = JSON.stringify(F) + SORT.col + SORT.dir;
+  if(sig !== PAGE.sig){ PAGE = {n:1, sig}; }
+  const ordinate = sortedRows(rows);
+  const shown = ordinate.slice(0, PAGE.n * PAGE_SIZE);
+  const altre = ordinate.length - shown.length;
   return '<div class="card"><div class="head"><h2>Transazioni</h2>'
     + `<span class="mini">${rows.length} righe, ne mostro ${shown.length}</span>`
-    + '<button class="link" data-nuova="1">+ transazione</button></div>'
-    + tableHTML(["data","descrizione","merchant","importo","conto","natura",
-                 "categoria","pagato da","quota","origine",""],
+    + '<button class="primary" data-nuova="1">+ transazione</button></div>'
+    + tableHTML([sortHeader("data","Data"), sortHeader("descrizione","Descrizione"),
+                 sortHeader("merchant","Merchant"), sortHeader("importo","Importo"),
+                 sortHeader("conto","Conto"), sortHeader("natura","Natura"),
+                 sortHeader("categoria","Categoria"), sortHeader("pagato da","Pagato da"),
+                 sortHeader("quota","Quota"), sortHeader("origine","Origine"), ""],
         shown.map(t => [
           `<input type="date" value="${esc(t.Data)}" data-fix="Data" data-id="${esc(t.ID)}">`,
           `<input style="min-width:230px" value="${esc(t.Descrizione||"")}"`
             + ` data-fix="Descrizione" data-id="${esc(t.ID)}">`,
           `<input style="min-width:130px" value="${esc(t.Merchant||"")}"`
             + ` data-fix="Merchant" data-id="${esc(t.ID)}">`,
-          `<input style="width:92px;text-align:right" value="${t.Importo}"`
+          `<input class="${t.Importo < 0 ? "importo-spesa" : "importo-entrata"}"`
+            + ` style="width:92px;text-align:right" value="${t.Importo}"`
             + ` data-fix="Importo" data-id="${esc(t.ID)}">`,
           accountSelect(t.Conto, t.ID),
           // La natura non si tocca qui: discende dalla categoria attraverso
@@ -1595,7 +1677,10 @@ VIEWS.transazioni = rows => {
           `<select data-quota-chi="${esc(t.ID)}">`
             + ["", "io", "lei"].map(v =>
                 `<option value="${v}" ${v===(t["Pagato da"]||"")?"selected":""}>`
-                + `${v || "—"}</option>`).join("") + "</select>",
+                // Il valore resta io/lei (e' quello che manda il server): a
+                // cambiare e' solo l'etichetta, "lei" letto dal nome vero
+                // in partita.csv invece di restare un pronome senza nome.
+                + `${v ? (v==="io"?"Fabio":esc((S.partita&&S.partita.controparte)||"lei")) : "—"}</option>`).join("") + "</select>",
           `<select data-quota="${esc(t.ID)}">`
             + ["", "meta", "tutto", "saldo"].map(v =>
                 `<option value="${v}" ${v===(t.Quota||"")?"selected":""}>`
@@ -1603,7 +1688,9 @@ VIEWS.transazioni = rows => {
           `<span class="mini">${esc(t.Origine)}</span>`,
           `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`
           + ` <button class="link" data-escludi="${esc(t.ID)}">escludi</button>`]),
-        [3])
+        [3], true)
+    + (altre > 0 ? `<button class="link" data-more="1">carica altre `
+        + `${Math.min(altre, PAGE_SIZE)}</button>` : "")
     + '<p class="note">Ogni modifica si salva da sola e la pipeline rigira '
     + 'subito. La categoria scrive override.csv; data, descrizione, merchant, '
     + 'importo e conto scrivono correzioni.csv. "annulla" toglie entrambe le '
@@ -1626,7 +1713,7 @@ VIEWS.partita = () => {
       + 'quota nella scheda <b>Transazioni</b>.</p></div>';
   const verso = r.saldo >= 0
     ? `${esc(r.controparte)} ti deve` : `devi a ${esc(r.controparte)}`;
-  const CHI = {io:"io", lei:esc(r.controparte)};
+  const CHI = {io:"Fabio", lei:esc(r.controparte)};
   return '<div class="card"><div class="head"><h2>Con '
     + esc(r.controparte) + '</h2>'
     + `<span class="mini">dal ${esc(r.dal)}, saldo di partenza `
@@ -1787,6 +1874,18 @@ function render(){
   const mostraKpi = TAB === "dashboard" && !senzaFiltri;
   el("kpibar").classList.toggle("hide", !mostraKpi);
   el("kpibar").innerHTML = mostraKpi ? indicatori(rows) : "";
+  // Senza un periodo scelto i numeri sono la media su tutta la storia, e
+  // niente lo diceva: si apriva l'app e non era chiaro a cosa si riferissero.
+  const senzaPeriodo = mostraKpi && !F.from && !F.to;
+  el("periodo-nota").classList.toggle("hide", !senzaPeriodo);
+  el("periodo-nota").textContent = "";
+  if(senzaPeriodo){
+    const mesi_ = uniq(spending(S.transactions).map(month)).sort();
+    el("periodo-nota").textContent = mesi_.length
+      ? `Nessun periodo scelto: qui sotto e' la media su tutta la storia, `
+        + `${mesi_.length} mesi da ${mesi_[0]} a ${mesi_[mesi_.length-1]}.`
+      : "Nessun periodo scelto, e nessuna transazione in archivio.";
+  }
 
   el("view").innerHTML = VIEWS[TAB](rows);
 }
@@ -1834,10 +1933,19 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-drill],[data-clear],[data-move],[data-quick],"
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
-    + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova],[data-lettura]");
+    + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova],[data-lettura],[data-sort],"
+    + "[data-more],[data-andamento-reset]");
   if(!t) return;
   const d = t.dataset;
 
+  if(d.andamentoReset){ ANDAMENTO.da = ""; ANDAMENTO.a = ""; render(); return; }
+  if(d.more){ PAGE.n++; render(); return; }
+  if(d.sort){
+    // Ripremere la stessa colonna inverte il verso, come un foglio di calcolo.
+    SORT.dir = SORT.col === d.sort ? -SORT.dir : -1;
+    SORT.col = d.sort;
+    render(); return;
+  }
   if(d.tab){ TAB = d.tab; render(); return; }
   if(d.clear){ F[d.clear] = ""; render(); return; }
   if(d.confronto !== undefined){ F.confronto = d.confronto; render(); return; }
@@ -2040,6 +2148,10 @@ document.addEventListener("change", async ev => {
     const card = S.layout.find(c => c.id === d.card);
     card.visibile = ev.target.checked;
     await post("/api/layout", {layout:S.layout});
+    return render();
+  }
+  if(d.andamento){
+    ANDAMENTO[d.andamento] = ev.target.value;
     return render();
   }
 });

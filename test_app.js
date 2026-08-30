@@ -55,7 +55,7 @@ ${js}
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
- registro, quotaPayload,
+ registro, quotaPayload, render,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
@@ -395,6 +395,44 @@ console.log("=== svuotare un menu svuota la coppia ===");
         api.quotaPayload("", "", false) === null);
   check("scegliere un solo menu su una riga vergine non scrive niente",
         api.quotaPayload("io", "", false) === null);
+}
+
+console.log("=== il confronto anno su anno non si spegne col periodo ===");
+{
+  // Il difetto vero: filtrando su "Anno in corso" la tabella restringeva il
+  // confronto agli anni presenti DENTRO al filtro, ne trovava uno solo, e la
+  // colonna "su <anno>" restava vuota proprio quando il periodo la rendeva
+  // piu' utile.
+  const F7 = api.getF();
+  const anno = state.transactions.map(t => (t.Data||"").slice(0,4))
+    .filter(Boolean).sort().slice(-1)[0];
+  F7.from = `${anno}-01-01`; F7.to = `${anno}-12-31`;
+  const html = api.CARDS.dove(api.filtered());
+  check("filtrando su un anno solo la colonna del confronto non e' vuota",
+        /class="delta (meglio|peggio|pari)"/.test(html), html.slice(0, 200));
+  const htmlAnno = api.CARDS.anno(api.filtered());
+  check("CARDS.anno non dice 'serve piu' di un anno' quando un anno c'e' gia'",
+        !htmlAnno.includes("serve piu"));
+  F7.from = ""; F7.to = "";
+}
+
+console.log("=== la nota quando non c'e' un periodo scelto ===");
+{
+  // Senza periodo i numeri erano una media su tutta la storia e niente lo
+  // diceva: si apriva l'app e non era chiaro a cosa si riferissero.
+  const F8 = api.getF();
+  F8.from = ""; F8.to = "";
+  api.render();
+  const senza = api.el("periodo-nota").textContent;
+  check("senza periodo la nota dice qualcosa", senza.length > 0, senza);
+  check("la nota nomina quanti mesi", /\d+ mesi/.test(senza), senza);
+
+  F8.from = "2026-01-01"; F8.to = "2026-12-31";
+  api.render();
+  check("con un periodo scelto la nota tace",
+        api.el("periodo-nota").textContent === "");
+  F8.from = ""; F8.to = "";
+  api.render();
 }
 
 console.log("=== filtri ===");

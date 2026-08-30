@@ -5,6 +5,67 @@ Va aggiornato a ogni sessione di lavoro, prima di chiudere.
 
 ---
 
+## IN CORSO (27/08/2026) — accesso da fuori casa via Cloudflare Tunnel, piano scritto ma non eseguito
+
+Fabio vuole aprire l'app da fuori casa, come gia' fa con Home Assistant. Non
+vuole deployarla su Cloudflare (Workers/Pages): l'app resta un server Python
+locale, Cloudflare fa solo da tunnel. Idea giusta — nessuna riscrittura, ma
+**tre modifiche reali** prima di poterlo fare, scoperte guardando l'account
+Cloudflare vero via MCP (`mcp__plugin_cloudflare_cloudflare-api__execute`,
+account "Fabio.stocco85@gmail.com's Account", id
+`3f078eb974edf09669ceca41a0264a1f`).
+
+### La topologia vera, non quella immaginata all'inizio
+
+Il tunnel esiste gia': **"HATunnel"** (id `53f4f8dc-6b11-4099-b731-5bf7834ee535`),
+**gestito da remoto** (`"source": "cloudflare"` nella configurazione — niente
+`config.yml` locale, si modifica via API, non su un file da cercare su un
+disco). L'ingress attuale:
+
+```
+home.smartcores.org -> http://192.168.178.220:8123   (Home Assistant)
+ai.smartcores.org   -> http://192.168.178.221:3000
+n8n.smartcores.org  -> http://192.168.178.221:5678
+*                   -> http_status:404
+```
+
+Il connettore cloudflared **gira su una macchina Linux ARM in LAN**
+(192.168.178.x), **non sul PC Windows** dove sta Bilancio. Il primo piano
+("aggiungo una riga di ingress e basta") non funziona: il connettore non puo'
+raggiungere `127.0.0.1:8770` di quel bind, che parla solo a se stesso.
+
+### Le tre modifiche, nell'ordine in cui bloccano l'una l'altra
+
+1. **`server.py:35`, `HOST = "127.0.0.1"`, deve diventare raggiungibile dalla
+   LAN** (es. `0.0.0.0` o l'IP LAN del PC Windows). Oggi l'app non e'
+   raggiungibile da nessun altro dispositivo, nemmeno dalla stessa rete di
+   casa: e' la ragione per cui non e' mai stata un problema di sicurezza finora.
+2. **`local_only()` (righe 722-732) va riscritta.** Oggi rifiuta tutto cio' che
+   non arriva da `127.0.0.1` con Host `localhost`/`127.0.0.1` — esattamente il
+   traffico che arriverebbe dal tunnel (IP del connettore in LAN, Host
+   `bilancio.<dominio>`). E' l'UNICA difesa che l'app ha oggi: non c'e' nessun
+   login. Tolta quella, chiunque in LAN (o dietro al tunnel, se Access e'
+   configurato male) avrebbe accesso pieno in lettura e scrittura alle
+   transazioni vere. Va sostituita con un controllo vero, non solo allentata.
+3. **Cloudflare Access davanti al nuovo hostname**, allowlist delle email di
+   Fabio e Michela. E' la vera autenticazione mancante al punto 2: senza,
+   il punto 2 lascia l'app aperta a chiunque scopra l'hostname.
+
+### Open point, bloccano l'esecuzione
+
+- **Hostname**: quale usare sul dominio `smartcores.org` (proposto
+  `bilancio.smartcores.org`, mai confermato)?
+- **Email da allowlistare** in Cloudflare Access (presumibilmente quella di
+  Fabio e quella di Michela, mai confermate).
+- **Bind address esatto** per `server.py`: `0.0.0.0` (tutte le interfacce) o
+  l'IP LAN specifico del PC Windows (piu' stretto, va scoperto/fissato)?
+- Nessuna riga di codice e' stata ancora toccata per questo piano: `server.py`
+  e la configurazione del tunnel sono entrambi ancora quelli di prima.
+  Riprendere da qui: rispondi agli open point, poi tocca `server.py` (bind +
+  `local_only()`), poi l'ingress del tunnel via API, poi Access.
+
+---
+
 ## IN CORSO (25/08/2026) — coda di revisione svuotata, e tre difetti nei passi di scarto
 
 **Zero righe senza categoria**, da 90 che erano. La coda scende da 157 a 47, e

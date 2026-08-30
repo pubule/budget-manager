@@ -129,7 +129,7 @@ def read_layout():
     if not path.exists():
         return DEFAULT_LAYOUT
     try:
-        saved = json.loads(path.read_text(encoding="utf-8"))
+        saved = json.loads(path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError):
         return DEFAULT_LAYOUT
     # I riquadri nuovi introdotti da una versione successiva devono comparire
