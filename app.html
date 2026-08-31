@@ -277,8 +277,18 @@ border-radius:8px;padding:6px 10px;margin-bottom:10px;flex-wrap:wrap}
 .tab-dove td{white-space:nowrap;font-variant-numeric:tabular-nums}
 .tab-dove td:first-child{white-space:normal}
 .tab-dove th.num,.tab-dove td:not(:first-child){text-align:right}
-.tab-dove tr.sub td{font-size:12px;color:var(--dim)}
+/* :not(.dove): le celle quota/confronto anno/tx hanno gia' la loro taglia
+   uniforme dalla classe .dove (11.5px, qui sotto) -- senza l'esclusione
+   questa regola, piu' generica, gliela cambiava a 12px SOLO sulle righe
+   indentate, e la colonna saltava di taglia riga per riga. */
+.tab-dove tr.sub td:not(.dove){font-size:12px;color:var(--dim)}
 .tab-dove tr.sub td:first-child{padding-left:20px}
+/* .delta e' pensata per un badge dentro le card mobile (display:block, un
+   margine sopra per staccarsi dall'etichetta) -- dentro questa tabella
+   finisce dritta su un <td>, e quel display:block le toglie il
+   comportamento di cella: la riga si spezzava esattamente qui, l'unica
+   colonna rimasta "block" in mezzo a celle "table-cell". */
+.tab-dove td.delta{display:table-cell;margin-top:0;font-size:11.5px}
 .tab-dove .q{position:relative}
 .tab-dove .q i{position:absolute;left:0;bottom:3px;height:2px;border-radius:2px;
 background:color-mix(in srgb,var(--accent) 55%,transparent);width:var(--w)}
@@ -325,7 +335,15 @@ font:12px ui-sans-serif,system-ui,sans-serif;color:var(--dim)}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;
 margin-right:5px;vertical-align:-1px}
 .scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font:13px ui-sans-serif,system-ui,sans-serif}
+/* separate, non collapse: con lo schermo scalato in modo non intero (125%,
+   comune su Windows) un bordo condiviso fra due celle arrotonda al pixel
+   fisico in punti diversi lungo la riga, e la linea sembra spezzata a
+   scalino invece che dritta. In "separate" ogni cella disegna il proprio
+   bordo per conto suo, niente conflitto da risolvere, niente scalino --
+   verificato dal vivo, stesso schermo dove si vedeva. border-spacing:0
+   toglie lo spazio che "separate" aggiungerebbe fra le celle. */
+table{border-collapse:separate;border-spacing:0;width:100%;
+font:13px ui-sans-serif,system-ui,sans-serif}
 th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.09em;
 color:var(--dim);border-bottom:1px solid var(--line);padding:7px 12px 7px 0;
 font-weight:600;white-space:nowrap}
