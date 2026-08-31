@@ -3421,7 +3421,15 @@ async function poll(){
 // Disegnati subito, prima dei dati: altrimenti la barra dei filtri si sposta
 // in giu' quando arrivano, e un clic partito prima colpisce la riga sbagliata.
 renderQuick();
-reload().then(() => setInterval(poll, 4000));
+// Il primo /api/state porta tutte le transazioni: sul telefono, in LAN, sono
+// un paio di secondi di schermo vuoto senza nessun segno che stia succedendo
+// qualcosa. Stesso overlay bloccante gia' usato per le altre attese, tolto
+// appena reload() ha finito il suo giro (dati carichi E disegnati).
+mostraOverlay({testo: "carico i dati…"});
+// finally, non dentro il then: se il primo giro fallisse (server non ancora
+// su, telefono che si connette proprio mentre parte), lo spinner non deve
+// restare acceso in eterno solo perche' reload() e' andata in errore.
+reload().finally(nascondiOverlay).then(() => setInterval(poll, 4000));
 
 // Ruotare il telefono (o ridimensionare la finestra oltre i 640px) deve
 // spostare subito #tablist nel suo posto giusto, non aspettare fino a 4
