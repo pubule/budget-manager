@@ -51,13 +51,15 @@ global.clearTimeout = () => {};
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
+ txCardsHTML, TABS, TAB_CODA, posizionaTablist,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
  periodoInCorso,
  registro, quotaPayload, render,
- setState: s => { S = s; }, getF: () => F,
+ setState: s => { S = s; }, getF: () => F, DOVE_PIE, pieChart, pieLegend,
+ setAzioniInCorso: n => { azioniInCorso = n; },
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
  coverage, mesi};
 })()`);
@@ -650,6 +652,102 @@ for (const [id, fn] of Object.entries(api.VIEWS)) {
         out3.slice(0, 120));
 }
 
+console.log("=== mobile (sotto i 640px) ===");
+// Le card sotto i 640px stanno ACCANTO alla tabella desktop, non al posto:
+// entrambe devono comparire nello stesso output di VIEWS.transazioni/
+// revisione, e' il CSS a scegliere quale mostrare.
+const txOut = api.VIEWS.transazioni(all);
+check("Transazioni: la tabella desktop c'e' ancora",
+      txOut.includes('class="desktop-rows"') && txOut.includes('class="scroll"'));
+check("Transazioni: ci sono anche le card mobile",
+      txOut.includes('class="bl-tx-wrap"') && txOut.includes('class="bl-tx"'));
+// Lo stato vero puo' avere zero righe da rivedere (dipende da quanto e'
+// fresco l'export): per verificare il markup serve almeno una riga a bassa
+// confidenza, quindi se ne fabbrica una, come gia' fa il test XSS sotto.
+const daRivedere = {...state.transactions[0], Confidenza: 0.4};
+api.setState({...state, transactions: [daRivedere]});
+const revOut = api.VIEWS.revisione(api.filtered());
+check("Da rivedere: la tabella desktop c'e' ancora",
+      revOut.includes('class="desktop-rows"') && revOut.includes('class="scroll"'));
+check("Da rivedere: ci sono anche le card mobile",
+      revOut.includes('class="bl-tx-wrap"'));
+api.setState(state);
+// Le card riusano selectBox/categorySelect/accountSelect: stessi data-* di
+// sempre, non un dispatch nuovo da tenere allineato. Un campo per riga nella
+// tabella, lo stesso campo ripetuto una volta per riga anche nelle card:
+// il totale deve raddoppiare quello della sola tabella, qualunque sia il
+// numero di righe mostrate.
+const soloDesktop = (txOut.split('class="desktop-rows"')[1] || "")
+  .split('class="bl-tx-wrap"')[0];
+const descDesktop = (soloDesktop.match(/data-fix="Descrizione"/g) || []).length;
+const descTotale = (txOut.match(/data-fix="Descrizione"/g) || []).length;
+check("le card hanno lo stesso data-fix della tabella (stesso dispatch)",
+      descDesktop > 0 && descTotale === descDesktop * 2);
+check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
+      (txOut.match(/id="bulk-cat"/g) || []).length <= 1);
+// "Altro" (tab bar da smartphone): stesse 3 schede di coda, stesso data-tab
+// del loop principale — non una seconda lista da tenere sincronizzata a mano.
+check('TAB_CODA e\' esattamente categorie/regole/componi',
+      api.TAB_CODA.map(([id]) => id).join(",") === "categorie,regole,componi");
+api.render();
+const tablist = api.el("tablist").innerHTML;
+check('la tab bar genera il blocco "Altro" con le 3 schede di coda',
+      tablist.includes('class="tab-more"')
+      && ["categorie","regole","componi"].every(id => tablist.includes(`data-tab="${id}"`)));
+
+// "Dove vanno i soldi": la vista "area" (quella di default) e' l'unica
+// gerarchica (categoria poi sottocategorie), e su mobile diventa una torta a
+// due livelli invece della lista di card di prima. "negozio"/"ricorrenti"
+// sono gia' piatte, niente da disegnare a livelli: restano com'erano.
+const doveOut = api.CARDS.dove(all);
+check('"dove vanno i soldi": la tabella desktop c\'e\' ancora',
+      doveOut.includes('class="desktop-rows"') && doveOut.includes('class="scroll tab-dove"'));
+check('vista "area": niente piu\' card <details> su mobile, c\'e\' la torta',
+      !doveOut.includes('class="bl-tx bl-dove') && doveOut.includes("<svg"));
+check('vista "area" al primo livello: fette cliccabili, nessun bottone indietro',
+      doveOut.includes("data-dove-pie=") && !doveOut.includes("data-dove-back"));
+
+{
+  // Scegliere una fetta vera (non inventata: deve esistere nei dati di
+  // prova, altrimenti "nessuna sottocategoria trovata" non direbbe niente
+  // sul comportamento vero della torta).
+  const areeTest = api.groupSum(api.outflow(all), "Categoria").slice(0, 12);
+  if(areeTest.length){
+    api.DOVE_PIE.categoria = areeTest[0].name;
+    const drillOut = api.CARDS.dove(all);
+    check('scegliendo una fetta appare il bottone indietro',
+          drillOut.includes('data-dove-back="1"'));
+    check('le fette del secondo livello non sono cliccabili: non c\'e\' un terzo livello',
+          !drillOut.includes("data-dove-pie="));
+    api.DOVE_PIE.categoria = "";
+    const tornatoOut = api.CARDS.dove(all);
+    check('svuotando la scelta si torna alla torta delle categorie',
+          !tornatoOut.includes("data-dove-back") && tornatoOut.includes("data-dove-pie="));
+  }
+}
+
+// "negozio"/"ricorrenti" sono piatte, un livello solo: anche li' la torta,
+// ma senza drill (nessun data-dove-pie: non c'e' un secondo livello sotto) e
+// senza bottone indietro (niente da cui tornare).
+for(const vistaFlat of ["negozio", "ricorrenti"]){
+  const F6b = api.getF();
+  F6b.vista = vistaFlat;
+  const flatOut = api.CARDS.dove(all);
+  check(`vista "${vistaFlat}": niente piu' card <details>, c'e' la torta`,
+        !flatOut.includes('class="bl-tx bl-dove') && flatOut.includes("<svg"));
+  check(`vista "${vistaFlat}": le fette non sono cliccabili, un livello solo`,
+        !flatOut.includes("data-dove-pie=") && !flatOut.includes("data-dove-back"));
+  F6b.vista = "";
+}
+
+// posizionaTablist() sposta #tablist fra .spalla (desktop) e .telaio
+// (smartphone): sotto Node "window" non esiste affatto. Se la guardia
+// (typeof window, non window.matchMedia diretto) fosse tolta o sbagliata,
+// l'intera suite esploderebbe qui con un ReferenceError, non con un FALLITO.
+check("posizionaTablist() non esplode senza window (Node, come qui)",
+      (() => { try { api.posizionaTablist(); return true; }
+               catch(e) { return false; } })());
+
 console.log("=== iniezione HTML ===");
 const evil = {...state.transactions[0], Descrizione: '<img src=x onerror=alert(1)>',
               Merchant: '"><script>bad()</script>'};
@@ -657,6 +755,9 @@ api.setState({...state, transactions: [evil]});
 const rendered = api.VIEWS.transazioni(api.filtered());
 check("la descrizione ostile viene neutralizzata",
       !rendered.includes("<img src=x") && !rendered.includes("<script>bad"));
+check("neutralizzata anche dentro la card mobile, non solo in tabella",
+      rendered.includes('class="bl-tx"')
+      && !rendered.includes("<img src=x") && !rendered.includes("<script>bad"));
 
 // Durante un giro i pulsanti che avviano la pipeline restano spenti.
 api.setState({...state, running: true});
@@ -664,6 +765,22 @@ api.setStatus();
 check("durante un giro i pulsanti sono tutti spenti",
       api.el("btn-run").disabled && api.el("btn-load").disabled);
 api.setState(state);
+
+// Il pallino "sto facendo qualcosa" deve accendersi anche per una singola
+// azione (elimina/conferma/nuova...), non solo durante il giro pesante di
+// Ricarica: prima di questa modifica restava spento e l'app sembrava in
+// stallo per tutta la durata di un post()+reload().
+api.setAzioniInCorso(1);
+api.setStatus();
+check('un\'azione singola in corso accende lo stesso pallino "busy"',
+      api.el("btn-run").disabled
+      && api.el("status").innerHTML.includes('class="dot busy"')
+      && api.el("status").innerHTML.includes("un attimo…"));
+api.setAzioniInCorso(0);
+api.setStatus();
+check("tornata a zero, il pallino si spegne di nuovo",
+      !api.el("btn-run").disabled
+      && !api.el("status").innerHTML.includes('class="dot busy"'));
 
 // I due livelli della categoria. whole() ricompone il nome intero, che resta
 // la chiave con cui il browser parla col server: se si rompe, il menu di

@@ -45,6 +45,13 @@ except ImportError:            # dashboard.py e' opzionale
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "qwen3:8b"
+# Un modello diverso apposta: qwen3:8b e' solo testo, non legge immagini.
+# Testato a mano su uno scontrino vero (Rossetto, 21 articoli) prima di
+# scriverlo qui: negozio e importo giusti al primo colpo, la data sbagliava
+# finche' il prompt sotto non gli ha detto di ignorare i riferimenti di
+# legge stampati vicino alla firma elettronica (es. "L. 21.06.2017, n.96") -
+# scambiati per la data d'acquisto.
+OLLAMA_VISION_MODEL = "qwen2.5vl:7b"
 
 # Soglia di somiglianza sotto la quale non ci si fida del match sullo storico.
 JACCARD_MIN = 0.60
@@ -990,6 +997,105 @@ class Categorizer:
             os.replace(temp, self.cache_path)
         finally:
             temp.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------
+# Scontrino fotografato -> negozio/data/importo. Stesso Ollama locale del
+# categorizzatore sopra (stesso host, stessa filosofia "se non risponde non
+# blocca niente"), ma un modello diverso (qwen3:8b e' solo testo) e una
+# funzione a parte: qui non c'e' ne' cache ne' uno storico di categorie da
+# provare, ogni scontrino e' un caso a se'.
+def leggi_scontrino(image_b64):
+    """Legge negozio/data/importo da una foto di scontrino (base64).
+
+    Torna sempre un dict: {"negozio","data","importo"} con quel che si e'
+    letto (stringa vuota o None per un campo che non si e' capito), oppure
+    {"errore": "..."} se Ollama non risponde o non si lascia interpretare.
+    Non solleva mai: chi chiama (server.py) decide cosa mostrarne
+    all'utente, e non deve mai fidarsi ciecamente di quel che torna --
+    e' un suggerimento su cui l'utente conferma, non un dato gia' vero.
+    """
+    prompt = (
+        "Guarda questa foto di uno scontrino italiano ed estrai i dati.\n"
+        "ATTENZIONE: molti scontrini stampano anche un riferimento di legge "
+        "(es. \"L. 21.06.2017, n.96\") vicino alla firma elettronica: NON e' "
+        "una data di acquisto, ignoralo. La data vera e' quella accanto a "
+        "\"Pagamento elettronico\"/\"Importo pagato\"/l'orario dello "
+        "scontrino.\n"
+        "Rispondi SOLO con un oggetto JSON, senza spiegazioni, con "
+        "esattamente questi campi:\n"
+        "{\"negozio\": nome del negozio/merchant, "
+        "\"data\": data VERA dell'acquisto in formato AAAA-MM-DD, "
+        "\"importo\": totale complessivo pagato, come numero decimale "
+        "positivo}"
+    )
+    payload = json.dumps({
+        "model": OLLAMA_VISION_MODEL,
+        "prompt": prompt,
+        "images": [image_b64],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0},
+    }).encode()
+    request = urllib.request.Request(
+        OLLAMA_URL, data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    started = time.monotonic()
+    try:
+        # 180s: la prima chiamata dopo un po' di inattivita' carica il
+        # modello (~6GB) in memoria prima di rispondere -- misurato a mano,
+        # 63s a freddo contro 6s a modello gia' caldo. Il timeout copre il
+        # caso peggiore, non il tipico.
+        with urllib.request.urlopen(request, timeout=180) as response:
+            answer = json.loads(response.read())["response"]
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return {"errore": f"Il modello {OLLAMA_VISION_MODEL} non e' "
+                              f"installato. Scaricalo con: ollama pull "
+                              f"{OLLAMA_VISION_MODEL}"}
+        return {"errore": f"Ollama ha risposto con un errore ({exc})"}
+    except (urllib.error.URLError, OSError, KeyError, ValueError) as exc:
+        return {"errore": f"Ollama non raggiungibile ({exc}). "
+                          f"Avvialo con: ollama serve"}
+    elapsed = time.monotonic() - started
+
+    try:
+        dati = json.loads(answer)
+    except ValueError:
+        print(f"scontrino {elapsed:5.1f}s | risposta non-JSON: {answer[:200]!r}")
+        return {"errore": "Non sono riuscito a leggere lo scontrino, "
+                          "riprova o inserisci i dati a mano"}
+
+    negozio = str(dati.get("negozio") or "").strip()
+    data = str(dati.get("data") or "").strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", data):
+        data = ""  # una data che non e' AAAA-MM-DD non e' una data vera
+    try:
+        importo = round(abs(float(dati.get("importo"))), 2)
+    except (TypeError, ValueError):
+        importo = None
+    print(f"scontrino {elapsed:5.1f}s | negozio={negozio!r} data={data!r} "
+          f"importo={importo!r}")
+    return {"negozio": negozio, "data": data, "importo": importo}
+
+
+def suggerisci_categoria(folder, descrizione):
+    """Anteprima di categoria e merchant per una descrizione non ancora
+    salvata, prima che l'utente confermi.
+
+    Stessa pipeline di run() (regole poi storico, mai LLM: la scansione
+    scontrino deve proporre subito, non aspettare un giro di modello testuale
+    sopra a uno vision gia' lento) ma senza scrivere niente su disco -- ne'
+    cache, ne' consolidato.
+    """
+    config = load_config(folder)
+    categorizer = Categorizer(config["history"], config["rules"],
+                              config["categories"],
+                              folder / "categorie_cache.json", use_llm=False)
+    categoria, origine, _ = categorizer.categorize(descrizione)
+    merchant = canonical_merchant(descrizione, config["merchants"])
+    return {"categoria": categoria, "merchant": merchant, "origine": origine}
 
 
 # --------------------------------------------------------------------------

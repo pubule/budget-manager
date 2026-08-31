@@ -743,8 +743,9 @@ def nuova_transazione(payload):
     while any((r.get("id") or "") == f"man-{data.replace('-','')}-{progressivo:02d}"
               for r in righe):
         progressivo += 1
+    nuovo_id = f"man-{data.replace('-', '')}-{progressivo:02d}"
     righe.append({
-        "id": f"man-{data.replace('-', '')}-{progressivo:02d}",
+        "id": nuovo_id,
         "data": data,
         "descrizione": descrizione,
         "importo": (payload.get("importo") or "0").strip(),
@@ -752,6 +753,10 @@ def nuova_transazione(payload):
         "nota": (payload.get("nota") or "").strip(),
     })
     write_rows("transazioni.csv", righe)
+    # Torna l'id vero invece di lasciare che il browser lo indovini
+    # cercando un segnaposto per testo (fragile: due creazioni di fila
+    # senza aver ancora corretto la prima si confondevano fra loro).
+    return {"id": nuovo_id}
 
 
 ACTIONS = {
@@ -918,11 +923,29 @@ class Handler(BaseHTTPRequestHandler):
                     kwargs={"use_llm": payload.get("llm", True)},
                     daemon=True).start()
                 return self.send_json({"ok": True, "avviato": True})
+            if route == "/api/scontrino":
+                # Solo lettura: non scrive nessun CSV, quindi niente
+                # STATE.refresh() dopo -- lo farebbe ripartire da capo la
+                # pipeline intera per un giro che non ha cambiato niente.
+                immagine = payload.get("immagine") or ""
+                if not immagine:
+                    return self.fail(400, "manca l'immagine")
+                letto = bilancio.leggi_scontrino(immagine)
+                if not letto.get("errore") and letto.get("negozio"):
+                    letto.update(bilancio.suggerisci_categoria(
+                        FOLDER, letto["negozio"]))
+                return self.send_json(letto)
             if route in ACTIONS:
-                ACTIONS[route](payload)
+                risultato = ACTIONS[route](payload)
                 STATE.refresh(use_llm=False)
-                return self.send_json({"ok": True, "version": STATE.version,
-                                       "errore": STATE.error})
+                risposta = {"ok": True, "version": STATE.version,
+                           "errore": STATE.error}
+                # nuova_transazione() torna l'id appena creato; le altre
+                # azioni non tornano niente (None) e questo resta un no-op
+                # per loro -- nessun cambio di comportamento.
+                if isinstance(risultato, dict):
+                    risposta.update(risultato)
+                return self.send_json(risposta)
         except ValueError as exc:
             return self.fail(400, str(exc))
         except Exception as exc:                          # noqa: BLE001
