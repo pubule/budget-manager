@@ -1,14 +1,9 @@
 ﻿id;data;importo;categoria;sottocategoria;nota
-;2025-03-19;-1000.00;;;bonifico istantaneo senza causale - da identificare
-;2025-08-14;-300.00;;;bonifico istantaneo senza causale - da identificare
-;2025-09-04;-2500.00;;;bonifico istantaneo senza causale - da identificare
-;2025-12-08;-300.00;;;bonifico istantaneo senza causale - da identificare
-;2025-12-30;-3829.00;;;bonifico istantaneo senza causale - da identificare
 bed4fd7fb3#1;;;Cibo & Mangiare;Ristoranti;
 9b3282dfcb#1;;;Casa;Manutenzione;
-2f04e99494#1;;;Shopping;Amazon;
-92b39fa486#1;;;Shopping;Amazon;
-a07622d9ec#1;;;Shopping;Amazon;
+2f04e99494#1;;;Shopping;Online;
+92b39fa486#1;;;Shopping;Online;
+a07622d9ec#1;;;Shopping;Online;
 829b63b91c#1;;;Personale;Abbonamenti;
 ca57c86a6f#1;;;Cibo & Mangiare;Alimentari;
 b2d493596c#1;;;Cibo & Mangiare;Ristoranti;
@@ -23,14 +18,14 @@ f6b55bfa51#1;;;Assistenza Sanitaria;Farmacia;
 08ab89266c#1;;;Personale;Benessere;
 6157b660ff#1;;;Casa;Arredamento;
 4ef4f6a422#1;;;Casa;Arredamento;
-413be8cabc#1;;;Shopping;Amazon;
-a9b2f0db51#1;;;Cibo & Mangiare;Cantina e Specialita;
+413be8cabc#1;;;Shopping;Online;
+a9b2f0db51#1;;;Cibo & Mangiare;Cantina e Specialità;
 ;2026-03-31;-1500.00;Casa;Ristrutturazione;Camino Vulcano: stufa o camino, intervento sulla casa
 ;2026-02-23;-267.37;Casa;Arredamento;madia
 ;2026-04-30;-230.00;Casa;Manutenzione;disotturazione terrazza
 ;2026-07-08;-150.00;Casa;Arredamento;scaletta da balcone
 ;2026-07-08;-25.00;Casa;Arredamento;poltrona da balcone
-;2026-04-30;-100.00;Cibo & Mangiare;Cantina e Specialita;vino
+;2026-04-30;-100.00;Cibo & Mangiare;Cantina e Specialità;vino
 ;2026-05-09;-70.00;Personale;Benessere;Body shape: sembra una palestra, correggi se e' altro
 ;2025-12-26;-34.00;Personale;Intrattenimento;mostra
 ;2026-06-28;-28.00;Casa;Fai da te;pannello per la tettoia
@@ -45,7 +40,7 @@ a9b2f0db51#1;;;Cibo & Mangiare;Cantina e Specialita;
 ;2026-06-21;-150.00;Casa;Fai da te;top del lavabo
 ;2026-06-21;-67.89;Casa;Fai da te;sifone del bagno
 ;2024-04-14;-129.90;Casa;Arredamento;tappeto e accappatoio
-;2026-01-24;-121.58;Cibo & Mangiare;Cantina e Specialita;Vivino vende vino
+;2026-01-24;-121.58;Cibo & Mangiare;Cantina e Specialità;Vivino vende vino
 ;2022-04-10;-66.16;Cibo & Mangiare;Alimentari;Familia e' un supermercato
 ;2024-11-01;-39.90;Casa;Arredamento;tovaglie
 ;2026-08-06;-75.00;Assistenza Sanitaria;Medico;il Dott. Perandini e' un medico, non un pranzo di lavoro
@@ -57,8 +52,8 @@ a9b2f0db51#1;;;Cibo & Mangiare;Cantina e Specialita;
 ;2026-05-07;-3.30;Cibo & Mangiare;Alimentari;frutta
 ;2026-04-30;-23.98;Casa;Fai da te;impregnante per legno
 ;2022-03-17;-110.00;Personale;Intrattenimento;stagionale di Gardaland: e' svago, non una spesa ricorrente fissa
-;2026-03-02;-22.10;Comunità;Tasse;PagoPA e' un pagamento alla pubblica amministrazione
-;2026-08-08;-34.05;Comunità;Tasse;PagoPA
+;2026-03-02;-22.10;Fisco;Tasse;PagoPA e' un pagamento alla pubblica amministrazione
+;2026-08-08;-34.05;Fisco;Tasse;PagoPA
 ;2024-03-08;-430.21;Casa;Fai da te;materiale elettrico: lo storico MoneyWiz lo dava per intrattenimento
 ;2026-02-25;-800.00;Viaggi;Vacanze;caparra per una camera: la parola 'hotel' non c'e', serve dirlo a mano
 ;2026-05-10;-80.00;Viaggi;Vacanze;camera QuiWolf
@@ -135,7 +130,7 @@ bf46fb6274#1;;;Cibo & Mangiare;Ristoranti;
 55b8879c60#1;;;Cibo & Mangiare;Alimentari;
 4b4b623146#1;;;Shopping;Regali;
 908612bf17#1;;;Casa;Arredamento;
-65b87cbb6e#1;;;Cibo & Mangiare;Cantina e Specialita;
+65b87cbb6e#1;;;Cibo & Mangiare;Cantina e Specialità;
 88af0a469a#1;;;Cibo & Mangiare;Ristoranti;
 3b8c8d2938#1;;;Casa;Arredamento;
 d7187a7a7e#1;;;Casa;Arredamento;
@@ -174,3 +169,11 @@ aebd0ab47c#1;;;Giroconto;;ricarica verso Hype, confermato da Fabio
 3004c027cc#1;;;Giroconto;;ricarica verso Hype, confermato da Fabio
 a40a1785c4#1;;;Giroconto;;ricarica verso Hype, confermato da Fabio
 34b0542ba8#1;;;Giroconto;;ricarica verso Hype, confermato da Fabio
+e36e4f4e4c#1;;;Casa;Giardino;
+fedcd884ef#1;;;Shopping;Regali;
+59994faf71#1;;;Giroconto;;
+0a050f81ee#1;;;Giroconto;;
+df08aa840c#1;;;Giroconto;;
+72299a7570#1;;;Giroconto;;
+f1ecc93fe0#1;;;Cibo & Mangiare;Ristoranti;
+ffe265615d#1;;;Giroconto;;

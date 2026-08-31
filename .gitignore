@@ -1,3 +1,8 @@
+# Email autorizzate ad entrare da fuori casa e dettagli dell'account
+# Cloudflare (server.py, Cloudflare Access). Dati personali di Fabio e
+# Michela, non del codice: restano solo su questo PC.
+access.json
+
 # GLI ESTRATTI CONTO NON ENTRANO MAI QUI DENTRO.
 # Contengono IBAN, numeri di carta e ogni movimento: una volta committati
 # restano nella cronologia per sempre. Vale anche per export/anonimi/, che

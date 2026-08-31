@@ -51,10 +51,11 @@ global.clearTimeout = () => {};
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
- CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending, uncategorized,
+ CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
  confronti, confrontoScelto, finestraConfronto, giorniConDati, formaDelPeriodo,
+ periodoInCorso,
  registro, quotaPayload, render,
  setState: s => { S = s; }, getF: () => F,
  QUICK, today, lastDataMonth, monthRange, renderQuick, monthsBetween,
@@ -529,8 +530,20 @@ console.log("  " + testo.trim());
 check("dichiara il periodo chiesto", testo.includes(ay) && testo.includes(az));
 check("dichiara quanti mesi di dati ci sono davvero",
       annoMesi.length === 12 || testo.includes("dati presenti per"));
-check("avverte sul denominatore delle medie",
-      annoMesi.length === 12 || testo.includes("Le medie mensili usano"));
+check("avverte che i numeri sopra sono il totale reale, non una stima",
+      annoMesi.length === 12 || testo.includes("totale reale fin qui"));
+
+// Un periodo in corso non ha una media da mostrare: la barra KPI deve dare
+// il totale vero (non totale/mesiEffettivi) e un'etichetta senza "/ mese".
+if(api.periodoInCorso()){
+  const veroEntrate = api.sum(api.inflow(annoRows));
+  const barraAnno = api.indicatori(annoRows);
+  check("anno in corso: KPI mostra il totale reale, non una media",
+        barraAnno.includes(api.euro(veroEntrate)));
+  check("anno in corso: etichetta senza \"/ mese\"",
+        barraAnno.includes("<span>entrate</span>")
+        && !barraAnno.includes("entrate / mese"));
+}
 Fc.from = ""; Fc.to = "";
 check("senza filtro non parla di periodo chiesto",
       !api.coverage(api.filtered(), annoMesi).includes("periodo chiesto"));
@@ -645,40 +658,11 @@ const rendered = api.VIEWS.transazioni(api.filtered());
 check("la descrizione ostile viene neutralizzata",
       !rendered.includes("<img src=x") && !rendered.includes("<script>bad"));
 
-// Il conteggio sul pulsante "Analizza con LLM". Conta le righe senza
-// categoria, comprese quelle a stringa vuota: il consolidato le scrive vuote,
-// il payload del server le manda come null, e il pulsante deve dire lo stesso
-// numero in entrambi i casi.
-check("il conteggio per l'LLM prende vuoti e null",
-      api.uncategorized([{Categoria: "Alimentari"}, {Categoria: ""},
-                         {Categoria: null}, {}]).length === 3);
-api.setState(state);
-check("nessuna riga categorizzata finisce nel conteggio per l'LLM",
-      api.uncategorized(state.transactions).every(t => !t.Categoria));
-
-// Il pulsante dell'LLM sui dati veri: il numero deve essere quello, e a zero
-// deve spegnersi invece di sparire.
-const aperte = api.uncategorized(state.transactions).length;
-api.setStatus();
-// A zero il numero sparisce dall'etichetta ma il pulsante resta: "(0)" e'
-// rumore, e il pulsante che se ne va confonderebbe.
-check("il pulsante dell'LLM porta il conteggio vero",
-      api.el("btn-llm").textContent === (aperte
-        ? `Analizza con LLM (${aperte})` : "Analizza con LLM"),
-      api.el("btn-llm").textContent + " con " + aperte + " aperte");
-check("il pulsante dell'LLM e' acceso se c'e' da lavorare",
-      api.el("btn-llm").disabled === !aperte);
-api.setState({...state, transactions: state.transactions.filter(t => t.Categoria)});
-api.setStatus();
-check("senza righe scoperte il pulsante dell'LLM si spegne ma resta",
-      api.el("btn-llm").disabled === true
-      && api.el("btn-llm").textContent === "Analizza con LLM",
-      api.el("btn-llm").textContent);
+// Durante un giro i pulsanti che avviano la pipeline restano spenti.
 api.setState({...state, running: true});
 api.setStatus();
 check("durante un giro i pulsanti sono tutti spenti",
-      api.el("btn-llm").disabled && api.el("btn-run").disabled
-      && api.el("btn-load").disabled);
+      api.el("btn-run").disabled && api.el("btn-load").disabled);
 api.setState(state);
 
 // I due livelli della categoria. whole() ricompone il nome intero, che resta

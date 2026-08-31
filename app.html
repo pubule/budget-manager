@@ -193,6 +193,12 @@ color:var(--dim);font-size:12px}
 .viste button.on{background:var(--card);color:var(--ink);font-weight:600;
 box-shadow:0 1px 2px rgba(0,0,0,.12)}
 
+/* La barra multi-selezione: appare solo con qualcosa di spuntato, sopra la
+   tabella che l'ha generata. */
+.bulk{display:flex;align-items:center;gap:8px;background:var(--soft);
+border-radius:8px;padding:6px 10px;margin-bottom:10px;flex-wrap:wrap}
+.bulk select{font:12px ui-sans-serif,system-ui,sans-serif}
+
 /* La tabella di "Dove vanno i soldi". La quota e' un filetto sotto al nome:
    a piena altezza, dietro al testo, sembrava una riga selezionata invece di
    una misura. */
@@ -398,7 +404,6 @@ button:disabled{opacity:.45;cursor:default}
       <h3>Dati</h3>
       <button id="btn-load" class="hide">Carica dati</button>
       <button id="btn-run">Ricarica</button>
-      <button id="btn-llm">Analizza con LLM</button>
       <button id="btn-export">Esporta HTML + Excel</button>
       <button id="btn-log">Log</button>
       <div class="status ui" id="source"></div>
@@ -474,13 +479,19 @@ button:disabled{opacity:.45;cursor:default}
 let S = null;                     // ultimo payload dal server
 let TAB = "dashboard";
 let VERSION = -1;
+// Selezione multipla, per applicare una categoria a piu' righe con un solo
+// giro di pipeline invece di uno per riga. Vive per ID, non per riga
+// disegnata: sopravvive a un ridisegno (ordinamento, "carica altre") ma si
+// svuota cambiando scheda, perche' una spunta lasciata accesa e invisibile
+// altrove confonderebbe piu' di quanto risparmi.
+let SELECTED = new Set();
 // Di default si parte sull'anno in corso: confrontoScelto() ricade gia' da
 // solo su "anno prima" quando il periodo e' un anno intero, quindi basta il
 // periodo per avere anche il confronto giusto acceso.
 const ANNO_DEFAULT = new Date().getFullYear();
 const F = {from:`${ANNO_DEFAULT}-01-01`, to:`${ANNO_DEFAULT}-12-31`,
            account:"", nature:"", category:"", sub:"",
-           text:"", confronto:"", vista:"", lettura:""};
+           text:"", confronto:"", vista:"", lettura:"mia"};
 // Ordinamento della tabella Transazioni: piu' recenti prima, cosi' non serve
 // scorrere 1900 righe per vedere l'ultima spesa fatta.
 const SORT = {col:"Data", dir:-1};
@@ -642,8 +653,8 @@ const mesi = n => n === 1 ? "1 mese" : `${n} mesi`;
 // Il periodo chiesto e quello effettivamente coperto dai dati sono due cose
 // diverse, e vanno dette separatamente: "anno in corso" che mostra un solo
 // mese sembra un filtro rotto, invece e' un anno appena cominciato. Serve
-// anche a leggere le medie: "uscite/mese" sotto "anno in corso" e' la media
-// dei mesi che hai, non di dodici.
+// anche a dire cosa sono i numeri sopra: su "anno in corso" con dati solo a
+// gennaio, "uscite" e' il totale vero di gennaio, non una media proiettata.
 function coverage(rows, months){
   if(!months.length){
     // Vuoto non e' un errore: e' l'informazione che per quel periodo non hai
@@ -660,8 +671,8 @@ function coverage(rows, months){
   if(asked > months.length){
     return `  ·  ${rows.length} righe  ·  periodo chiesto ${mesi(asked)} `
       + `(${F.from} – ${F.to}), dati presenti per ${mesi(months.length)}: `
-      + `${span}. Le medie mensili usano ${mesi(months.length)}, `
-      + `non ${mesi(asked)}.`;
+      + `${span}. I numeri sopra sono il totale reale fin qui, non una `
+      + `stima sui ${mesi(asked)} chiesti.`;
   }
   return `  ·  ${rows.length} righe su ${mesi(months.length)}, ${span}`;
 }
@@ -779,10 +790,6 @@ const spending = rows => rows.filter(t => t.Natura !== "Non spesa" && t.Quota !=
 // funzioni continuano a spartirsi le stesse righe.
 const inflow  = rows => spending(rows).filter(t => t.Natura === "Entrate");
 const outflow = rows => spending(rows).filter(t => t.Natura !== "Entrate");
-// Le righe che nessun livello deterministico ha saputo classificare: sono le
-// uniche su cui l'LLM abbia qualcosa da dire, quindi sono la misura che dice
-// se vale la pena aspettare i minuti che ci mette.
-const uncategorized = rows => rows.filter(t => !t.Categoria);
 // La somma passa dal moltiplicatore: e' l'unico punto da cui passano tutti i
 // riquadri, quindi cambiarlo qui li cambia tutti insieme e nessuno puo'
 // dimenticarsene.
@@ -1018,16 +1025,25 @@ function indicatori(rows){
   const ordinarioP = sum(outflow(prima).filter(t => t.Natura !== "Straordinarie"));
   const tassoP = presoP ? (presoP + spesoP)/presoP : 0;
 
-  return kpi("entrate / mese", euro(earned/m), "",
-          confronta(earned/m, presoP/mp, false, p && p.etichetta))
-    + kpi("uscite / mese", spesa(spent/m), "",
-          confronta(-spent/m, -spesoP/mp, true, p && p.etichetta))
-    + kpi("risparmio / mese", euro(saved/m), saved>0?"good":"bad",
-          confronta(saved/m, (presoP+spesoP)/mp, false, p && p.etichetta))
+  // Un periodo in corso non ha ancora un mese intero da mediare: "ora" e
+  // "prima" restano i totali veri (la finestra di confronto e' gia'
+  // ritagliata allo stesso punto, quindi il paragone resta corretto), e
+  // l'etichetta lo dice smettendo di promettere una media al mese.
+  const inCorso = periodoInCorso();
+  const eti = base => inCorso ? base : `${base} / mese`;
+  const ora = tot => inCorso ? tot : tot/m;
+  const primaDi = tot => inCorso ? tot : tot/mp;
+
+  return kpi(eti("entrate"), euro(ora(earned)), "",
+          confronta(ora(earned), primaDi(presoP), false, p && p.etichetta))
+    + kpi(eti("uscite"), spesa(ora(spent)), "",
+          confronta(-ora(spent), -primaDi(spesoP), true, p && p.etichetta))
+    + kpi(eti("risparmio"), euro(ora(saved)), saved>0?"good":"bad",
+          confronta(ora(saved), primaDi(presoP+spesoP), false, p && p.etichetta))
     + kpi("tasso di risparmio", Math.round(rate*100) + "%", "",
           confronta(rate, tassoP, false, p && p.etichetta))
-    + kpi("spesa ordinaria / mese", spesa(ordinary/m), "",
-          confronta(-ordinary/m, -ordinarioP/mp, true, p && p.etichetta));
+    + kpi(eti("spesa ordinaria"), spesa(ora(ordinary)), "",
+          confronta(-ora(ordinary), -primaDi(ordinarioP), true, p && p.etichetta));
 }
 const kpi = (label, value, cls, confronto) =>
   `<div class="kpi ${cls||""}"><span>${esc(label)}</span><b>${esc(value)}</b>`
@@ -1106,6 +1122,14 @@ function giorniConDati(){
   const fino = ultimoGiornoUtile();
   if(fino < F.from) return 0;
   return Math.round((giorno(fino) - giorno(F.from)) / 86400000) + 1;
+}
+
+// Il periodo scelto e' "in corso" quando i dati non arrivano fino alla sua
+// fine: un mese o un anno non ancora finiti, o anche uno gia' passato ma non
+// ancora importato del tutto. In quel caso "tot/m" non e' piu' una media che
+// normalizza, e' una stima sopra un totale che e' gia' vero cosi' com'e'.
+function periodoInCorso(){
+  return !!(F.from && F.to) && ultimoGiornoUtile() < F.to;
 }
 
 // La finestra con cui confrontare, gia' ritagliata, e come si chiama.
@@ -1575,18 +1599,77 @@ function patternNegozio(merchant, descrizione){
   return regge(daDescrizione) ? daDescrizione : daMerchant;
 }
 
-function categorySelect(current, id){
-  // Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
-  // due livelli si vedono a colpo d'occhio.
+// Raggruppato per area: con 37 voci un elenco piatto e' illeggibile, e i
+// due livelli si vedono a colpo d'occhio. Condivisa fra il menu per riga e
+// quello della barra multi-selezione, cosi' le due liste non divergono.
+function categoryOptions(current){
   const aree = uniq(S.categories.map(c => c.categoria));
-  const opts = aree.map(a => {
+  return aree.map(a => {
     const dentro = S.categories.filter(c => c.categoria === a);
     const voci = dentro.map(c =>
       `<option value="${esc(c.nome)}" ${c.nome===current?"selected":""}>`
       + `${esc(c.sottocategoria || c.categoria)}</option>`).join("");
     return `<optgroup label="${esc(a)}">${voci}</optgroup>`;
   }).join("");
-  return `<select data-setcat="${esc(id)}"><option value=""></option>${opts}</select>`;
+}
+
+function categorySelect(current, id){
+  return `<select data-setcat="${esc(id)}"><option value=""></option>`
+    + categoryOptions(current) + "</select>";
+}
+
+// La spunta per riga: l'ID e' la chiave, non l'indice in tabella, cosi' la
+// selezione sopravvive a un riordino o a "carica altre".
+const selectBox = id => `<input type="checkbox" data-select="${esc(id)}"`
+  + ` ${SELECTED.has(id) ? "checked" : ""}>`;
+
+// La barra sopra la tabella, viva solo quando c'e' qualcosa di selezionato.
+// Ogni campo e' per conto suo: lasciato vuoto (o su "non cambiare") non
+// tocca quella colonna, cosi' si puo' applicare solo la categoria, solo il
+// conto, solo un campo di testo, o una combinazione. opts.conto/opts.quota/
+// opts.testo mostrano i controlli in piu' che ha senso offrire solo dove
+// quei campi si vedono anche riga per riga (in Da rivedere la tabella non
+// ha conto/quota/data/descrizione/merchant/importo). opts.extra sono i
+// pulsanti in piu' di questa scheda (Da rivedere ha "confermo selezionate").
+//
+// I campi di testo (data, descrizione, merchant, importo) scrivono lo
+// STESSO valore su ogni riga selezionata: utili per correggere un errore
+// identico ripetuto (una data di importazione sbagliata su un lotto, un
+// nome negozio da uniformare), pericolosi se applicati per sbaglio a righe
+// che invece dovrebbero restare diverse fra loro -- da qui la conferma
+// prima di applicarli (vedi d.bulkApply).
+function bulkBar(opts){
+  if(!SELECTED.size) return "";
+  opts = opts || {};
+  const contoSel = opts.conto
+    ? `<select id="bulk-conto"><option value="">non cambiare conto</option>`
+      + uniq(S.accounts).sort().map(a => `<option>${esc(a)}</option>`).join("")
+      + "</select>"
+    : "";
+  const quotaSel = opts.quota
+    ? `<select id="bulk-chi"><option value="">non cambiare pagato da</option>`
+      + ["io","lei"].map(v => `<option value="${v}">`
+          + `${v==="io"?"Fabio":esc((S.partita&&S.partita.controparte)||"lei")}</option>`).join("")
+      + `</select><select id="bulk-quota"><option value="">non cambiare quota</option>`
+      + ["meta","tutto","saldo"].map(v => `<option value="${v}">${v}</option>`).join("")
+      + "</select>"
+    : "";
+  const testoSel = opts.testo
+    ? `<input type="date" id="bulk-data" title="data: lascia vuoto per non cambiarla">`
+      + `<input id="bulk-descrizione" placeholder="non cambiare descrizione" style="width:150px">`
+      + `<input id="bulk-merchant" placeholder="non cambiare merchant" style="width:120px">`
+      + `<input id="bulk-importo" placeholder="non cambiare importo" style="width:90px">`
+    : "";
+  const catSel = `<select id="bulk-cat"><option value="">non cambiare categoria</option>`
+    + categoryOptions("") + "</select>";
+  // Stesso ordine delle colonne in tabella (data, descrizione, merchant,
+  // importo, conto, categoria, pagato da/quota): trovare il campo giusto
+  // nella barra non deve richiedere di indovinare un ordine diverso.
+  return `<div class="bulk"><span class="mini">${SELECTED.size} selezionate</span>`
+    + testoSel + contoSel + catSel + quotaSel
+    + `<button class="link" data-bulk-apply="1">applica</button>`
+    + (opts.extra || "")
+    + `<button class="link" data-bulk-clear="1">annulla selezione</button></div>`;
 }
 
 VIEWS.revisione = rows => {
@@ -1605,9 +1688,13 @@ VIEWS.revisione = rows => {
     + '<b>\"confermo\"</b> la fissa e la riga esce dalla coda. Se il negozio '
     + 'si ripete conviene <b>\"regola\"</b>, che vale anche per le prossime '
     + 'volte. Se e\' sbagliata, cambiala nel <b>menu</b>. E se non fai niente '
-    + 'non succede nulla: la categoria proposta resta in vigore.</p>'
-    + tableHTML(["data","descrizione","merchant","importo","proposta","conf.","correggi"],
+    + 'non succede nulla: la categoria proposta resta in vigore. Spunta piu\' '
+    + 'righe per confermarle o ricategorizzarle tutte insieme.</p>'
+    + bulkBar({extra: `<button class="link" data-bulk-confirm="1">confermo selezionate</button>`})
+    + tableHTML(['<input type="checkbox" data-select-all="1">', "data","descrizione",
+                 "merchant","importo","proposta","conf.","correggi"],
         todo.slice(0,300).map(t => [
+          selectBox(t.ID),
           esc(t.Data), esc((t.Descrizione||"").slice(0,58)), esc(t.Merchant),
           euro(t.Importo), esc(whole(t)||"—"),
           (t.Confidenza ?? 0).toFixed(2),
@@ -1616,7 +1703,7 @@ VIEWS.revisione = rows => {
             + ` data-cat="${esc(whole(t))}">confermo</button>`
             + ` <button class="link" data-rule="${esc(t.Merchant||"")}"`
             + ` data-id="${esc(t.ID)}">regola</button>`]),
-        [3,5])
+        [4,6], true)
     + "</div>";
 };
 
@@ -1653,12 +1740,15 @@ VIEWS.transazioni = rows => {
   return '<div class="card"><div class="head"><h2>Transazioni</h2>'
     + `<span class="mini">${rows.length} righe, ne mostro ${shown.length}</span>`
     + '<button class="primary" data-nuova="1">+ transazione</button></div>'
-    + tableHTML([sortHeader("data","Data"), sortHeader("descrizione","Descrizione"),
+    + bulkBar({conto:true, quota:true, testo:true})
+    + tableHTML(['<input type="checkbox" data-select-all="1">',
+                 sortHeader("data","Data"), sortHeader("descrizione","Descrizione"),
                  sortHeader("merchant","Merchant"), sortHeader("importo","Importo"),
                  sortHeader("conto","Conto"), sortHeader("natura","Natura"),
                  sortHeader("categoria","Categoria"), sortHeader("pagato da","Pagato da"),
                  sortHeader("quota","Quota"), sortHeader("origine","Origine"), ""],
         shown.map(t => [
+          selectBox(t.ID),
           `<input type="date" value="${esc(t.Data)}" data-fix="Data" data-id="${esc(t.ID)}">`,
           `<input style="min-width:230px" value="${esc(t.Descrizione||"")}"`
             + ` data-fix="Descrizione" data-id="${esc(t.ID)}">`,
@@ -1687,8 +1777,14 @@ VIEWS.transazioni = rows => {
                 + `${v || "—"}</option>`).join("") + "</select>",
           `<span class="mini">${esc(t.Origine)}</span>`,
           `<button class="link" data-reset-tx="${esc(t.ID)}">annulla</button>`
-          + ` <button class="link" data-escludi="${esc(t.ID)}">escludi</button>`]),
-        [3], true)
+          + ` <button class="link" data-escludi="${esc(t.ID)}">escludi</button>`
+          // Solo le righe scritte a mano: per quelle di banca non c'e' un
+          // "elimina" vero, "escludi" e' gia' il modo giusto di toglierle
+          // dalla vista senza perdere il perche'.
+          + (t.ID.startsWith("man-")
+              ? ` <button class="link" data-elimina="${esc(t.ID)}">elimina</button>`
+              : "")]),
+        [4], true)
     + (altre > 0 ? `<button class="link" data-more="1">carica altre `
         + `${Math.min(altre, PAGE_SIZE)}</button>` : "")
     + '<p class="note">Ogni modifica si salva da sola e la pipeline rigira '
@@ -1696,7 +1792,8 @@ VIEWS.transazioni = rows => {
     + 'importo e conto scrivono correzioni.csv. "annulla" toglie entrambe le '
     + 'modifiche per quella riga.<br>La natura non si modifica qui perche\' '
     + 'discende dalla categoria: si cambia nella scheda Categorie, e vale per '
-    + 'tutte le righe di quella voce.</p></div>';
+    + 'tutte le righe di quella voce. Spunta piu\' righe per assegnare la '
+    + 'stessa categoria a tutte insieme.</p></div>';
 };
 
 VIEWS.partita = () => {
@@ -1908,17 +2005,6 @@ function setStatus(){
   load.textContent = attesa.length === 1
     ? "Carica 1 export" : `Carica ${attesa.length} export`;
   load.title = attesa.join("\n");
-  // Il modello ha senso solo se e' rimasto qualcosa da classificare: il numero
-  // dice se vale la pena aspettare. A zero il pulsante resta visibile ma
-  // spento, perche' sparire e ricomparire confonderebbe.
-  const aperte = uncategorized((S && S.transactions) || []).length;
-  const llm = el("btn-llm");
-  llm.disabled = busy || !aperte;
-  llm.textContent = aperte ? `Analizza con LLM (${aperte})` : "Analizza con LLM";
-  llm.title = aperte
-    ? `${aperte} transazioni che nessuna regola ha saputo classificare.\n`
-      + "Il modello viene interrogato solo su queste: dura minuti."
-    : "Nessuna transazione da classificare.";
   const dot = S && S.running ? "busy" : (S && S.error ? "err" : "");
   el("status").innerHTML = `<span class="dot ${dot}"></span>`
     + (S && S.running ? "elaboro…"
@@ -1934,7 +2020,8 @@ document.addEventListener("click", async ev => {
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
     + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova],[data-lettura],[data-sort],"
-    + "[data-more],[data-andamento-reset]");
+    + "[data-more],[data-andamento-reset],[data-bulk-apply],[data-bulk-confirm],"
+    + "[data-bulk-clear],[data-elimina]");
   if(!t) return;
   const d = t.dataset;
 
@@ -1946,7 +2033,9 @@ document.addEventListener("click", async ev => {
     SORT.col = d.sort;
     render(); return;
   }
-  if(d.tab){ TAB = d.tab; render(); return; }
+  // Una spunta lasciata accesa su una scheda diversa da quella in cui e'
+  // nata confonderebbe piu' di quanto risparmi: cambiare scheda la svuota.
+  if(d.tab){ TAB = d.tab; SELECTED.clear(); render(); return; }
   if(d.clear){ F[d.clear] = ""; render(); return; }
   if(d.confronto !== undefined){ F.confronto = d.confronto; render(); return; }
   if(d.vista !== undefined){ F.vista = d.vista; render(); return; }
@@ -1991,18 +2080,24 @@ document.addEventListener("click", async ev => {
     return reload();
   }
   if(d.nuova){
-    // Quattro domande in fila invece di un modulo: il modale sa fare una
-    // domanda per volta, e un modulo nuovo sarebbe l'unico dell'app.
-    const data = await domanda("Data (aaaa-mm-gg):", today().iso);
-    if(!data) return;
-    const descrizione = await domanda("Descrizione:", "");
-    if(!descrizione) return;
-    const importo = await domanda("Importo (negativo se e' una spesa):", "-");
-    if(!importo) return;
-    const conto = await domanda("Conto:", "A mano");
-    if(!conto) return;
-    await post("/api/nuova", {data, descrizione, importo, conto});
-    return reload();
+    // Prima erano quattro domande in fila, una alla volta: lente, e non si
+    // torna indietro a correggere la precedente senza ricominciare da capo.
+    // Ora la riga nasce subito con dei segnaposto e si corregge sul posto,
+    // in tabella, con lo stesso salvataggio-poi-ridisegno-in-pausa di ogni
+    // altra riga: e' la stessa modifica per campo di sempre, solo senza il
+    // giro dei modali prima di vederla.
+    const PLACEHOLDER = "nuova transazione";
+    await post("/api/nuova", {data: today().iso, descrizione: PLACEHOLDER,
+                              importo: "0", conto: "A mano"});
+    await reload();
+    // Il segnaposto e' scelto apposta per essere trovabile: e' l'unica riga
+    // che lo porta finche' non lo correggi. Se non lo trova (due creazioni
+    // di fila senza aver ancora rinominato la prima) non e' un errore, la
+    // riga c'e' comunque in tabella.
+    const input = document.querySelector(
+      `input[data-fix="Descrizione"][value="${PLACEHOLDER}"]`);
+    if(input){ input.focus(); input.select(); }
+    return;
   }
   if(d.escludi){
     const motivo = (await domanda("Perche' questa riga non deve comparire?", "") || "").trim();
@@ -2017,6 +2112,13 @@ document.addEventListener("click", async ev => {
     await post("/api/transaction", {id:d.resetTx, azzera:true});
     return reload();
   }
+  if(d.elimina){
+    const ok = await chiedi("Eliminare questa transazione? Scritta a mano, "
+      + "non si puo' recuperare da nessun estratto conto.");
+    if(!ok) return;
+    await post("/api/transaction", {id:d.elimina, elimina:true});
+    return reload();
+  }
   if(d.conferma){
     // "Va bene cosi'": fissa la categoria che c'e' gia'. La riga esce
     // dalla coda perche' la confidenza sale a 1, e nei totali non cambia
@@ -2025,6 +2127,76 @@ document.addEventListener("click", async ev => {
     await post("/api/transaction", {id:d.conferma, categoria:d.cat});
     return reload();
   }
+  if(d.bulkApply){
+    // Ogni campo lasciato vuoto (o su "non cambiare") non partecipa: si puo'
+    // applicare solo la categoria, solo il conto, solo chi ha pagato, solo
+    // un campo di testo, o una combinazione.
+    const cat = (el("bulk-cat") || {}).value || "";
+    const conto = (el("bulk-conto") || {}).value || "";
+    const chi = (el("bulk-chi") || {}).value || "";
+    const quota = (el("bulk-quota") || {}).value || "";
+    const data = (el("bulk-data") || {}).value || "";
+    const descrizione = (el("bulk-descrizione") || {}).value.trim();
+    const merchant = (el("bulk-merchant") || {}).value.trim();
+    const importo = (el("bulk-importo") || {}).value.trim();
+    const campi = {};
+    if(cat) campi.categoria = cat;
+    if(conto) campi.conto = conto;
+    if(data) campi.data = data;
+    if(descrizione) campi.descrizione = descrizione;
+    if(merchant) campi.merchant = merchant;
+    if(importo) campi.importo = importo;
+    // "Pagato da" e "quota" vanno per forza in una richiesta a parte: il
+    // server tratta quel payload come un'altra cosa e non guarda categoria/
+    // conto/testo quando li vede (set_transaction, ramo quota/pagato_da).
+    // Servono entrambi insieme, come nel menu per riga: meta' di una coppia
+    // non dice da che parte va il debito.
+    const conQuota = !!(chi && quota);
+    if(!Object.keys(campi).length && !conQuota)
+      return avvisa("Scegli almeno un campo da applicare.");
+    // Data/descrizione/merchant/importo scrivono lo STESSO valore su tutte
+    // le selezionate: utile per un errore identico ripetuto, pericoloso se
+    // e' un errore di selezione. Una conferma in piu' solo per questi campi
+    // e solo con piu' di una riga, dove uno sbaglio pesa di piu'.
+    const testoInGioco = ["data","descrizione","merchant","importo"]
+      .some(k => campi[k] !== undefined);
+    if(testoInGioco && SELECTED.size > 1){
+      const ok = await chiedi(`Stai per scrivere lo stesso `
+        + `${["data","descrizione","merchant","importo"].filter(k => campi[k]!==undefined).join("/")} `
+        + `su ${SELECTED.size} transazioni diverse. Continuare?`);
+      if(!ok) return;
+    }
+    // Una riga alla volta: due scritture insieme sullo stesso file
+    // rischierebbero di perdersi a vicenda. Un solo reload() alla fine, non
+    // uno per riga.
+    t.disabled = true; t.textContent = "applico…";
+    for(const id of SELECTED){
+      if(Object.keys(campi).length) await post("/api/transaction", {id, ...campi});
+      if(conQuota) await post("/api/transaction", {id, pagato_da:chi, quota});
+    }
+    SELECTED.clear();
+    return reload();
+  }
+  if(d.bulkConfirm){
+    // Come "confermo" singolo, ma su tutte le selezionate: fissa la
+    // categoria gia' proposta per ciascuna, non ne sceglie una comune.
+    const senzaCategoria = [...SELECTED].filter(id => {
+      const riga = (S.transactions || []).find(x => x.ID === id);
+      return riga && !whole(riga);
+    });
+    if(senzaCategoria.length)
+      return avvisa(`${senzaCategoria.length} delle selezionate non hanno `
+        + 'ancora una categoria: scegline una nel menu per quelle, oppure '
+        + 'togli la spunta.');
+    t.disabled = true; t.textContent = "confermo…";
+    for(const id of SELECTED){
+      const riga = (S.transactions || []).find(x => x.ID === id);
+      await post("/api/transaction", {id, categoria:whole(riga)});
+    }
+    SELECTED.clear();
+    return reload();
+  }
+  if(d.bulkClear){ SELECTED.clear(); render(); return; }
   if(d.rule){
     // Il pulsante si basta da solo: la categoria la chiede qui dentro. Prima
     // la leggeva dal menu accanto, ma scegliere li' salva subito e la riga
@@ -2119,11 +2291,27 @@ function quotaPayload(chi, q, aveva){
   return aveva ? {pagato_da: "", quota: ""} : null;
 }
 
+// Ogni campo si salva da solo appena lo lasci, ma un `reload()` e' un
+// ridisegno intero della tabella: farlo dopo OGNI campo strappa via di sotto
+// alle dita l'input successivo che si sta per toccare sulla stessa riga
+// (categoria, poi merchant, poi descrizione...). Il salvataggio resta
+// immediato -- e' gia' sul server quando la funzione torna -- solo il
+// ridisegno aspetta una pausa, cosi' una raffica di campi sulla stessa riga
+// (o su righe vicine) ha tempo di finire prima che tutto si ridisegni.
+let reloadTimer = null;
+function reloadSoon(){
+  clearTimeout(reloadTimer);
+  // Azzerato PRIMA di reload(): se restasse valorizzato dopo lo scatto,
+  // sembrerebbe per sempre "un reload gia' in coda" e poll() (sotto) non
+  // aggiornerebbe mai piu' da solo.
+  reloadTimer = setTimeout(() => { reloadTimer = null; reload(); }, 900);
+}
+
 document.addEventListener("change", async ev => {
   const d = ev.target.dataset;
   if(d.setcat){
     await post("/api/transaction", {id:d.setcat, categoria:ev.target.value});
-    return reload();
+    return reloadSoon();
   }
   if(d.natura){
     await post("/api/categories", {azione:"natura", nome:d.natura,
@@ -2138,11 +2326,25 @@ document.addEventListener("change", async ev => {
     const corpo = quotaPayload(chi, q, !!(riga.Quota || riga["Pagato da"]));
     if(!corpo) return;
     await post("/api/transaction", {id, ...corpo});
-    return reload();
+    return reloadSoon();
   }
   if(d.fix){
     await post("/api/transaction", {id:d.id, [d.fix.toLowerCase()]:ev.target.value});
-    return reload();
+    return reloadSoon();
+  }
+  if(d.select){
+    if(ev.target.checked) SELECTED.add(d.select); else SELECTED.delete(d.select);
+    return render();
+  }
+  if(d.selectAll !== undefined){
+    // Solo le righe disegnate ORA: su Transazioni "carica altre" ne mostra
+    // un sottoinsieme, e spuntare "tutte" non deve raggiungere quelle non
+    // ancora arrivate in pagina.
+    document.querySelectorAll("[data-select]").forEach(box => {
+      if(ev.target.checked) SELECTED.add(box.dataset.select);
+      else SELECTED.delete(box.dataset.select);
+    });
+    return render();
   }
   if(d.card){
     const card = S.layout.find(c => c.id === d.card);
@@ -2176,6 +2378,9 @@ el("f-text").addEventListener("input", () => {
 });
 el("f-reset").addEventListener("click", () => {
   Object.keys(F).forEach(k => F[k] = "");
+  // "Azzera" pulisce tutto, ma "la mia quota" e' il default dell'app, non un
+  // filtro da azzerare: senza questa riga il pulsante lo riportava a "tutto".
+  F.lettura = "mia";
   render();
 });
 // --------------------------------------------------------------------------
@@ -2244,31 +2449,26 @@ el("log-body").addEventListener("scroll", () => {
   }
 });
 
-// Caricare e analizzare sono due cose diverse, ed e' la ragione per cui i
-// pulsanti sono tre. "Carica" e "Ricarica" girano senza modello: durano
-// secondi e a parita' di file danno sempre lo stesso consolidato. L'LLM entra
-// solo con "Analizza", e lavora solo sulle descrizioni che nessun livello
-// deterministico ha saputo risolvere.
+// "Carica" e "Ricarica" girano senza modello: durano secondi e a parita' di
+// file danno sempre lo stesso consolidato.
 //
-// Il log si apre da solo in tutti e tre i casi: e' il momento in cui serve, e
-// con il modello e' anche l'unico modo di sapere che sta lavorando e non e'
-// bloccato. Il server AVVIA e basta, la fine la scopre poll(), che riabilita i
-// pulsanti quando running torna falso.
-async function start(button, route, llm){
+// Il log si apre da solo in entrambi i casi: e' il momento in cui serve. Il
+// server AVVIA e basta, la fine la scopre poll(), che riabilita i pulsanti
+// quando running torna falso.
+async function start(button, route){
   el(button).disabled = true;
   LOG_AT = 0;
   el("log-body").innerHTML = "";
   openLog();
-  await post(route, {llm});
+  await post(route, {llm: false});
   pullLog();
 }
 
 el("btn-load").addEventListener("click", () => {
   if(!((S && S.pending) || []).length) return;
-  start("btn-load", "/api/carica", false);
+  start("btn-load", "/api/carica");
 });
-el("btn-run").addEventListener("click", () => start("btn-run", "/api/run", false));
-el("btn-llm").addEventListener("click", () => start("btn-llm", "/api/run", true));
+el("btn-run").addEventListener("click", () => start("btn-run", "/api/run"));
 el("btn-export").addEventListener("click", async () => {
   const r = await post("/api/export", {});
   if(r.ok) await avvisa("Scritti:\n" + r.file.join("\n"));
@@ -2293,7 +2493,10 @@ async function poll(){
     if(light.version !== VERSION || light.running !== (S && S.running)
        || light.pending !== attesaOra){
       if(light.running){ S.running = true; setStatus(); }
-      else await reload();
+      // Un reload di un campo e' gia' in coda (reloadSoon()): e' lui a
+      // ridisegnare quando l'utente si ferma, il poll non deve anticiparlo
+      // ogni 4 secondi mentre sta ancora scrivendo.
+      else if(!reloadTimer) await reload();
     }
   }catch(e){ /* server fermo, riprova al giro dopo */ }
 }

@@ -9,7 +9,7 @@
 (?i)^transazione senza nome$;Giroconto;
 (?i)^yyw[0-9]+/paypal;Giroconto;
 # Marketplace: la banca scrive solo AMZN Mktp IT, cosa sia non si sa.;;
-(?i)amazon|amzn;Shopping;Amazon
+(?i)amazon|amzn;Shopping;Online
 (?i)vallese di oppeano;Shopping;Vestiti
 (?i)gruppo negozi;Shopping;Vestiti
 (?i)peschiera del garda;Cibo & Mangiare;Ristoranti
@@ -34,9 +34,7 @@
 (?i)bolletta acqua|acque veronesi|acquedotto|abbanoa;Casa;Acqua
 (?i)agsm|enel|servizio elettrico|\ba2a\b|\bhera\b|\biren\b|\bacea\b|eni ?gas|edison|sorgenia|illumia|bolletta luce|\bluce\b|\bgas\b|riscaldamento;Casa;Luce e gas
 (?i)\btim\b|telecom italia|vodafone|windtre|wind tre|iliad|fastweb|ho\.?mobile|very mobile|poste ?mobile;Casa;Telefono e internet
-(?i)marca da bollo|imposta di bollo|bollettino.*passaporto|passaporto elettronico;Comunità;Tasse
-(?i)f24|agenzia entrate|\bimu\b|irpef|tributi|contributi inps;Comunità;Tasse
-(?i)\btari\b|tarsu|rifiuti|nettezza urbana|canone rai|f24|agenzia entrate;Comunità;Tasse
+(?i)marca da bollo|imposta di bollo|bollettino.*passaporto|passaporto elettronico|f24|agenzia entrate|\bimu\b|irpef|tributi|contributi inps|\btari\b|tarsu|rifiuti|nettezza urbana|canone rai;Fisco;Tasse
 # Il condominio prima della manutenzione: gli interventi sulle parti;;
 # comuni arrivano come spese condominiali, non come lavori tuoi.;;
 (?i)condomin|borgo mangano|camminamento;Casa;Condominio
@@ -63,15 +61,16 @@
 # Mangiare.;;
 (?i)esselunga|coop\b|conad|carrefour|lidl|eurospin|penny ?market|md discount|\bpam\b|bennet|\biper\b|rossetto|tigota|despar|crai\b|famila|in's mercato|galassia|ipermercato|spaccio;Cibo & Mangiare;Alimentari
 (?i)macelleria|panificio|panetteria|pescheria|ortofrutta|salumeria|\bforno\b|molon|vivafruit|carni equine;Cibo & Mangiare;Alimentari
-(?i)azienda agricola|enoteca|cantina|\bvini\b|\bvino\b|vivino|dischiponte;Cibo & Mangiare;Cantina e Specialita
+(?i)azienda agricola|enoteca|cantina|\bvini\b|\bvino\b|vivino|dischiponte;Cibo & Mangiare;Cantina e Specialità
 (?i)\bmensa\b|ticket restaurant|buoni pasto|edenred|pellegrini card|day ristoservice|ucagric men;Cibo & Mangiare;Pranzo Lavoro
 (?i)^prelievo|prelievo (smart|mastercard|bancomat);Da identificare;
 (?i)ristorante|trattoria|osteria|pizzeria|hosteria|braceria|sushi|mcdonald|burger king|\bkfc\b|old wild west|roadhouse|burghy|beghini|bomagrill|grotta azzurra|bottega della birra|makako|panzare|anteiko|the public|torcoli|ti amo cioccolato|vinsanto|visanto|bastianello|deliveroo|glovo|justeat;Cibo & Mangiare;Ristoranti
 (?i)\bbar\b|caffetteria|pasticceria|gelateria|aperitivo|birreria|\bpub\b|\bcafe\b|caff\we;Cibo & Mangiare;Ristoranti
 # Persona.;;
-(?i)midjourney|moonshot ai|\bollama\b|openai|anthropic|claude\.ai|perplexity|\breplicate\b|cursor\.(com|sh);Personale;Abbonamenti
+(?i)midjourney|moonshot ai|\bollama\b|openai|anthropic|claude\.ai|perplexity|\breplicate\b|cursor\.(com|sh);Personale;Abbonamenti AI
 (?i)canone hype;Personale;Abbonamenti
-(?i)netflix|spotify|disney ?\+|\bdazn\b|amazon prime|prime video|now ?tv|apple\.?com/bill|apple bill|itunes|icloud|google ?(one|storage)|youtube ?premium|dropbox|microsoft ?365|adobe;Personale;Abbonamenti
+(?i)netflix|spotify|disney ?\+|\bdazn\b|amazon prime|prime video|now ?tv|youtube ?premium;Personale;Streaming
+(?i)apple\.?com/bill|apple bill|itunes|icloud|google ?(one|storage)|dropbox|microsoft ?365|adobe;Personale;Cloud e software
 (?i)palestra|fitness|virgin active|mcfit|anytime fitness|centro sportivo|emporio della cosmesi|profumeria|sephora|douglas|parrucchier|estetist;Personale;Benessere
 (?i)cinema|the space|uci cinemas|teatro|concerto|ticketone|vivaticket|steam ?games|playstation|nintendo|xbox|blizzard|instant gaming|gardaland|mostra |museo;Personale;Intrattenimento
 # Salute: le farmacie prima dei medici, sono la voce piu' frequente.;;
@@ -83,7 +82,7 @@
 (?i)zara\b|h&m|hm\.com|decathlon|\bovs\b|kiabi|primark|calzedonia|intimissimi|scarpe|abbigliamento|\bnike\b|adidas|shein|yamamay|outlet noventa|primadonna|pittarosso;Shopping;Vestiti
 (?i)mediaworld|unieuro|euronics|trony|apple store|monclick|\bcomet\b|samsung|dyson|\biphone\b;Shopping;Tecnologia
 (?i)feltrinelli|mondadori|libreria|fiorista|gift ?card|paypal.*visa direct|tosi gioielli|regalo;Shopping;Regali
-(?i)\bebay\b|aliexpress|zalando|temu;Shopping;Amazon
+(?i)\bebay\b|aliexpress|zalando|temu;Shopping;Online
 # Entrate.;;
 (?i)stipendio|salario|retribuzione|emolumenti|cedolino;Stipendio;
 (?i)affitto attivo|canone attivo|affitti incassati|bonifico inquilino;Affitti incassati;

@@ -10,8 +10,13 @@ finisce in uno dei CSV di configurazione e fa ripartire la pipeline.
 
 Sorveglia anche la cartella: appena un export nuovo compare, rielabora da solo.
 
-Ascolta SOLO su 127.0.0.1. Sono dati bancari e non devono essere raggiungibili
-dalle altre macchine della rete.
+Ascolta su tutte le interfacce (serve al tunnel Cloudflare per raggiungerlo
+da fuori casa), ma accetta solo due tipi di richiesta: quelle che arrivano
+davvero da 127.0.0.1, e quelle che portano un JWT di Cloudflare Access
+verificato (firma, scadenza, audience) per una delle email autorizzate.
+Sono dati bancari: senza quel secondo controllo chiunque sulla LAN di casa
+(o su una VPN attiva su questo PC) potrebbe raggiungerlo lo stesso.
+Vedi local_only()/access_email().
 """
 
 import csv
@@ -27,18 +32,48 @@ from contextlib import redirect_stdout, redirect_stderr
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import jwt
 import pandas as pd
 
 import bilancio
 import dashboard
 
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 8770
+# webbrowser.open() deve restare qui, non su HOST: "0.0.0.0" non e' un
+# indirizzo navigabile in tutti i browser, "127.0.0.1" lo e' sempre.
+LOCAL_URL = f"http://127.0.0.1:{PORT}/"
 
 # Ogni quanto guardare se sono comparsi export nuovi.
 WATCH_SECONDS = 3
 
 FOLDER = Path(__file__).parent
+
+# Team, AUD e email autorizzate per Cloudflare Access vivono in
+# access.json, FUORI da questo file: e' un dettaglio d'account (e le email
+# sono dati personali di Fabio e Michela), e questo repo e' su GitHub. Il
+# file e' in .gitignore; senza, l'accesso da fuori casa resta spento e in
+# locale non cambia niente (vedi access_email()).
+def load_access_config():
+    path = FOLDER / "access.json"
+    if not path.exists():
+        return None
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "team_domain": config["team_domain"],
+            "aud": config["aud"],
+            "allowed_emails": {e.strip().lower() for e in config["allowed_emails"]},
+            "jwks_client": jwt.PyJWKClient(
+                f"https://{config['team_domain']}/cdn-cgi/access/certs"),
+        }
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"attenzione: access.json illeggibile ({exc}), "
+              "l'accesso da fuori casa resta spento")
+        return None
+
+
+ACCESS = load_access_config()
 
 # Intestazioni dei file di configurazione, per riscriverli senza perdere colonne.
 SCHEMA = {
@@ -267,7 +302,12 @@ class State:
         if frame.empty:
             transactions, accounts = [], []
         else:
-            clean = frame.where(pd.notna(frame), None)
+            # Le colonne grezze (bilancio.RAW_COLUMNS) sono un dettaglio
+            # interno di read_consolidato(): servono a far ripartire una
+            # correzione dal fatto vero quando l'estratto sparisce, non a
+            # essere lette nel browser.
+            visibili = [c for c in frame.columns if c not in bilancio.RAW_COLUMNS]
+            clean = frame[visibili].where(pd.notna(frame[visibili]), None)
             transactions = clean.to_dict("records")
             accounts = sorted(frame["Conto"].dropna().unique().tolist())
 
@@ -363,6 +403,29 @@ def set_transaction(payload):
                                     if (r.get("id") or "").strip() != key])
         write_rows("correzioni.csv", [r for r in read_rows("correzioni.csv")
                                       if (r.get("id") or "").strip() != key])
+        return
+
+    if payload.get("elimina"):
+        # Solo le righe scritte a mano: per un movimento di banca "sparire"
+        # vorrebbe dire riapparire al prossimo giro (read_sources rilegge
+        # sempre l'estratto, finche' c'e'), e se l'estratto non c'e' piu'
+        # bilancio.read_consolidato() lo riprende comunque dal derivato. Chi
+        # vuole togliere una riga di banca dalla vista usa "escludi", che
+        # lascia scritto il perche'; una riga a mano invece non ha nessuna
+        # fonte a monte, e transazioni.csv e' l'unico posto in cui vive.
+        if not key.startswith("man-"):
+            raise ValueError('solo le transazioni scritte a mano si possono '
+                             'eliminare; per le altre usa "escludi"')
+        write_rows("transazioni.csv", [r for r in read_rows("transazioni.csv")
+                                       if (r.get("id") or "").strip() != key])
+        write_rows("override.csv", [r for r in read_rows("override.csv")
+                                    if (r.get("id") or "").strip() != key])
+        write_rows("correzioni.csv", [r for r in read_rows("correzioni.csv")
+                                      if (r.get("id") or "").strip() != key])
+        write_rows("quote.csv", [r for r in read_rows("quote.csv")
+                                 if (r.get("id") or "").strip() != key])
+        write_rows("escluse.csv", [r for r in read_rows("escluse.csv")
+                                   if (r.get("id") or "").strip() != key])
         return
 
     if "escludi" in payload:
@@ -560,7 +623,14 @@ def preview_rule(payload):
 
 
 def archive_exports(names):
-    """Sposta in export/elaborati/AAAA-MM/ e scrive le copie anonime.
+    """Scrive le copie anonime e cancella gli originali.
+
+    Non si archiviano piu' in export/elaborati/: l'originale contiene IBAN e
+    numeri di conto, e tenerlo vorrebbe dire lasciarlo dentro iCloud Drive
+    per sempre. Dopo un caricamento riuscito bastano la copia senza IBAN in
+    export/anonimi/ e il consolidato: read_consolidato() (bilancio.py) e'
+    pensato apposta a riprendere da li' le transazioni il cui export non c'e'
+    piu', e app.html lo dichiara ("sorgente: consolidato.csv").
 
     Solo dopo un giro riuscito: se il parsing fallisce il file deve restare
     dov'e', altrimenti sparisce dalla vista senza essere stato elaborato.
@@ -572,57 +642,40 @@ def archive_exports(names):
         source = root / name
         if not source.exists():
             continue
-        # La copia si scrive PRIMA di spostare, rileggendo quel file: deve
+        # La copia si scrive PRIMA di cancellare, rileggendo quel file: deve
         # rispecchiare quell'export, non il consolidato intero.
         #
         # Vale anche da controllo: load_transactions non solleva errori, su un
         # file illeggibile stampa "saltato" e torna vuoto. Senza questo, un
-        # export che non e' stato letto verrebbe archiviato lo stesso e
+        # export che non e' stato letto verrebbe cancellato lo stesso e
         # sparirebbe dalla vista senza essere mai entrato nei conti.
         if bilancio.write_anonymous_copy(FOLDER, source, accounts) is None:
             skipped.append((name, "non ne e' stata letta nessuna transazione, "
                                   "controlla il formato del file"))
             continue
-        # Stesso nome file vuol dire stesso conto e stesso periodo: e' un
-        # riscarico, non un export nuovo. Vince il piu' recente, altrimenti
-        # l'archivio accumula copie quasi identiche e una transazione che la
-        # banca ha stornato resterebbe nel bilancio per sempre.
-        #
-        # Il gemello si cerca fra TUTTI gli archiviati, non nella cartella del
-        # mese corrente: un export di agosto ricaricato a settembre finirebbe
-        # in elaborati/2026-09/ e i due non si incontrerebbero mai.
+        # Un archivio scritto prima di questo cambio (export/elaborati/) puo'
+        # ancora contenere un file con lo stesso nome: e' un riscarico, non un
+        # export nuovo, e va ritirato per non farlo rileggere insieme al
+        # nuovo (una transazione che la banca ha stornato resterebbe nel
+        # bilancio per sempre). Il gemello si cerca fra TUTTI gli archiviati
+        # rimasti, non solo nel mese corrente.
         twin = next((p for p in bilancio.archived_exports(FOLDER)
                      if p.name == name), None)
-        target = root / bilancio.ARCHIVE_DIR / time.strftime("%Y-%m")
-        target.mkdir(parents=True, exist_ok=True)
-        destination = target / name
-        # Il gemello si tocca solo DOPO che il nuovo e' al sicuro. Se occupa
-        # gia' la casella buona il nuovo si posa accanto con un nome
-        # provvisorio e ci trasloca alla fine, cosi' un'archiviazione fallita
-        # non lascia il bilancio senza nessuna delle due copie.
-        staged = destination
-        if destination.exists():
-            staged = target / (f"{source.stem}-{time.strftime('%d%H%M%S')}"
-                               f"{source.suffix}")
-        source.replace(staged)
-        # Dentro iCloud Drive su Windows replace() puo' tornare senza errore
-        # e senza aver spostato niente. Dichiarare l'archiviazione riuscita
-        # a quel punto e' il danno peggiore: il giro dopo gira con
-        # include_pending=False e quelle transazioni spariscono dal
-        # consolidato dopo essere state viste una volta.
-        if not (staged.exists() and not source.exists()):
-            skipped.append((name, "lo spostamento non e' andato a buon fine "
-                                  "(iCloud Drive?)"))
-            continue
         if twin:
             retired = retire(twin)
             print(f"{name} sostituisce la copia caricata prima: quella e' ora "
                   f"in {bilancio.EXPORT_DIR}/{bilancio.SUPERSEDED_DIR}/"
                   f"{retired.name}")
-            if staged != destination:
-                staged.replace(destination)
-                staged = destination
-        moved.append(staged.name)
+        source.unlink()
+        # Dentro iCloud Drive su Windows le operazioni sui file possono
+        # tornare senza errore senza aver fatto niente. Dichiarare la
+        # cancellazione riuscita a quel punto e' il danno peggiore: l'IBAN
+        # resterebbe dentro iCloud senza che nessuno se ne accorga.
+        if source.exists():
+            skipped.append((name, "la cancellazione non e' andata a buon fine "
+                                  "(iCloud Drive?)"))
+            continue
+        moved.append(name)
     return moved, skipped
 
 
@@ -644,7 +697,7 @@ def retire(path):
 
 
 def load_and_archive(use_llm=True):
-    """Elabora e, solo se e' andata bene, archivia gli originali."""
+    """Elabora e, solo se e' andata bene, cancella gli originali."""
     names = STATE.pending()
     STATE.refresh(use_llm=use_llm, include_pending=True)
 
@@ -657,20 +710,20 @@ def load_and_archive(use_llm=True):
 
     if STATE.error:
         say(f"elaborazione fallita: i {len(names)} file restano in "
-            f"{bilancio.EXPORT_DIR}/, non sono stati archiviati")
+            f"{bilancio.EXPORT_DIR}/, non sono stati cancellati")
         return
     try:
         moved, skipped = archive_exports(names)
     except OSError as exc:
-        say(f"archiviazione fallita ({exc}). I dati sono stati elaborati, "
+        say(f"cancellazione fallita ({exc}). I dati sono stati elaborati, "
             f"i file restano in {bilancio.EXPORT_DIR}/")
         return
     for name, motivo in skipped:
-        say(f"{name} NON archiviato: {motivo}. "
+        say(f"{name} NON cancellato: {motivo}. "
             f"Resta in {bilancio.EXPORT_DIR}/")
     if moved:
-        say(f"archiviati {len(moved)} export in {bilancio.EXPORT_DIR}/"
-            f"{bilancio.ARCHIVE_DIR}/: {', '.join(moved)}")
+        say(f"cancellati {len(moved)} export dopo il caricamento: "
+            f"{', '.join(moved)}")
         say(f"copie senza IBAN in {bilancio.EXPORT_DIR}/{bilancio.ANON_DIR}/ "
             f"(attenzione: restano importi, date e negozi)")
 
@@ -709,6 +762,33 @@ ACTIONS = {
 }
 
 
+def access_email(headers):
+    """Email verificata dal JWT di Cloudflare Access, o None.
+
+    Verifica la FIRMA (RS256 contro le chiavi pubbliche di Cloudflare), non
+    solo la presenza dell'header: senza, chiunque sulla LAN di casa o su una
+    VPN attiva su questo PC potrebbe scriversi a mano
+    "Cf-Access-Jwt-Assertion: qualsiasi cosa" e passare. Controlla anche
+    l'audience, cosi' un JWT valido ma emesso per un'ALTRA Access
+    Application (es. "roccamora") non basta.
+
+    Fallisce chiuso: qualunque eccezione - JWKS irraggiungibile, token
+    scaduto, firma sbagliata, audience sbagliata - conta come "non
+    autenticato", mai come errore da far esplodere fino al chiamante.
+    """
+    token = headers.get("Cf-Access-Jwt-Assertion")
+    if not token or not ACCESS:
+        return None
+    try:
+        key = ACCESS["jwks_client"].get_signing_key_from_jwt(token)
+        claims = jwt.decode(token, key.key, algorithms=["RS256"],
+                            audience=ACCESS["aud"])
+    except Exception:                                       # noqa: BLE001
+        return None
+    email = (claims.get("email") or "").strip().lower()
+    return email if email in ACCESS["allowed_emails"] else None
+
+
 # --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
@@ -720,16 +800,23 @@ class Handler(BaseHTTPRequestHandler):
         pass                        # niente rumore nel terminale
 
     def local_only(self):
-        """Difesa contro il DNS rebinding: un sito web non deve poter parlare
-        con questo server usando il browser dell'utente come ponte."""
-        if self.client_address[0] not in ("127.0.0.1", "::1"):
-            self.fail(403, "solo da locale")
-            return False
-        host = (self.headers.get("Host") or "").split(":")[0]
-        if host not in ("127.0.0.1", "localhost", "[::1]", ""):
-            self.fail(403, f"Host non ammesso: {host}")
-            return False
-        return True
+        """Locale, o autenticato via Cloudflare Access. Nient'altro.
+
+        Il ramo locale e' la stessa difesa di sempre contro il DNS
+        rebinding: un sito web non deve poter parlare con questo server
+        usando il browser dell'utente come ponte, quindi conta solo un
+        127.0.0.1 vero E un Host header locale. Esce prima e non tocca mai
+        access_email(): l'uso da questo PC resta esattamente come prima,
+        zero chiamate a Cloudflare per verificare un JWT.
+        """
+        if self.client_address[0] in ("127.0.0.1", "::1"):
+            host = (self.headers.get("Host") or "").split(":")[0]
+            if host in ("127.0.0.1", "localhost", "[::1]", ""):
+                return True
+        if access_email(self.headers):
+            return True
+        self.fail(403, "accesso non autorizzato")
+        return False
 
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
@@ -877,9 +964,12 @@ def main():
 
     threading.Thread(target=watch, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    url = f"http://{HOST}:{PORT}/"
-    print(f"dashboard su {url}   (ctrl+c per fermare)")
-    webbrowser.open(url)
+    print(f"dashboard su {LOCAL_URL}   (ctrl+c per fermare)")
+    if not ACCESS:
+        print("attenzione: access.json mancante o incompleto, l'app e' "
+              "raggiungibile solo da 127.0.0.1 (l'accesso da fuori casa via "
+              "Cloudflare Access resta spento finche' non lo scrivi)")
+    webbrowser.open(LOCAL_URL)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

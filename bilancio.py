@@ -400,6 +400,18 @@ def assign_ids(rows):
 # avere due transazioni della stessa voce con nature diverse.
 CORREGGIBILI = ("Importo", "Data", "Descrizione", "Conto", "Merchant")
 
+# Il fatto grezzo dietro ogni campo correggibile che viene da un estratto
+# conto (Merchant escluso: non esiste nel grezzo, e' sempre derivato da
+# Descrizione o corretto a parte - vedi il giro di categorizzazione in
+# run()). run() lo salva PRIMA di apply_corrections(), cosi'
+# read_consolidato() puo' far ripartire una riga il cui estratto e' sparito
+# dal dato vero, invece che da un valore gia' corretto che altrimenti
+# diventerebbe permanente (togliere la correzione non tornerebbe piu'
+# indietro: non ci sarebbe piu' niente da cui ripartire).
+RAW_SUFFISSO = {"Importo": "grezzo", "Data": "grezza", "Descrizione": "grezza",
+                "Conto": "grezzo"}
+RAW_COLUMNS = [f"{campo} {suffisso}" for campo, suffisso in RAW_SUFFISSO.items()]
+
 
 def load_corrections(path):
     """correzioni.csv: id -> {campo: valore}, per i fatti sbagliati.
@@ -2702,8 +2714,12 @@ def selfcheck(history, rules, categories):
 # Dove si depositano gli estratti conto. Sta tutto fuori da git: dentro ci
 # sono IBAN e movimenti, e una volta committati restano per sempre.
 EXPORT_DIR = "export"
-ARCHIVE_DIR = "elaborati"       # dentro export/, dopo un caricamento riuscito
-ANON_DIR = "anonimi"            # copie senza IBAN, accanto agli originali
+# Dopo un caricamento riuscito l'originale viene cancellato (server.py,
+# archive_exports()): resta popolata solo dagli export caricati prima di
+# quel cambio. archived_exports()/read_sources() continuano a rileggerli
+# finche' ci sono, e read_consolidato() copre chi non c'e' piu'.
+ARCHIVE_DIR = "elaborati"
+ANON_DIR = "anonimi"            # copie senza IBAN, al posto degli originali
 # Gli export rimpiazzati da uno scarico piu' recente. Deve stare dentro
 # export/ ma FUORI da export/elaborati/: archived_exports() fa rglob() sugli
 # elaborati, quindi una sottocartella li' dentro riporterebbe nel consolidato
@@ -2928,6 +2944,26 @@ def read_consolidato(folder, output, gia_presenti):
     giroconto rimasto spaiato si appaierebbe con una riga fresca qualsiasi di
     pari importo (vedi prepara_righe()). La categorizzazione invece si rifa'
     sempre, cosi' una regola aggiunta oggi vale anche su questi dati.
+
+    Le righe scritte a mano (ID che comincia per "man-", vedi
+    nuova_transazione() in server.py) non passano MAI da qui, nemmeno se
+    "gia_presenti" non le contiene: la loro unica fonte vera e' sempre
+    transazioni.csv (read_manual()), fresca a ogni giro. Senza questa
+    esclusione una riga a mano cancellata dal file tornava comunque: il suo
+    ID non e' mai "gia_presente" (non viene da un export), quindi sembrava
+    sempre "un export sparito" e read_consolidato() la resuscitava dall'
+    ultima copia scritta qui, per sempre.
+
+    I campi correggibili (Data/Descrizione/Importo/Conto) NON si leggono
+    dalle colonne omonime, che possono gia' portare una correzione applicata
+    in un giro precedente: si leggono dalle colonne "... grezza/o" scritte da
+    run() (vedi RAW_SUFFISSO), il fatto vero fotografato prima che
+    apply_corrections() lo sovrascrivesse. Senza questo, una correzione tolta
+    (azzera) non tornava mai indietro per una riga il cui estratto e'
+    sparito: read_consolidato() la rifotografava ogni giro dall'ultimo valore
+    gia' corretto, che diventava cosi' permanente. Le righe scritte prima di
+    questo cambio non hanno le colonne grezze: per loro resta il valore che
+    gia' avevano, l'unico che c'e'.
     """
     path = Path(folder) / output
     if not path.exists():
@@ -2943,17 +2979,22 @@ def read_consolidato(folder, output, gia_presenti):
         # darebbe un id diverso, e ogni correzione si staccherebbe dalla sua
         # transazione al primo riavvio.
         id_ = _text(riga.get("ID"))
-        if id_ in gia_presenti:
+        if id_ in gia_presenti or id_.startswith("man-"):
             continue
+        grezzo = {campo: _text(riga.get(f"{campo} {suffisso}"))
+                        or _text(riga.get(campo))
+                  for campo, suffisso in RAW_SUFFISSO.items()}
         rows.append({
             "ID": id_,
-            "Data": _text(riga.get("Data")),
-            "Descrizione": _text(riga.get("Descrizione")),
-            "Importo": parse_amount(_text(riga.get("Importo"))),
-            "Conto": _text(riga.get("Conto")),
+            "Data": grezzo["Data"],
+            "Descrizione": grezzo["Descrizione"],
+            "Importo": parse_amount(grezzo["Importo"]),
+            "Conto": grezzo["Conto"],
             "Pagato da": _text(riga.get("Pagato da")),
             "Quota": _text(riga.get("Quota")),
             "Rango": RANK_BANK,
+            **{f"{campo} {suffisso}": grezzo[campo]
+               for campo, suffisso in RAW_SUFFISSO.items()},
         })
     if rows:
         print(f"  {output}: {len(rows)} transazioni riprese, nessun export "
@@ -3032,6 +3073,12 @@ def run(folder, use_llm=True, output="consolidato.csv",
     # sua gemella nel derivato rientrerebbe dalla porta di servizio: la
     # decisione della pulizia verrebbe disfatta in silenzio.
     ids_grezze = {r["ID"] for r in raw}
+    # Il fatto grezzo si fotografa PRIMA di apply_corrections(), che sotto lo
+    # sovrascrive: e' l'unico momento in cui questi campi sono ancora quelli
+    # letti dall'estratto, non un valore gia' corretto. Vedi RAW_SUFFISSO.
+    for row in raw:
+        for campo, suffisso in RAW_SUFFISSO.items():
+            row[f"{campo} {suffisso}"] = row[campo]
     # Corrections/exclusions PRIMA della pulizia, sulle sole grezze: una riga
     # gia' corretta o esclusa dall'utente non deve sporcare gli appaiamenti di
     # drop_internal_transfers/drop_covered_by qui sotto (una riga esclusa
@@ -3124,8 +3171,13 @@ def run(folder, use_llm=True, output="consolidato.csv",
 
     columns = ["ID", "Data", "Descrizione", "Merchant", "Importo", "Conto",
                "Natura", "Categoria", "Sottocategoria", "Pagato da", "Quota",
-               "Origine", "Confidenza"]
-    frame = pd.DataFrame(rows)[columns].sort_values(["Data", "Descrizione"])
+               "Origine", "Confidenza"] + RAW_COLUMNS
+    # reindex, non [columns]: le colonne grezze (RAW_COLUMNS) esistono solo
+    # sulle righe di banca, non su quelle scritte a mano. Se un giorno "rows"
+    # fosse fatto di sole manuali, [columns] solleverebbe KeyError sulle
+    # colonne che non esistono su NESSUNA riga; reindex le aggiunge vuote.
+    frame = pd.DataFrame(rows).reindex(columns=columns) \
+              .sort_values(["Data", "Descrizione"])
     frame.to_csv(folder / output, index=False, sep=";", encoding="utf-8-sig")
 
     review = frame[frame["Confidenza"] < 1.0]

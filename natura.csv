@@ -21,12 +21,15 @@ Trasporto;Mezzi pubblici;Quotidiane
 Cibo & Mangiare;Alimentari;Quotidiane
 Cibo & Mangiare;Pranzo Lavoro;Quotidiane
 Cibo & Mangiare;Ristoranti;Discrezionali
-Cibo & Mangiare;Cantina e Specialita;Discrezionali
-Shopping;Amazon;Discrezionali
+Cibo & Mangiare;Cantina e Specialità;Discrezionali
+Shopping;Online;Discrezionali
 Shopping;Vestiti;Discrezionali
 Shopping;Tecnologia;Discrezionali
 Shopping;Regali;Discrezionali
 Personale;Abbonamenti;Ricorrenti
+Personale;Streaming;Ricorrenti
+Personale;Cloud e software;Ricorrenti
+Personale;Abbonamenti AI;Ricorrenti
 Personale;Benessere;Discrezionali
 Personale;Intrattenimento;Discrezionali
 Assistenza Sanitaria;Farmacia;Quotidiane
@@ -36,4 +39,4 @@ Stipendio;;Entrate
 Affitti incassati;;Entrate
 Giroconto;;Non spesa
 Da identificare;;Da chiarire
-Comunità;Tasse;Vincolate
+Fisco;Tasse;Vincolate
