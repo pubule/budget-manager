@@ -10,6 +10,7 @@ pagina si apre offline e i dati non escono dal PC.
 """
 
 import html
+import io
 from collections import Counter
 
 import pandas as pd
@@ -384,6 +385,17 @@ def write_excel(data, path):
         (out.groupby("Mese").Importo.sum().rename("uscite").to_frame()
          .to_excel(writer, sheet_name="6 mesi"))
         data["all"].to_excel(writer, sheet_name="transazioni", index=False)
+
+
+def excel_bytes(frame):
+    """Lo stesso .xlsx di generate(), in memoria: per il bottone di
+    esportazione, che deve dare un file da scaricare al browser (anche dal
+    telefono, sulla rete di casa), non scriverlo sul disco del PC dove gira
+    il server.
+    """
+    buffer = io.BytesIO()
+    write_excel(build(frame), buffer)
+    return buffer.getvalue()
 
 
 def generate(frame, folder, title="Bilancio familiare"):

@@ -725,7 +725,7 @@ button:disabled{opacity:.45;cursor:default}
       <h3>Dati</h3>
       <button id="btn-load" class="hide">Carica dati</button>
       <button id="btn-run">Ricarica</button>
-      <button id="btn-export">Esporta HTML + Excel</button>
+      <button id="btn-export">Esporta Excel</button>
       <button id="btn-log">Log</button>
       <div class="status ui" id="source"></div>
     </div>
@@ -868,6 +868,10 @@ const F = {from:`${ANNO_DEFAULT}-01-01`, to:`${ANNO_DEFAULT}-12-31`,
 // Ordinamento della tabella Transazioni: piu' recenti prima, cosi' non serve
 // scorrere 1900 righe per vedere l'ultima spesa fatta.
 const SORT = {col:"Data", dir:-1};
+// Ordinamento a se' per "Con Michela": condividere SORT con Transazioni
+// vorrebbe dire che cambiare colonna di la' ordina qui per una colonna che
+// in questa tabella non esiste nemmeno, senza nessuna freccia a dirlo.
+const SORT_MICHELA = {col:"Data", dir:-1};
 // La finestra del grafico "uscite mese per mese" e' indipendente dal periodo
 // scelto in alto: quel filtro sceglie COSA sommano gli indicatori, questo
 // sceglie quanta storia disegnare. Di default l'anno in corso fino a oggi;
@@ -1622,6 +1626,35 @@ function txCardsHTML(rows, opts){
       : `<div class="bl-field"><label>Categoria</label>${categorySelect(whole(t), t.ID)}</div>`;
     return `<details class="bl-tx">${sommario}<div class="body">${campi}`
       + `<div class="bl-rowbtns">${azioni}</div></div></details>`;
+  }).join("") + "</div></div>";
+}
+
+// Stessa struttura di txCardsHTML (stesso <details class="bl-tx">, stesso
+// riquadro sommario+corpo): solo di lettura, non c'e' niente da correggere o
+// confermare qui dentro, il registro e' un conto che si guarda, non una
+// transazione da smistare.
+function michelaCardsHTML(righe, CHI){
+  if(!righe.length) return "";
+  return '<div class="bl-tx-wrap"><div class="bl-txlist">' + righe.map(t => {
+    const sommario = '<summary>'
+      + `<span class="who"><span class="d">${esc(t.Data)}</span>`
+      + `<div class="m">${esc((t.Descrizione||"").slice(0,52))}</div></span>`
+      + `<span class="amt">${spesa(t.Importo)}</span></summary>`;
+    const campi = `<div class="bl-field-row">`
+      + `<div class="bl-field"><label>Chi ha pagato</label><div class="val">`
+      + `${esc(CHI[t["Pagato da"]] || "—")}</div></div>`
+      + `<div class="bl-field"><label>Quota</label><div class="val">`
+      + `${esc(t.Quota || "—")}</div></div></div>`
+      + `<div class="bl-field-row">`
+      + `<div class="bl-field"><label>Effetto</label>`
+      + `<div class="val delta ${t.effetto >= 0 ? "meglio" : "peggio"}">`
+      + `${t.effetto >= 0 ? "+" : ""}${euro(t.effetto)}</div></div>`
+      + `<div class="bl-field"><label>Saldo dopo</label><div class="val">`
+      + `${euro(t.saldo)}</div></div></div>`;
+    // bl-dove: stessa griglia di bl-tx ma a due colonne, senza il posto per
+    // il checkbox -- qui non c'e' selezione multipla, un'altra colonna
+    // vuota da 26px avrebbe solo schiacciato data e descrizione.
+    return `<details class="bl-tx bl-dove">${sommario}<div class="body">${campi}</div></details>`;
   }).join("") + "</div></div>";
 }
 
@@ -2403,22 +2436,29 @@ const SORT_KEYS = {
   Merchant: t => t.Merchant || "", Importo: t => t.Importo || 0,
   Conto: t => t.Conto || "", Natura: t => t.Natura || "",
   Categoria: t => whole(t), "Pagato da": t => t["Pagato da"] || "",
-  Quota: t => t.Quota || "", Origine: t => t.Origine || ""};
+  Quota: t => t.Quota || "", Origine: t => t.Origine || "",
+  // Solo per "Con Michela": effetto e saldo non sono campi di una
+  // transazione, li calcola registro() riga per riga.
+  effetto: t => t.effetto || 0, saldo: t => t.saldo || 0};
 
-function sortedRows(rows){
-  const key = SORT_KEYS[SORT.col];
+function sortedRowsBy(stato, rows){
+  const key = SORT_KEYS[stato.col];
   if(!key) return rows;
   return [...rows].sort((a,b) => {
     const x = key(a), y = key(b);
-    return (x < y ? -1 : x > y ? 1 : 0) * SORT.dir;
+    return (x < y ? -1 : x > y ? 1 : 0) * stato.dir;
   });
 }
+const sortedRows = rows => sortedRowsBy(SORT, rows);
 
-function sortHeader(label, col){
-  const attivo = SORT.col === col;
-  return `<button class="link" data-sort="${col}">${esc(label)}`
-    + (attivo ? (SORT.dir === 1 ? " ↑" : " ↓") : "") + "</button>";
+function sortHeaderBy(stato, attr, label, col){
+  const attivo = stato.col === col;
+  return `<button class="link" data-${attr}="${col}">${esc(label)}`
+    + (attivo ? (stato.dir === 1 ? " ↑" : " ↓") : "") + "</button>";
 }
+const sortHeader = (label, col) => sortHeaderBy(SORT, "sort", label, col);
+const sortHeaderMichela = (label, col) =>
+  sortHeaderBy(SORT_MICHELA, "sort-michela", label, col);
 
 VIEWS.transazioni = rows => {
   const sig = JSON.stringify(F) + SORT.col + SORT.dir;
@@ -2515,20 +2555,34 @@ VIEWS.partita = () => {
   const verso = r.saldo >= 0
     ? `${esc(r.controparte)} ti deve` : `devi a ${esc(r.controparte)}`;
   const CHI = {io:"Fabio", lei:esc(r.controparte)};
+  // Ordinare qui non tocca i saldi: registro() li ha gia' calcolati in
+  // ordine cronologico prima di questa riga, sortedRowsBy sceglie solo come
+  // elencarli, non li ricalcola. Un solo giro, condiviso da tabella desktop
+  // e card mobile: stessa logica del resto del file, non due ordinamenti
+  // separati da tenere allineati.
+  const ordinate = sortedRowsBy(SORT_MICHELA, r.righe);
   return '<div class="card"><div class="head"><h2>Con '
     + esc(r.controparte) + '</h2>'
     + `<span class="mini">dal ${esc(r.dal)}, saldo di partenza `
     + `${euro((S.partita && S.partita.saldo) || 0)}</span></div>`
     + `<p class="verdetto-partita">${verso} <b>${euro(Math.abs(r.saldo))}</b></p>`
-    + tableHTML(["data","descrizione","importo","chi ha pagato","quota",
-                 "effetto","saldo"],
-        r.righe.map(t => [
+    + '<div class="desktop-rows">'
+    + tableHTML([sortHeaderMichela("data","Data"),
+                 sortHeaderMichela("descrizione","Descrizione"),
+                 sortHeaderMichela("importo","Importo"),
+                 sortHeaderMichela("chi ha pagato","Pagato da"),
+                 sortHeaderMichela("quota","Quota"),
+                 sortHeaderMichela("effetto","effetto"),
+                 sortHeaderMichela("saldo","saldo")],
+        ordinate.map(t => [
           esc(t.Data), esc((t.Descrizione||"").slice(0,52)),
           spesa(t.Importo), CHI[t["Pagato da"]] || "—", esc(t.Quota),
           `<span class="delta ${t.effetto >= 0 ? "meglio" : "peggio"}">`
             + `${t.effetto >= 0 ? "+" : ""}${euro(t.effetto)}</span>`,
           euro(t.saldo)]),
-        [2,5,6])
+        [2,5,6], true)
+    + "</div>"
+    + michelaCardsHTML(ordinate, CHI)
     + '<p class="note">Positivo vuol dire che '
     + esc(r.controparte) + ' deve a te. Un <b>saldo</b> e\' il rimborso '
     + 'stesso: non e\' una spesa, e muove il conto per intero. Il periodo qui '
@@ -2816,6 +2870,11 @@ async function gestisciClick(t){
     SORT.col = d.sort;
     render(); return;
   }
+  if(d.sortMichela){
+    SORT_MICHELA.dir = SORT_MICHELA.col === d.sortMichela ? -SORT_MICHELA.dir : -1;
+    SORT_MICHELA.col = d.sortMichela;
+    render(); return;
+  }
   // Una spunta lasciata accesa su una scheda diversa da quella in cui e'
   // nata confonderebbe piu' di quanto risparmi: cambiare scheda la svuota.
   if(d.tab){
@@ -3050,6 +3109,7 @@ document.addEventListener("click", ev => {
     + "[data-cat-rename],[data-cat-merge],[data-cat-drop],[data-rule-save],"
     + "[data-rule-del],[data-rule-test],[data-new-save],[data-reset-tx],[data-escludi],[data-rule],"
     + "[data-up],[data-conferma],[data-confronto],[data-vista],[data-nuova],[data-lettura],[data-sort],"
+    + "[data-sort-michela],"
     + "[data-more],[data-andamento-reset],[data-bulk-apply],[data-bulk-confirm],"
     + "[data-bulk-clear],[data-elimina],[data-dove-pie],[data-dove-back]");
   if(!t) return;
@@ -3310,9 +3370,25 @@ el("btn-load").addEventListener("click", () => {
   start("btn-load", "/api/carica");
 });
 el("btn-run").addEventListener("click", () => start("btn-run", "/api/run"));
-el("btn-export").addEventListener("click", async () => {
-  const r = await post("/api/export", {});
-  if(r.ok) await avvisa("Scritti:\n" + r.file.join("\n"));
+el("btn-export").addEventListener("click", () => {
+  // Non fetch+JSON: una navigazione vera, cosi' e' il browser a gestire il
+  // download (Content-Disposition: attachment nella risposta) -- funziona
+  // identico dal telefono sulla rete di casa, non solo dal PC dove gira il
+  // server. Niente scritto sul disco del server: il file esiste solo nella
+  // risposta.
+  //
+  // target="_blank" non e' decorativo: in modalita' "aggiunta a Home"
+  // (standalone, senza barra Safari) iOS non ha il gestore download di
+  // Safari, e senza aprire una scheda vera il file finiva dritto nella
+  // preview/condivisione invece di poter scegliere dove salvarlo.
+  const a = document.createElement("a");
+  a.href = "/api/export.xlsx";
+  a.download = "bilancio.xlsx";
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 });
 
 // --------------------------------------------------------------------------

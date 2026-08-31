@@ -849,6 +849,26 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.path.split("?")[0] == "/api/export.xlsx":
+            # GET, non POST: e' un download vero, il browser deve poterlo
+            # aprire da solo (un <a href>, non fetch+JSON) -- e deve
+            # funzionare identico dal telefono sulla rete di casa, non solo
+            # dal PC dove gira il server. Niente scritto su disco qui: il
+            # file esiste solo nella risposta.
+            if STATE.frame.empty:
+                return self.fail(400, "nessun dato da esportare")
+            body = dashboard.excel_bytes(STATE.frame)
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument"
+                ".spreadsheetml.sheet")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="bilancio.xlsx"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path.startswith("/api/state"):
             if "light=1" in self.path:
                 # Il browser controlla ogni pochi secondi se e' cambiato
@@ -898,12 +918,6 @@ class Handler(BaseHTTPRequestHandler):
                                  payload.get("layout", DEFAULT_LAYOUT),
                                  ensure_ascii=False, indent=1)))
                 return self.send_json({"ok": True})
-            if route == "/api/export":
-                if STATE.frame.empty:
-                    return self.fail(400, "nessun dato da esportare")
-                written = dashboard.generate(STATE.frame, FOLDER)
-                return self.send_json({"ok": True,
-                                       "file": [p.name for p in written]})
             if route == "/api/carica":
                 if STATE.running:
                     return self.send_json({"ok": True, "gia_in_corso": True})
