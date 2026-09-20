@@ -2036,7 +2036,7 @@ CARDS.dove = rows => {
 
   let corpo = "", dovePieHTML = "", intestazioni;
   if(vista === "area"){
-    intestazioni = ["voce", "nel periodo", "quota",
+    intestazioni = ["voce", "nel periodo", "peso sul periodo",
                     conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
     // Due livelli in una tabella sola: l'area, e sotto le sue voci. Prima
     // "dentro Casa, cosa?" era un altro riquadro; qui e' la riga seguente.
@@ -2076,7 +2076,7 @@ CARDS.dove = rows => {
     dovePieHTML = testa + pieChart(datiTorta, {clickable: !scelto})
       + pieLegend(datiTorta, {clickable: !scelto});
   } else {
-    intestazioni = ["negozio", "nel periodo", "quota",
+    intestazioni = ["negozio", "nel periodo", "peso sul periodo",
                     conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
     const mappa = new Map();
     for(const r of out){

@@ -922,6 +922,9 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         tabellaHtml.includes(">nel periodo<")
         && !tabellaHtml.includes(">al mese<")
         && !tabellaHtml.includes(">all'anno<"));
+  check("la percentuale dice che e' il peso nel periodo",
+        tabellaHtml.includes(">peso sul periodo<")
+        && !tabellaHtml.includes(">quota<"));
 
   // Lo stesso passaggio a mesiEffettivi tocca anche il ramo "partial" (un
   // filtro categoria/natura/testo acceso), che scrive "mesi coperti" come
