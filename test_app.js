@@ -279,12 +279,11 @@ console.log("=== le due letture ===");
                         Data:"2025-06-10", "Pagato da":"io", Quota:"meta"}];
   F6.vista = "negozio";
   F6.lettura = "";
-  const mNeg = api.mesiEffettivi(api.spending(rigaNegozio));
   check("il totale per negozio pesa per intero in lettura tutto",
-        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-200/mNeg)}<`));
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-200)}<`));
   F6.lettura = "mia";
   check("il totale per negozio si dimezza in lettura la mia quota",
-        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-100/mNeg)}<`));
+        api.CARDS.dove(rigaNegozio).includes(`>${api.spesa(-100)}<`));
   F6.vista = "";
 
   // L'invariante che si era rotto: la percentuale di ogni riga divide il suo
@@ -584,7 +583,7 @@ check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'))
   check("con molti punti resta una linea pulita, senza pallini",
         !tanti.includes("<circle"));
   const F3 = api.getF();
-  const [da, a] = api.QUICK[0][1]();          // mese in corso
+  const [da, a] = api.QUICK[5][1]();          // ultimo mese con dati
   F3.from = da; F3.to = a;
   // L'andamento guarda lo storico anche con un periodo scelto: ritagliarlo al
   // mese lo riduceva a un punto, cioe' a niente. Il periodo diventa una fascia.
@@ -894,42 +893,41 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         !celle.includes('class="note"'));
 }
 
-// La barra degli indicatori e "Dove finiscono i soldi" devono dividere ogni
-// "al mese" per LO STESSO numero di mesi sulle stesse righe: nel caso reale
-// che ha fatto scoprire il bug la barra diceva "1 mese" e la tabella sotto
-// "0.806", il 24% di scarto, sempre a favore di un falso miglioramento.
-// Con una sola categoria di uscite il totale della barra e quello della riga
-// di categoria sono lo STESSO numero diviso per lo STESSO denominatore:
-// devono comparire identici a schermo. Il confronto e' fra le due uscite
-// vere, non fra due ricalcoli della formula - cosi' fallisce se un domani
-// una delle due tornasse a usare monthsOf da sola.
+// "Dove vanno i soldi" e' un riepilogo delle righe scelte, non una
+// proiezione. In un settembre fermo al 19 una spesa condivisa di 3.000 euro
+// vale 1.500 nella lettura "la mia quota": non 2.368 euro perche' divisa per
+// 19/30 di mese, ne' una stima annuale. Gli indicatori hanno regole proprie
+// per il periodo in corso, ma non devono cambiare questo totale.
 {
   const Fden = api.getF();
   const salvaFden = {...Fden};
   Object.assign(Fden, {from:"", to:"", account:"", nature:"", category:"",
                         sub:"", text:"", confronto:"", vista:"", lettura:""});
-  const righeKpi = [
-    {Importo:-100, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-01"},
-    {Importo:-50, Natura:"Spese", Categoria:"KpiTest", Data:"2026-08-25"},
-  ];
+  const righeKpi = [{Importo:-3000, Natura:"Spese", Categoria:"Viaggi",
+                     Data:"2026-09-19", "Pagato da":"io", Quota:"meta"}];
+  Object.assign(Fden, {from:"2026-09-01", to:"2026-09-30", lettura:"mia"});
   const m = api.mesiPeriodo(righeKpi);
-  check("un agosto fermo al 25 non vale un mese intero (sanity)",
-        Math.abs(m - 25/31) < 0.001, String(m));
+  check("un settembre fermo al 19 non vale un mese intero (sanity)",
+        Math.abs(m - 19/30) < 0.001, String(m));
   const barraHtml = api.indicatori(righeKpi);
   const tabellaHtml = api.CARDS.dove(righeKpi);
-  const uscite = barraHtml.match(/<span>uscite \/ mese<\/span><b>([^<]*)<\/b>/);
-  const rigaCategoria = tabellaHtml.match(/>KpiTest<\/button><\/td><td>([^<]*)<\/td>/);
-  check("la barra usa mesiEffettivi, non monthsOf, per 'uscite / mese'",
-        !!uscite && uscite[1] === api.spesa(150/m), uscite && uscite[1]);
-  check("la barra e la tabella sotto dividono per lo stesso numero di mesi",
-        !!uscite && !!rigaCategoria && uscite[1] === rigaCategoria[1],
-        JSON.stringify([uscite && uscite[1], rigaCategoria && rigaCategoria[1]]));
+  const uscite = barraHtml.match(/<span>uscite<\/span><b>([^<]*)<\/b>/);
+  const rigaCategoria = tabellaHtml.match(/>Viaggi<\/button><\/td><td>([^<]*)<\/td>/);
+  check("nel mese in corso anche la barra mostra il totale reale",
+        !!uscite && uscite[1] === api.spesa(1500), uscite && uscite[1]);
+  check("la card mostra il totale reale della quota nel periodo",
+        !!rigaCategoria && rigaCategoria[1] === api.spesa(1500),
+        rigaCategoria && rigaCategoria[1]);
+  check("la card non espone piu' stime mensili o annuali",
+        tabellaHtml.includes(">nel periodo<")
+        && !tabellaHtml.includes(">al mese<")
+        && !tabellaHtml.includes(">all'anno<"));
 
   // Lo stesso passaggio a mesiEffettivi tocca anche il ramo "partial" (un
   // filtro categoria/natura/testo acceso), che scrive "mesi coperti" come
   // testo grezzo: senza arrotondare qui si rivedeva a schermo lo stesso
   // difetto di "14/55.806451612903224 mesi" (Task 2), ma in barra.
-  Fden.category = "KpiTest";
+  Fden.category = "Viaggi";
   const barraFiltrata = api.indicatori(righeKpi);
   const mesiCoperti = barraFiltrata.match(/<span>mesi coperti<\/span><b>([^<]*)<\/b>/);
   check("'mesi coperti' nella barra filtrata e' un intero, non un float grezzo",
@@ -957,10 +955,10 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
     {Importo:-10, Natura:"Ricorrenti", Merchant:"Abbonamento Test", Data:"2026-06-10"},
   ];
   const tabellaRic = api.CARDS.dove(righeRicorrenti);
-  const nota = tabellaRic.match(/(\d+)\/([\d.]+) mesi/);
+  const nota = tabellaRic.match(/(\d+) mesi/);
   check("il ramo ricorrenti compare con la sua nota", !!nota, tabellaRic);
   check("i mesi nella nota sono un numero intero, non un float grezzo",
-        !!nota && !nota[2].includes("."), nota && nota[0]);
+        !!nota && !nota[1].includes("."), nota && nota[0]);
   Object.assign(Fric, salvaFric);
 }
 

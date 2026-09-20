@@ -1542,9 +1542,8 @@ function pieChart(data, opts){
 
 // Stessa forma di legend() qui sopra, ma cliccabile: le fette sono piccole su
 // un telefono, la voce scritta deve poter scegliere la categoria anche da
-// sola. Importo al mese e quota%, la stessa lettura che la card <details>
-// dava gia' aperta prima che la torta la sostituisse.
-function pieLegend(data, mesi, opts){
+// sola. Importo nel periodo e quota%, la stessa lettura della tabella.
+function pieLegend(data, opts){
   opts = opts || {};
   const totale = data.reduce((s,d) => s + Math.abs(d.total), 0) || 1;
   return '<div class="legend dove-pie-legend">' + data.map((d,i) => {
@@ -1553,7 +1552,7 @@ function pieLegend(data, mesi, opts){
     const attr = opts.clickable
       ? ` class="hit" data-dove-pie="${esc(d.name)}"` : "";
     const testo = `${d.name}${d.nota ? " · " + d.nota : ""} `
-      + `— ${spesa(d.total/mesi)} (${quota}%)`;
+      + `— ${spesa(d.total)} (${quota}%)`;
     return `<span${attr} title="${esc(testo)}"><i style="background:${colore}"></i>`
       + `${esc(testo)}</span>`;
   }).join("") + "</div>";
@@ -1996,13 +1995,6 @@ function anniAConfronto(out){
 
 CARDS.dove = rows => {
   const vista = VISTE.some(v => v[0] === F.vista) ? F.vista : "area";
-  const m = mesiPeriodo(rows);
-  // Quando il periodo scelto e' gia' un anno (in corso o passato), "all'anno"
-  // deve essere il totale vero di quell'anno, non una proiezione: su "Anno in
-  // corso" con 8 mesi veri, media*12 inventava gli altri 4 che non sono
-  // ancora successi. Sugli altri periodi (un mese, tre mesi...) la proiezione
-  // resta quello che "all'anno" ha sempre voluto dire: a questo ritmo, un anno.
-  const annoIntero = (formaDelPeriodo() || {}).tipo === "anno";
   const out = outflow(rows);
   // Il confronto anno su anno guarda sempre tutto lo storico (rispetto agli
   // altri filtri, non al periodo): filtrato a "Anno in corso" out ha un anno
@@ -2035,7 +2027,7 @@ CARDS.dove = rows => {
       + `data-value="${esc(nome)}">${esc(nome)}</button>`
       + (o.nota ? ` <span class="dove">${esc(o.nota)}</span>` : "")
       + `</td>`
-      + `<td>${spesa(tot/m)}</td><td>${spesa(annoIntero ? tot : tot/m*12)}</td>`
+      + `<td>${spesa(tot)}</td>`
       + `<td class="dove">${quota}%</td>`
       + `<td class="${s ? "delta " + s.verso : "dove"}">`
       + `${s ? esc(s.testo) : "—"}</td>`
@@ -2044,7 +2036,7 @@ CARDS.dove = rows => {
 
   let corpo = "", dovePieHTML = "", intestazioni;
   if(vista === "area"){
-    intestazioni = ["voce", "al mese", "all'anno", "quota",
+    intestazioni = ["voce", "nel periodo", "quota",
                     conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
     // Due livelli in una tabella sola: l'area, e sotto le sue voci. Prima
     // "dentro Casa, cosa?" era un altro riquadro; qui e' la riga seguente.
@@ -2077,14 +2069,14 @@ CARDS.dove = rows => {
     const testa = scelto
       ? `<div class="dove-pie-head"><button class="link" data-dove-back="1">`
         + `&larr; categorie</button><b>${esc(scelto)}</b>`
-        + (voceScelta ? `<span class="dove-pie-tot">${spesa(voceScelta.total/m)} `
+        + (voceScelta ? `<span class="dove-pie-tot">${spesa(voceScelta.total)} `
           + `(${Math.round(Math.abs(voceScelta.total)/totale*100)}%)</span>` : "")
         + `</div>`
       : "";
     dovePieHTML = testa + pieChart(datiTorta, {clickable: !scelto})
-      + pieLegend(datiTorta, m, {clickable: !scelto});
+      + pieLegend(datiTorta, {clickable: !scelto});
   } else {
-    intestazioni = ["negozio", "al mese", "all'anno", "quota",
+    intestazioni = ["negozio", "nel periodo", "quota",
                     conf ? `su ${conf.anni[0]}` : "su un anno fa", "tx"];
     const mappa = new Map();
     for(const r of out){
@@ -2105,10 +2097,10 @@ CARDS.dove = rows => {
     } else {
       elenco.sort((a,b) => a.total - b.total);
     }
-    // m e' frazionario (l'ultimo mese si ritaglia ai giorni trascorsi):
-    // senza arrotondare si leggeva "14/55.806451612903224 mesi" a schermo.
-    const notaDi = v => vista === "ricorrenti"
-      ? `${v.mesi}/${Math.round(m)} mesi` : "";
+    // Per i ricorrenti conta soltanto la presenza storica: non rapportiamo
+    // il numero dei mesi a un periodo scelto, perche' il valore e' gia' il
+    // totale reale della finestra aperta.
+    const notaDi = v => vista === "ricorrenti" ? `${v.mesi} mesi` : "";
     for(const v of elenco.slice(0, 22))
       corpo += riga(v.name, v.total, v.n, {
         drill:"text", nota: notaDi(v),
@@ -2125,7 +2117,7 @@ CARDS.dove = rows => {
       const datiTorta = elenco.slice(0, 12)
         .map(v => ({name: v.name, total: v.total, nota: notaDi(v)}));
       dovePieHTML = pieChart(datiTorta, {clickable:false})
-        + pieLegend(datiTorta, m, {clickable:false});
+        + pieLegend(datiTorta, {clickable:false});
     }
   }
 
