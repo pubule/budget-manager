@@ -1600,7 +1600,7 @@ def source_rank(path, shared):
     return RANK_SHARED if shared else RANK_BANK
 
 
-def drop_covered_by(rows, days=3, discarded=None, merchants=()):
+def drop_covered_by(rows, days=3, discarded=None, merchants=(), bill_days=45):
     """Scarta le righe gia' coperte da una sorgente di rango superiore.
 
     Due casi, un meccanismo solo:
@@ -1616,12 +1616,32 @@ def drop_covered_by(rows, days=3, discarded=None, merchants=()):
     Le due righe devono avere lo STESSO SEGNO. Sul valore assoluto un
     accredito bancario di +60,00 cancellava una spesa condivisa di -60,00,
     che non c'entra niente con lui.
+
+    Le bollette hanno una finestra piu' larga (bill_days): su Koala la
+    bolletta si segna il giorno in cui arriva, la banca la addebita alla
+    scadenza, 2-5 settimane dopo. "Gas -607,80" del 26/01 e l'addebito AGSM
+    del 17/02 restavano due spese. La finestra larga vale solo se merchant.csv
+    dice ESPLICITAMENTE che e' lo stesso fornitore e l'importo ha i centesimi:
+    un -50,00 tondo dallo stesso supermercato un mese dopo e' un'altra spesa.
     """
     def as_date(value):
         try:
             return datetime.strptime(str(value), "%Y-%m-%d")
         except (ValueError, TypeError):
             return None
+
+    def fornitore(description):
+        # Solo merchant.csv, senza il ripiego sulle prime parole di
+        # canonical_merchant(): due causali bancarie qualsiasi darebbero lo
+        # stesso "Addebito Sepa".
+        return next((name for pattern, name in merchants
+                     if pattern.search(str(description or ""))), None)
+
+    def stessa_bolletta(one, two, distance):
+        if distance > bill_days or float(one["Importo"]).is_integer():
+            return False
+        name = fornitore(one.get("Descrizione"))
+        return name is not None and name == fornitore(two.get("Descrizione"))
 
     # Chiave con segno: una copertura vale solo per righe dello stesso verso.
     higher = defaultdict(list)
@@ -1660,7 +1680,8 @@ def drop_covered_by(rows, days=3, discarded=None, merchants=()):
                 continue
             when = as_date(rows[other].get("Data"))
             distance = abs((day - when).days) if day and when else 99
-            if distance > days:
+            if distance > days and not stessa_bolletta(row, rows[other],
+                                                       distance):
                 continue
             if not same_expense(row.get("Descrizione"),
                                 rows[other].get("Descrizione"), merchants):
@@ -2244,6 +2265,28 @@ def selftest():
     scartate = {"Splitwise", "Storico"} - {r["Conto"] for r in resto}
     assert len(scartate) == 1, \
         f"deve sparire una sola fra Splitwise e Storico, sparite: {scartate}"
+
+    # La bolletta: Koala la segna all'arrivo, la banca la addebita settimane
+    # dopo. Stesso fornitore per merchant.csv e importo coi centesimi: e' la
+    # stessa spesa, e la quota di Koala passa alla riga di banca. Un importo
+    # tondo dallo stesso fornitore un mese dopo resta un'altra spesa.
+    energia = [(re.compile(r"(?i)agsm|\bgas\b"), "Energia")]
+    bolletta = [
+        {"Data": "2026-02-17", "Descrizione": "ADDEBITO SEPA DD AGSM AIM ENERGIA",
+         "Importo": -607.80, "Conto": "UniCredit", "Rango": RANK_BANK},
+        {"Data": "2026-01-26", "Descrizione": "Gas", "Importo": -607.80,
+         "Conto": "Koala", "Rango": RANK_SHARED,
+         "Pagato da": "io", "Quota": "meta"},
+        {"Data": "2026-02-17", "Descrizione": "ADDEBITO SEPA DD AGSM AIM ENERGIA",
+         "Importo": -100.0, "Conto": "UniCredit", "Rango": RANK_BANK},
+        {"Data": "2026-01-15", "Descrizione": "Gas", "Importo": -100.0,
+         "Conto": "Koala", "Rango": RANK_SHARED},
+    ]
+    resto = drop_covered_by(bolletta, merchants=energia)
+    assert len(resto) == 3, f"attese 3 righe, trovate {len(resto)}"
+    assert resto[0].get("Quota") == "meta", "la quota di Koala non e' passata alla banca"
+    assert len(drop_covered_by(bolletta[:2])) == 2, \
+        "senza merchant.csv la finestra larga non deve scattare"
 
     # Grafie diverse dello stesso negozio devono dare lo stesso merchant,
     # altrimenti la classifica di spesa li conta come negozi distinti.
@@ -3020,6 +3063,25 @@ def merge_manual(rows, manuali):
     return [r for r in rows if r["ID"] not in manuali_ids] + manuali
 
 
+def rango_derivato(riga, conto):
+    """Il rango di una riga del derivato, scritto da run() nella colonna Rango.
+
+    Prima veniva appiattito a RANK_BANK: con gli estratti originali cancellati
+    tutto il consolidato arriva da qui, e drop_covered_by non poteva piu'
+    distinguere lo storico o Koala dalla banca. Le copie della stessa
+    transazione (stipendio UniCredit + Storico, bolletta AGSM + Koala)
+    restavano due per sempre.
+    """
+    valore = _text(riga.get("Rango"))
+    if valore.isdigit():
+        return int(valore)
+    # ponytail: ripiego per i consolidati scritti prima della colonna Rango;
+    # dopo un giro la colonna c'e' e questo ramo non scatta piu'.
+    if conto == "Storico":
+        return RANK_HISTORY
+    return RANK_SHARED if conto in ("Koala", "Splitwise") else RANK_BANK
+
+
 def read_consolidato(folder, output, gia_presenti):
     """Le transazioni del derivato che nessun export presente fornisce piu'.
 
@@ -3098,7 +3160,7 @@ def read_consolidato(folder, output, gia_presenti):
             "Conto": grezzo["Conto"],
             "Pagato da": _text(riga.get("Pagato da")),
             "Quota": _text(riga.get("Quota")),
-            "Rango": RANK_BANK,
+            "Rango": rango_derivato(riga, grezzo["Conto"]),
             **{f"{campo} {suffisso}": grezzo[campo]
                for campo, suffisso in RAW_SUFFISSO.items()},
         })
@@ -3219,10 +3281,21 @@ def run(folder, use_llm=True, output="consolidato.csv",
     raw = drop_internal_transfers(raw, discarded=scartate,
                                   transfers=giroconti)
     raw = drop_import_artifacts(raw, scartate)
-    raw = drop_covered_by(raw, discarded=scartate,
-                          merchants=config["merchants"])
 
     derivate = read_consolidato(folder, output, ids_grezze)
+    # Le coperture, a differenza degli altri passi, girano anche sulle
+    # derivate: una riga Storico del derivato e' coperta dall'estratto
+    # UniCredit esattamente come lo sarebbe la sua versione fresca. Senza,
+    # un estratto caricato dopo che lo storico era gia' solo nel derivato
+    # lasciava stipendio e mutuo contati due volte. Rifarlo su righe gia'
+    # pulite non toglie niente: una copertura trovata ora e' un doppione
+    # sfuggito prima. Gli altri passi restano sulle grezze (vedi
+    # prepara_righe() per il perche').
+    vive = drop_covered_by(raw + derivate, discarded=scartate,
+                           merchants=config["merchants"])
+    tenute = {id(r) for r in vive}
+    raw = [r for r in raw if id(r) in tenute]
+    derivate = [r for r in derivate if id(r) in tenute]
     manuali = read_manual(folder)
     if not raw and not derivate and not manuali:
         raise RuntimeError(
@@ -3277,7 +3350,7 @@ def run(folder, use_llm=True, output="consolidato.csv",
 
     columns = ["ID", "Data", "Descrizione", "Merchant", "Importo", "Conto",
                "Natura", "Categoria", "Sottocategoria", "Pagato da", "Quota",
-               "Origine", "Confidenza"] + RAW_COLUMNS
+               "Origine", "Confidenza", "Rango"] + RAW_COLUMNS
     # reindex, non [columns]: le colonne grezze (RAW_COLUMNS) esistono solo
     # sulle righe di banca, non su quelle scritte a mano. Se un giorno "rows"
     # fosse fatto di sole manuali, [columns] solleverebbe KeyError sulle

@@ -31,7 +31,8 @@
 (?i)rata mutuo|mutuo/prestito|\bmutuo\b;Mutuo casa
 (?i)domiciliazioni e utenze;Utenze domiciliate
 (?i)\bbogoni\b;Michela Bogoni
-(?i)\bgas\b|riscaldamento;Gas
+(?i)agsm|magis|\bgas\b|riscaldamento|\bluc[ea]\b;Energia
+(?i)acque veronesi|bolletta acqua;Acque Veronesi
 (?i)dalla bernardina|stazione dalla;Dalla Bernardina
 (?i)prelievo;Prelievo contante
 (?i)paypal.*decathlon;Decathlon
