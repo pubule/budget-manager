@@ -604,10 +604,28 @@ pointer-events:none;transition:opacity .4s ease}
 @media (min-width:641px){.log-velo{background:transparent}}
 body.log-on .log-velo{opacity:1;pointer-events:auto}
 /* Le due pagine affiancate: "Mostra il log completo" scorre alla seconda. */
-.log-pagine{display:flex;flex:none;width:300%;height:100%;
+.log-pagine{display:flex;flex:none;width:400%;height:100%;
 transition:transform .45s cubic-bezier(.32,.72,0,1)}
-#log.grezzo .log-pagine{transform:translateX(-33.3333%)}
-#log.coppie .log-pagine{transform:translateX(-66.6667%)}
+#log.grezzo .log-pagine{transform:translateX(-25%)}
+#log.coppie .log-pagine{transform:translateX(-50%)}
+#log.scartate .log-pagine{transform:translateX(-75%)}
+.coppia .chi{grid-column:1;font-size:12px;color:var(--dim);margin-top:-2px}
+.coppia .azioni-coppia{grid-column:1/-1;display:flex;gap:8px;margin-top:8px}
+.coppia .azioni-coppia button{flex:1;border:none;border-radius:10px;padding:8px 0;
+font:600 14px var(--sans);min-height:0;text-align:center;color:var(--accent);
+background:var(--soft)}
+.coppia .azioni-coppia button.primary{background:var(--accent);color:#fff}
+.coppia .azioni-coppia button+button::before{content:none}
+.scartata{padding:10px 16px;position:relative}
+.scartata+.scartata::before{content:"";position:absolute;top:0;left:16px;right:0;
+border-top:.5px solid var(--line)}
+.scartata .sc-testa{display:flex;gap:10px;align-items:baseline}
+.scartata .sc-testa b{flex:1;font-weight:500;font-size:15px;white-space:nowrap;
+overflow:hidden;text-overflow:ellipsis}
+.scartata .sc-testa span{font-variant-numeric:tabular-nums;font-weight:600}
+.scartata small{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+.scartata button{margin-top:6px;background:none;border:none;padding:0;min-height:0;
+color:var(--accent);font:15px var(--sans)}
 .log-nota{font-size:13px;color:var(--dim);margin:4px 4px 14px}
 .coppia{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;
 padding:10px 16px;position:relative}
@@ -617,7 +635,7 @@ border-top:.5px solid var(--line)}
 text-align:left;color:var(--accent);font:15px var(--sans);white-space:nowrap;
 overflow:hidden;text-overflow:ellipsis}
 .coppia button+button::before{content:"↔ ";color:var(--dim)}
-.coppia b{grid-column:2;grid-row:1/3;font-variant-numeric:tabular-nums;font-weight:600}
+.coppia b{grid-column:2;grid-row:1/5;font-variant-numeric:tabular-nums;font-weight:600}
 .log-pagina{width:33.3333%;height:100%;overflow-y:auto;padding:0 16px 16px;
 display:flex;flex-direction:column;font-family:var(--sans)}
 .log-barra{display:flex;align-items:center;gap:8px;padding:16px 0 6px;position:sticky;
@@ -1387,9 +1405,19 @@ button:disabled{opacity:.45;cursor:default}
         <button type="button" class="hide">.</button>
       </div>
       <p class="log-nota">Stesso giorno e stesso importo, ma descrizioni diverse: il
-        motore non le ha unite. Tocca una descrizione per trovarla in Transazioni
-        e, se e' la stessa spesa contata due volte, escluderne una.</p>
+        motore non le ha unite. Se e' la stessa spesa contata due volte, "Fondi"
+        tiene la riga della banca e toglie l'altra; se sono spese diverse,
+        "Non sono la stessa" non te la ripropone piu'.</p>
       <div id="log-coppie-lista"></div>
+    </section>
+    <!-- Le righe rimaste fuori dal bilancio, col perche'. -->
+    <section class="log-pagina" id="log-scartate">
+      <div class="log-barra">
+        <button type="button" data-log-torna="1">‹ Ricarica</button>
+        <b>Scartate</b>
+        <button type="button" class="hide">.</button>
+      </div>
+      <div id="log-scartate-lista"></div>
     </section>
   </div>
 </aside>
@@ -4659,7 +4687,7 @@ let LOG_LIVE = null;
 let LOG_TEMPI = {};
 
 const openLog = () => {
-  el("log").classList.remove("grezzo", "coppie");
+  el("log").classList.remove("grezzo", "coppie", "scartate");
   document.body.classList.add("log-on");
   aggiornaRicarica(false);
   pullLog();
@@ -4786,17 +4814,72 @@ function aggiornaRicarica(running){
   el("log-guarda").innerHTML = finito && !errore && T.movimenti !== null
     ? '<div class="log-eti">Da guardare</div><div class="log-grp">'
       + `<button type="button" class="log-riga" data-log-vai="revisione">Da rivedere<span>${T.rivedere || 0}</span><i>›</i></button>`
-      + `<button type="button" class="log-riga" data-log-vai="grezzo">Scartate<span>${T.scartate || 0}</span><i>›</i></button>`
+      + `<button type="button" class="log-riga" data-log-vai="scartate">Scartate<span>${((S && S.scartate) || []).length}</span><i>›</i></button>`
       + `<button type="button" class="log-riga" data-log-vai="coppie">Coppie non fuse`
-      + `<span class="${T.coppie ? "w" : ""}">${T.coppie}</span><i>›</i></button></div>` : "";
-  el("log-coppie-lista").innerHTML = R.coppie.length
-    ? '<div class="log-grp">' + R.coppie.map(c => '<div class="coppia">'
-        + `<button type="button" data-log-cerca="${esc(c.a)}">${esc(c.a)}</button>`
-        + `<button type="button" data-log-cerca="${esc(c.b)}">${esc(c.b)}</button>`
-        + `<b>${euro(c.importo)}</b></div>`).join("") + "</div>"
-    : '<p class="log-nota">Nessuna coppia in questo giro.</p>';
+      + `<span class="${coppieAperte(R.coppie).length ? "w" : ""}">${coppieAperte(R.coppie).length}</span><i>›</i></button></div>` : "";
+  const coppie = coppieAperte(R.coppie);
+  el("log-coppie-lista").innerHTML = coppie.length
+    ? '<div class="log-grp">' + coppie.map(([x, y], i) => '<div class="coppia">'
+        + `<button type="button" data-log-cerca="${esc(x.Descrizione || "")}">${esc(x.Descrizione || "—")}</button>`
+        + `<span class="chi">${esc(giornoLeggibile(x.Data).toLowerCase())} · ${esc(x.Conto)}</span>`
+        + `<button type="button" data-log-cerca="${esc(y.Descrizione || "")}">${esc(y.Descrizione || "—")}</button>`
+        + `<span class="chi">${esc(giornoLeggibile(y.Data).toLowerCase())} · ${esc(y.Conto)}</span>`
+        + `<b>${euro(x.Importo)}</b>`
+        + `<div class="azioni-coppia"><button type="button" class="primary" data-coppia-fondi="${i}">Fondi</button>`
+        + `<button type="button" data-coppia-diverse="${i}">Non sono la stessa</button></div>`
+        + "</div>").join("") + "</div>"
+    : '<p class="log-nota">Nessuna coppia da guardare.</p>';
+  COPPIE_APERTE = coppie;
+  // Le scartate dal file, non dal conteggio del log: e' la stessa lista,
+  // con il motivo di ognuna.
+  const scartate = (S && S.scartate) || [];
+  const aMano = s => (s["Scartata da"] || "").startsWith("esclusa a mano");
+  const riga = s => '<div class="scartata"><div class="sc-testa">'
+    + `<b>${esc(s.Descrizione || "—")}</b><span>${euro(numeroLog(s.Importo || 0))}</span></div>`
+    + `<small>${esc(giornoLeggibile(s.Data).toLowerCase())} · ${esc(s.Conto || "")}</small>`
+    + `<small>${esc((s["Scartata da"] || "").replace(/^esclusa a mano: /, ""))}</small>`
+    + (aMano(s) && s.ID ? `<button type="button" data-scartata-rimetti="${esc(s.ID)}">Rimetti nel bilancio</button>` : "")
+    + "</div>";
+  const gruppo = (titolo, lista) => lista.length
+    ? `<div class="log-eti">${titolo}</div><div class="log-grp">${lista.map(riga).join("")}</div>` : "";
+  el("log-scartate-lista").innerHTML = scartate.length
+    ? gruppo("Escluse a mano", scartate.filter(aMano))
+      + gruppo("Coperte da un'altra fonte", scartate.filter(s => !aMano(s)))
+    : '<p class="log-nota">Nessuna riga scartata.</p>';
   el("log-close").classList.toggle("hide", finito && !errore);
   el("log-fine").classList.toggle("hide", running);
+}
+
+// Le coppie del log ritrovate fra le righe del bilancio. Il log ne scrive
+// solo l'importo e le descrizioni tagliate a una larghezza fissa: qui si
+// cercano le due righe vere (stesso giorno, stesso importo, descrizione che
+// comincia cosi'), saltando quelle gia' risolte -- fuse, escluse o segnate
+// come spese diverse.
+let COPPIE_APERTE = [];
+function coppieAperte(coppie){
+  const tutte = (S && S.transactions) || [];
+  const diverse = new Set(((S && S.non_doppioni) || [])
+    .map(r => [r.id_a, r.id_b].sort().join("|")));
+  const usate = new Set(), trovate = [];
+  const inizia = (t, testo) => (t.Descrizione || "").trim().startsWith(testo.trim());
+  for(const c of coppie){
+    const stessoImporto = t => Math.abs((t.Importo || 0) - c.importo) < 0.005 && !usate.has(t.ID);
+    // Il motore accoppia entro 3 giorni (45 per le bollette, che la banca
+    // addebita tardi): qui la stessa finestra, e la riga piu' vicina vince.
+    const giorni = (p, q) => Math.abs(new Date(p.Data) - new Date(q.Data)) / 864e5;
+    let coppia = null, meglio = Infinity;
+    for(const x of tutte.filter(t => stessoImporto(t) && inizia(t, c.a)))
+      for(const y of tutte.filter(t => t.ID !== x.ID && stessoImporto(t) && inizia(t, c.b))){
+        const d = giorni(x, y);
+        if(d <= 45 && d < meglio){ meglio = d; coppia = [x, y]; }
+      }
+    if(!coppia) continue;
+    usate.add(coppia[0].ID); usate.add(coppia[1].ID);
+    if(diverse.has([coppia[0].ID, coppia[1].ID].sort().join("|"))) continue;
+    // Prima la riga che resta in una fusione: quella della banca (Rango 0).
+    trovate.push(coppia.sort((p, q) => (+p.Rango || 0) - (+q.Rango || 0)));
+  }
+  return trovate;
 }
 
 async function copiaLog(){
@@ -4854,8 +4937,46 @@ el("log-apri-raw").addEventListener("click", () => el("log").classList.add("grez
 el("log-indietro").addEventListener("click", () => el("log").classList.remove("grezzo"));
 el("log-copia").addEventListener("click", copiaLog);
 // "Da guardare": Da rivedere apre la sua scheda, il resto si legge nel log.
-el("log-coppie").addEventListener("click", ev => {
+el("log-scartate").addEventListener("click", async ev => {
+  if(ev.target.closest("[data-log-torna]")){ el("log").classList.remove("scartate"); return; }
+  const b = ev.target.closest("[data-scartata-rimetti]");
+  if(!b) return;
+  if(!await chiedi("Rimettere questa riga nel bilancio? Torna a contare nei totali.")) return;
+  b.disabled = true;
+  await post("/api/transaction", {id: b.dataset.scartataRimetti, escludi: ""});
+  await reload();
+  aggiornaRicarica(false);
+});
+el("log-coppie").addEventListener("click", async ev => {
   if(ev.target.closest("[data-log-torna]")){ el("log").classList.remove("coppie"); return; }
+  const fondi = ev.target.closest("[data-coppia-fondi]");
+  const diverse = ev.target.closest("[data-coppia-diverse]");
+  if(fondi || diverse){
+    const [tieni, togli] = COPPIE_APERTE[+(fondi || diverse).dataset[fondi ? "coppiaFondi" : "coppiaDiverse"]] || [];
+    if(!tieni) return;
+    (fondi || diverse).disabled = true;
+    if(diverse){
+      await post("/api/non-doppioni", {id_a: tieni.ID, id_b: togli.ID,
+        nota: `${tieni.Descrizione} / ${togli.Descrizione}`});
+    } else {
+      const quota = togli.Quota && togli["Pagato da"] && !tieni.Quota;
+      if(!await chiedi(`Tengo "${tieni.Descrizione}" (${tieni.Conto}) e tolgo `
+          + `"${togli.Descrizione}" (${togli.Conto}).`
+          + (quota ? " Chi ha pagato e la quota passano sulla riga che resta." : ""))){
+        fondi.disabled = false; return;
+      }
+      // Prima la quota sulla riga che resta, poi l'esclusione dell'altra:
+      // se la seconda fallisse, la spesa resterebbe contata una volta sola
+      // ma con la divisione giusta, non persa.
+      if(quota) await post("/api/transaction", {id: tieni.ID,
+        pagato_da: togli["Pagato da"], quota: togli.Quota});
+      await post("/api/transaction", {id: togli.ID, escludi:
+        `doppione della riga ${tieni.Conto} ${tieni.ID} (${tieni.Descrizione}): fusa da Coppie non fuse`});
+    }
+    await reload();
+    aggiornaRicarica(false);
+    return;
+  }
   const c = ev.target.closest("[data-log-cerca]");
   if(!c) return;
   // In Transazioni con la descrizione gia' cercata e su tutto il periodo:
@@ -4870,6 +4991,7 @@ el("log-esito").addEventListener("click", ev => {
   if(!b) return;
   if(b.dataset.logVai === "grezzo"){ el("log").classList.add("grezzo"); return; }
   if(b.dataset.logVai === "coppie"){ el("log").classList.add("coppie"); return; }
+  if(b.dataset.logVai === "scartate"){ el("log").classList.add("scartate"); return; }
   closeLog();
   TAB = b.dataset.logVai; SELECTED.clear(); SELEZIONE = false; render();
 });

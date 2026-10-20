@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  txCardsHTML, TABS, TAB_CODA, posizionaTablist, DOVE_APERTE, schedaTxHTML, nomeLeggibile,
- patternLeggibile, schedaCategoriaHTML, schedaNuovaCategoriaHTML, riassuntoLog,
+ patternLeggibile, schedaCategoriaHTML, schedaNuovaCategoriaHTML, riassuntoLog, coppieAperte,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
@@ -783,6 +783,22 @@ check("il nome in maiuscolo della banca diventa leggibile",
         !rv.includes('data-conferma="di1"') && rv.includes('data-conferma="dub1"')
         && !api.schedaTxHTML(di, {editable:false}).includes("data-conferma="));
   api.setState(state); Object.assign(Fdi, salvaFdi);
+}
+{
+  // Coppie non fuse: dal log alle due righe vere; quelle segnate come spese
+  // diverse non si ripropongono; la riga della banca viene prima.
+  const banca = {ID:"b1", Data:"2026-01-14", Descrizione:"PRELIEVO MASTERCARD DEL 14/01/26 CARTA", Importo:-120, Conto:"UniCredit", Rango:0};
+  const sw = {ID:"k1", Data:"2026-01-14", Descrizione:"Regalo Elena", Importo:-120, Conto:"Koala", Rango:1, Quota:"meta", "Pagato da":"io"};
+  const log = [{importo:-120, a:"Regalo Elena", b:"PRELIEVO MASTERCARD DEL 14/01/26 C"}];
+  api.setState({...state, transactions:[sw, banca], non_doppioni:[]});
+  const cp = api.coppieAperte(log);
+  check("Coppie: ritrovate le due righe, prima quella della banca",
+        cp.length === 1 && cp[0][0].ID === "b1" && cp[0][1].ID === "k1");
+  api.setState({...state, transactions:[sw, banca], non_doppioni:[{id_a:"k1", id_b:"b1"}]});
+  check("Coppie: quelle segnate come diverse spariscono", api.coppieAperte(log).length === 0);
+  api.setState({...state, transactions:[banca], non_doppioni:[]});
+  check("Coppie: una gia' fusa (riga esclusa) sparisce", api.coppieAperte(log).length === 0);
+  api.setState(state);
 }
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);

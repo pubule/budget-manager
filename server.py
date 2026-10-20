@@ -90,6 +90,9 @@ SCHEMA = {
                             "transazioni", "categoria_finale",
                             "sottocategoria_finale"],
     "transazioni.csv": ["id", "data", "descrizione", "importo", "conto", "nota"],
+    # Le coppie "stesso giorno, stesso importo" che l'utente ha detto non
+    # essere la stessa spesa: l'app smette di proporle. Gli ID in ordine.
+    "non_doppioni.csv": ["id_a", "id_b", "nota"],
 }
 
 # Il PRIMO riquadro acceso prende la colonna larga della dashboard e ne porta
@@ -355,6 +358,10 @@ class State:
             "overrides": read_rows("override.csv"),
             "corrections": read_rows("correzioni.csv"),
             "layout": read_layout(),
+            # Per la pagina "Scartate" di Ricarica: cosa e' rimasto fuori
+            # dal bilancio e perche'.
+            "scartate": read_rows("scartate.csv"),
+            "non_doppioni": read_rows("non_doppioni.csv"),
             "partita": bilancio.load_partita(FOLDER / "partita.csv"),
             "has_exports": self.has_exports(),
             # Se i dati vengono dal derivato invece che dagli export,
@@ -954,6 +961,20 @@ class Handler(BaseHTTPRequestHandler):
                     letto.update(bilancio.suggerisci_categoria(
                         FOLDER, letto["negozio"]))
                 return self.send_json(letto)
+            if route == "/api/non-doppioni":
+                # Solo un promemoria per l'interfaccia: non cambia nessun
+                # numero, quindi niente STATE.refresh().
+                coppia = sorted([(payload.get("id_a") or "").strip(),
+                                 (payload.get("id_b") or "").strip()])
+                if not all(coppia):
+                    return self.fail(400, "servono i due id")
+                righe = [r for r in read_rows("non_doppioni.csv")
+                         if sorted([r.get("id_a", ""), r.get("id_b", "")]) != coppia]
+                if not payload.get("togli"):
+                    righe.append({"id_a": coppia[0], "id_b": coppia[1],
+                                  "nota": (payload.get("nota") or "").strip()})
+                write_rows("non_doppioni.csv", righe)
+                return self.send_json({"ok": True})
             if route in ACTIONS:
                 risultato = ACTIONS[route](payload)
                 STATE.refresh(use_llm=False)
