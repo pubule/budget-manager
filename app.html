@@ -764,7 +764,19 @@ color:var(--dim)}
      niente cornice di card, giorni come sezioni, righe in gruppi arrotondati.
      div.bl-tx e' la riga nuova; details.bl-tx resta per "Con Michela". --- */
   .card.lista-tx{background:none;box-shadow:none;padding:0}
-  .card.lista-tx>.head,.card.lista-tx>.note{display:none}
+  .card.lista-tx>.head,.card.lista-tx>.note,
+  .card.lista-tx>.verdetto-partita{display:none}
+  /* "Con Michela": il saldo in cima, grande, come il saldo di Apple Cash. */
+  .michela-hero{display:flex;flex-direction:column;align-items:center;gap:2px;
+    background:var(--card);border-radius:16px;padding:18px 16px 16px;
+    margin-top:4px;text-align:center;font-family:var(--sans)}
+  .michela-hero span{font-size:15px;color:var(--dim);font-weight:500}
+  .michela-hero b{font-size:40px;font-weight:700;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums}
+  .michela-hero b.pos{color:var(--in)}
+  .michela-hero b.neg{color:var(--out)}
+  .michela-hero small{font-size:13px;color:var(--dim)}
+  div.bl-tx .amt.neg{color:var(--out)}
   .tx-riepilogo{font:13px var(--sans);color:var(--dim);margin:2px 4px 0;
     font-variant-numeric:tabular-nums}
   .tx-giorno{display:flex;justify-content:space-between;align-items:baseline;
@@ -1915,7 +1927,7 @@ function lineChart(labels, series, dentro){
 const legend = series => '<div class="legend">' + series.map(s =>
   `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("") + "</div>";
 
-/// Ciambella scritta a mano come lineChart qui sopra: nessuna libreria di
+// Ciambella scritta a mano come lineChart qui sopra: nessuna libreria di
 // charting nel progetto. opts.clickable aggiunge data-dove-pie a ogni fetta
 // (e classe "hit"): usato solo al primo livello, le sottocategorie non hanno
 // un terzo livello sotto, solo il bottone indietro le richiude. I colori
@@ -2180,33 +2192,54 @@ function apriScheda(id){
 const euroSegno = v => (v > 0 ? "+" : "") + euro(v);
 const chiudiScheda = () => { if(el("tx-scheda").open) el("tx-scheda").close(); };
 
-// Stessa struttura di txCardsHTML (stesso <details class="bl-tx">, stesso
-// riquadro sommario+corpo): solo di lettura, non c'e' niente da correggere o
-// confermare qui dentro, il registro e' un conto che si guarda, non una
-// transazione da smistare.
-function michelaCardsHTML(righe, CHI){
+// "Con Michela" da smartphone, nello stile di Transazioni: in cima il saldo
+// grande, sotto le spese divise come righe di Wallet. A destra non l'importo
+// ma quanto quella riga sposta il conto fra i due; nell'intestazione del
+// giorno il saldo a fine giornata. Toccare una riga apre la sua scheda, da
+// cui si cambiano chi ha pagato e la quota.
+function michelaCardsHTML(righe, CHI, r){
   if(!righe.length) return "";
-  return '<div class="bl-tx-wrap"><div class="bl-txlist">' + righe.map(t => {
-    const sommario = '<summary>'
-      + `<span class="who"><span class="d">${esc(t.Data)}</span>`
-      + `<div class="m">${esc((t.Descrizione||"").slice(0,52))}</div></span>`
-      + `<span class="amt">${spesa(t.Importo)}</span></summary>`;
-    const campi = `<div class="bl-field-row">`
-      + `<div class="bl-field"><label>Chi ha pagato</label><div class="val">`
-      + `${esc(CHI[t["Pagato da"]] || "—")}</div></div>`
-      + `<div class="bl-field"><label>Quota</label><div class="val">`
-      + `${esc(t.Quota || "—")}</div></div></div>`
-      + `<div class="bl-field-row">`
-      + `<div class="bl-field"><label>Effetto</label>`
-      + `<div class="val delta ${t.effetto >= 0 ? "meglio" : "peggio"}">`
-      + `${t.effetto >= 0 ? "+" : ""}${euro(t.effetto)}</div></div>`
-      + `<div class="bl-field"><label>Saldo dopo</label><div class="val">`
-      + `${euro(t.saldo)}</div></div></div>`;
-    // bl-dove: stessa griglia di bl-tx ma a due colonne, senza il posto per
-    // il checkbox -- qui non c'e' selezione multipla, un'altra colonna
-    // vuota da 26px avrebbe solo schiacciato data e descrizione.
-    return `<details class="bl-tx bl-dove">${sommario}<div class="body">${campi}</div></details>`;
-  }).join("") + "</div></div>";
+  const lei = (r && r.controparte) || "lei";
+  // L'ordine cronologico in cui registro() ha calcolato i saldi: serve a
+  // sapere quale riga chiude la giornata, qualunque sia l'ordine a schermo.
+  const ordine = new Map(((r && r.righe) || righe).map((t, i) => [t.ID, i]));
+  const perGiorno = SORT_MICHELA.col === "Data";
+  const gruppi = [];
+  for(const t of righe){
+    const g = gruppi[gruppi.length-1];
+    if(g && (!perGiorno || g.data === t.Data)) g.righe.push(t);
+    else gruppi.push({data: t.Data, righe: [t]});
+  }
+  const saldo = r ? r.saldo : 0;
+  const dal = r && r.dal ? giornoLeggibile(r.dal).replace(/^\S+ /, "") : "";
+  const eroe = '<div class="michela-hero">'
+    + `<span>${saldo >= 0 ? `${esc(lei)} ti deve` : `Devi a ${esc(lei)}`}</span>`
+    + `<b class="${saldo >= 0 ? "pos" : "neg"}">${euro(Math.abs(saldo))}</b>`
+    + `<small>${dal ? `dal ${esc(dal)} · ` : ""}saldo di partenza `
+    + `${euro((S.partita && S.partita.saldo) || 0)}</small></div>`;
+  const riga = t => {
+    const saldoRiga = t.Quota === "saldo";
+    const chi = t["Pagato da"] === "io" ? "Pagato da te"
+      : `Pagato da ${CHI[t["Pagato da"]] || lei}`;
+    return `<div class="bl-tx" data-tx-apri="${esc(t.ID)}">`
+      + `<span class="tx-ico" style="background:${saldoRiga ? "var(--net)" : coloreCategoria(t)}">`
+      + `${saldoRiga ? "⇄" : esc((t.Categoria || "?").charAt(0).toUpperCase())}</span>`
+      + `<span class="who"><span class="m">${esc(nomeLeggibile(t))}</span>`
+      + `<span class="tx-sub">${saldoRiga ? "Rimborso" : esc(chi)}`
+      + `${t.Quota && !saldoRiga ? " · " + esc(ETICHETTA_QUOTA[t.Quota] || t.Quota) : ""}`
+      + ` · ${spesa(t.Importo)}</span></span>`
+      + `<span class="amt ${t.effetto >= 0 ? "pos" : "neg"}">${euroSegno(t.effetto)}`
+      + (perGiorno ? "" : `<small>saldo ${euro(t.saldo)}</small>`) + "</span></div>";
+  };
+  return '<div class="bl-tx-wrap"><div class="bl-txlist">' + eroe
+    + gruppi.map(g => {
+      const ultima = g.righe.reduce((a, b) =>
+        (ordine.get(b.ID) ?? 0) > (ordine.get(a.ID) ?? 0) ? b : a);
+      return (perGiorno
+        ? `<div class="tx-giorno"><b>${esc(giornoLeggibile(g.data))}</b>`
+          + `<span>saldo ${euro(ultima.saldo)}</span></div>` : "")
+        + '<div class="tx-grp">' + g.righe.map(riga).join("") + "</div>";
+    }).join("") + "</div></div>";
 }
 
 // --------------------------------------------------------------------------
@@ -3183,7 +3216,7 @@ VIEWS.partita = () => {
   // e card mobile: stessa logica del resto del file, non due ordinamenti
   // separati da tenere allineati.
   const ordinate = sortedRowsBy(SORT_MICHELA, r.righe);
-  return '<div class="card"><div class="head"><h2>Con '
+  return '<div class="card lista-tx"><div class="head"><h2>Con '
     + esc(r.controparte) + '</h2>'
     + `<span class="mini">dal ${esc(r.dal)}, saldo di partenza `
     + `${euro((S.partita && S.partita.saldo) || 0)}</span></div>`
@@ -3204,7 +3237,7 @@ VIEWS.partita = () => {
           euro(t.saldo)]),
         [2,5,6], true)
     + "</div>"
-    + michelaCardsHTML(ordinate, CHI)
+    + michelaCardsHTML(ordinate, CHI, r)
     + '<p class="note">Positivo vuol dire che '
     + esc(r.controparte) + ' deve a te. Un <b>saldo</b> e\' il rimborso '
     + 'stesso: non e\' una spesa, e muove il conto per intero. Il periodo qui '

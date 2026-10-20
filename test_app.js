@@ -699,6 +699,18 @@ check("la scheda di Da rivedere offre confermo e regola",
 check("il nome in maiuscolo della banca diventa leggibile",
       api.nomeLeggibile({Descrizione:"ANTHROPIC* CLAUDE SUB"}) === "Anthropic Claude Sub"
       && api.nomeLeggibile({Descrizione:"x", Merchant:"Enel Energia"}) === "Enel Energia");
+{
+  // "Con Michela" da smartphone: saldo in cima e righe che aprono la scheda.
+  api.setState(Object.assign({}, state, {transactions: [
+    {ID:"cm1", Data:"2026-01-10", Descrizione:"Spesa", Importo:-60, Categoria:"Casa",
+     "Pagato da":"io", Quota:"meta"}],
+    partita: {dal:"2026-01-01", saldo:0, controparte:"Lei"}}));
+  const cm = api.VIEWS.partita(api.filtered());
+  check('"Con Michela" mobile: saldo in cima e righe che aprono la scheda',
+        cm.includes('class="michela-hero"') && cm.includes('data-tx-apri="cm1"')
+        && cm.includes("Lei ti deve") && cm.includes("+30"));
+  api.setState(state);
+}
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);
 // "Altro" (tab bar da smartphone): stesse 3 schede di coda, stesso data-tab
