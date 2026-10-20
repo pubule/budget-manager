@@ -2257,7 +2257,8 @@ const ETICHETTA_QUOTA = {meta:"metà", tutto:"tutto", saldo:"saldo"};
 // scheda di dettaglio, o in modalita' "Seleziona" la spunta.
 function rigaTx(t, opts){
   const tag = (t.Quota ? `<span class="tx-tag">${esc(ETICHETTA_QUOTA[t.Quota] || t.Quota)}</span>` : "")
-    + (opts.editable && (t.Confidenza ?? 1) < 1 ? '<span class="tx-tag w">da rivedere</span>' : "");
+    + (daIdentificare(t) ? '<span class="tx-tag w">da assegnare</span>'
+       : opts.editable && (t.Confidenza ?? 1) < 1 ? '<span class="tx-tag w">da rivedere</span>' : "");
   const mio = importoMio(t);
   return `<div class="bl-tx" data-tx-apri="${esc(t.ID)}">`
     + `<span class="ck${SELECTED.has(t.ID) ? " on" : ""}">`
@@ -2303,8 +2304,9 @@ function schedaTxHTML(t, opts){
     return testa
       + '<div class="scheda-grp">' + cella("Categoria", categorySelect(whole(t), t.ID)) + "</div>"
       + '<div class="scheda-grp">'
-      + `<button type="button" class="azione" data-conferma="${id}" data-cat="${esc(whole(t))}">`
-      + "Confermo la categoria</button>"
+      + (daIdentificare(t) ? ""
+         : `<button type="button" class="azione" data-conferma="${id}" data-cat="${esc(whole(t))}">`
+           + "Confermo la categoria</button>")
       + `<button type="button" class="azione" data-rule="${esc(t.Merchant || "")}" data-id="${id}">`
       + `Crea una regola${t.Merchant ? " per " + esc(t.Merchant) : ""}</button></div>`;
   }
@@ -3039,8 +3041,17 @@ CARDS.andamento = () => {
        : "");
 };
 
+// "Da identificare" e' il segnaposto di quando non si sa ancora cos'e' una
+// spesa: una regola (i prelievi di contanti) o una correzione a mano lo
+// assegnano con certezza, quindi con confidenza 1, ma la riga resta da
+// sistemare. Da rivedere = il motore non e' sicuro, oppure la categoria
+// stessa dice che non si sa.
+const DA_IDENTIFICARE = "Da identificare";
+const daIdentificare = t => (t.Categoria || "") === DA_IDENTIFICARE;
+const daRivedere = t => (t.Confidenza ?? 1) < 1 || daIdentificare(t);
+
 CARDS.revisione = rows => {
-  const todo = rows.filter(t => (t.Confidenza ?? 1) < 1);
+  const todo = rows.filter(daRivedere);
   if(!todo.length)
     return '<p class="note">Niente da rivedere: ogni riga ha una categoria '
       + 'di cui il motore e\' sicuro.</p>';
@@ -3225,8 +3236,11 @@ function bulkBar(opts){
 VIEWS.revisione = rows => {
   // Prima le meno sicure, e a parita' di confidenza le piu' recenti: le
   // righe del 2022 sono poche e vecchie, correggerle per prime non serve.
-  const todo = rows.filter(t => (t.Confidenza ?? 1) < 1)
-    .sort((a,b) => (a.Confidenza||0) - (b.Confidenza||0)
+  // Le "Da identificare" in cima: aspettano una categoria vera, non una
+  // conferma.
+  const todo = rows.filter(daRivedere)
+    .sort((a,b) => (daIdentificare(b) - daIdentificare(a))
+                   || (a.Confidenza||0) - (b.Confidenza||0)
                    || (b.Data||"").localeCompare(a.Data||""));
   if(!todo.length) return '<div class="card"><p class="note">Niente da rivedere '
     + 'con i filtri attuali.</p></div>';
@@ -3240,7 +3254,9 @@ VIEWS.revisione = rows => {
     + 'si ripete conviene <b>\"regola\"</b>, che vale anche per le prossime '
     + 'volte. Se e\' sbagliata, cambiala nel <b>menu</b>. E se non fai niente '
     + 'non succede nulla: la categoria proposta resta in vigore. Spunta piu\' '
-    + 'righe per confermarle o ricategorizzarle tutte insieme.</p>'
+    + 'righe per confermarle o ricategorizzarle tutte insieme. Le righe '
+    + '<b>Da identificare</b> invece aspettano una categoria vera: sceglila '
+    + 'nel menu.</p>'
     + bulkBar({extra: `<button class="link" data-bulk-confirm="1">confermo selezionate</button>`})
     + '<div class="desktop-rows">'
     + tableHTML(['<input type="checkbox" data-select-all="1">', "data","descrizione",
@@ -3251,8 +3267,9 @@ VIEWS.revisione = rows => {
           euro(t.Importo), esc(whole(t)||"—"),
           (t.Confidenza ?? 0).toFixed(2),
           categorySelect(whole(t), t.ID)
-            + ` <button class="link" data-conferma="${esc(t.ID)}"`
-            + ` data-cat="${esc(whole(t))}">confermo</button>`
+            // Confermare "Da identificare" la fisserebbe cosi': qui si sceglie.
+            + (daIdentificare(t) ? "" : ` <button class="link" data-conferma="${esc(t.ID)}"`
+            + ` data-cat="${esc(whole(t))}">confermo</button>`)
             + ` <button class="link" data-rule="${esc(t.Merchant||"")}"`
             + ` data-id="${esc(t.ID)}">regola</button>`]),
         [4,6], true)
@@ -3724,7 +3741,7 @@ function render(){
   // Le sezioni, con il lavoro arretrato scritto sopra a "Da rivedere": una
   // scheda che nasconde il proprio arretrato non viene mai aperta.
   const arretrato = ((S && S.transactions) || [])
-    .filter(x => (x.Confidenza ?? 1) < 1).length;
+    .filter(daRivedere).length;
   // Smartphone, liste di transazioni: "Seleziona" e "+" in alto, il campo
   // Cerca sotto il titolo; mentre si seleziona il titolo conta le scelte e
   // la tab bar lascia il posto alle azioni.
@@ -4301,7 +4318,8 @@ async function gestisciClick(t){
     // categoria gia' proposta per ciascuna, non ne sceglie una comune.
     const senzaCategoria = [...SELECTED].filter(id => {
       const riga = (S.transactions || []).find(x => x.ID === id);
-      return riga && !whole(riga);
+      // "Da identificare" non e' una categoria da confermare: va scelta.
+      return riga && (!whole(riga) || daIdentificare(riga));
     });
     if(senzaCategoria.length)
       return avvisa(`${senzaCategoria.length} delle selezionate non hanno `

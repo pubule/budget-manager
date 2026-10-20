@@ -757,6 +757,27 @@ check("il nome in maiuscolo della banca diventa leggibile",
         && Math.abs(R.totali.entrate - 166353.23) < 0.01 && !R.errore,
         JSON.stringify(R.det));
 }
+{
+  // "Da identificare" con confidenza piena (da regola o a mano) e' comunque
+  // da rivedere, in cima, e senza "confermo": va scelta una categoria vera.
+  const di = {ID:"di1", Data:"2025-09-08", Descrizione:"PRELIEVO", Importo:-100,
+              Categoria:"Da identificare", Sottocategoria:"", Confidenza:1};
+  const certa = {ID:"ok1", Data:"2025-09-09", Descrizione:"Esselunga", Importo:-20,
+                 Categoria:"Spesa", Sottocategoria:"", Confidenza:1};
+  const dubbia = {ID:"dub1", Data:"2025-09-10", Descrizione:"Boh", Importo:-5,
+                  Categoria:"Svago", Sottocategoria:"", Confidenza:0.4};
+  const Fdi = api.getF(); const salvaFdi = {...Fdi};
+  Object.assign(Fdi, {from:"", to:"", account:"", nature:"", category:"", sub:"", text:""});
+  api.setState({...state, transactions: [certa, dubbia, di]});
+  const rv = api.VIEWS.revisione(api.filtered());
+  check('"Da identificare" compare in Da rivedere, prima delle dubbie',
+        rv.includes('data-tx-apri="di1"') && !rv.includes('data-tx-apri="ok1"')
+        && rv.indexOf('data-tx-apri="di1"') < rv.indexOf('data-tx-apri="dub1"'));
+  check('"Da identificare" non offre "confermo"',
+        !rv.includes('data-conferma="di1"') && rv.includes('data-conferma="dub1"')
+        && !api.schedaTxHTML(di, {editable:false}).includes("data-conferma="));
+  api.setState(state); Object.assign(Fdi, salvaFdi);
+}
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);
 // "Altro" (tab bar da smartphone): stesse 3 schede di coda, stesso data-tab
