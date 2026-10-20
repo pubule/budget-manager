@@ -52,7 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  txCardsHTML, TABS, TAB_CODA, posizionaTablist, DOVE_APERTE, schedaTxHTML, nomeLeggibile,
- patternLeggibile, schedaCategoriaHTML,
+ patternLeggibile, schedaCategoriaHTML, schedaNuovaCategoriaHTML, riassuntoLog,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
@@ -727,10 +727,35 @@ check("il nome in maiuscolo della banca diventa leggibile",
   check("il pattern si legge senza la sintassi",
         api.patternLeggibile("(?i)Zoom.*Progress") === "Zoom … Progress"
         && api.patternLeggibile("(?i)amzn|amazon") === "amzn · amazon");
+  check("Categorie: si crea una voce nuova da desktop e da smartphone",
+        cat.includes('data-cat-nuova="1"'));
+  const nc = api.schedaNuovaCategoriaHTML();
+  check("la scheda nuova categoria chiede area, sottocategoria e natura",
+        ['id="nc-area"', 'id="nc-sotto"', "data-nc-natura=", "data-cat-crea="]
+          .every(a => nc.includes(a)));
   const sc = api.schedaCategoriaHTML(state.categories[0]);
   check("la scheda categoria ha natura e azioni",
         sc.includes("data-natura-set=") && sc.includes("data-cat-merge=")
         && sc.includes("data-cat-drop="));
+}
+{
+  // La pagina Ricarica legge i passi e i totali dal testo del log.
+  const R = api.riassuntoLog(["categorie e storico", "  71 regole caricate da regole.csv",
+    "  233 override manuali da override.csv", "  47 merchant canonici da merchant.csv",
+    "EXPORT", "  consolidato.csv: 1999 transazioni riprese, nessun export",
+    "  8 coppie non fuse: stesso importo e data", "", "categorizzazione",
+    "    1368  regola", "     376  storico-esatto", "     214  override",
+    "1992 transazioni -> consolidato.csv", "0 da controllare -> da_rivedere.csv",
+    "9 scartate -> scartate.csv", "entrate     166,353.23", "uscite     -158,798.01",
+    "risparmio     7,555.22"]);
+  check("Ricarica: quattro passi riconosciuti nel log",
+        ["regole", "estratti", "categorie", "totali"].every(k => R.inizio[k] !== undefined));
+  check("Ricarica: dettagli e totali letti dal log",
+        R.det.regole === "71 regole · 233 correzioni · 47 negozi"
+        && R.det.categorie.startsWith("1.368 da regola")
+        && R.totali.movimenti === 1992 && R.totali.scartate === 9 && R.totali.coppie === 8
+        && Math.abs(R.totali.entrate - 166353.23) < 0.01 && !R.errore,
+        JSON.stringify(R.det));
 }
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);

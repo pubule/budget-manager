@@ -83,6 +83,11 @@ border-radius:20px;padding:1px 7px}
 max-height:94dvh;border-radius:12px 12px 0 0;background:var(--bg);color:var(--ink);
 overflow-y:auto;font-family:var(--sans)}
 #tx-scheda::backdrop{background:rgba(0,0,0,.4)}
+/* Su schermo largo (la nuova categoria si crea anche da desktop) la scheda
+   e' un riquadro al centro, non un foglio largo quanto la finestra. */
+@media (min-width:641px){
+  #tx-scheda{margin:auto;max-width:460px;border-radius:14px;max-height:86vh}
+}
 #tx-scheda-corpo{padding:6px 16px calc(24px + env(safe-area-inset-bottom,0px))}
 .scheda-barra{display:flex;align-items:center;padding:14px 0 4px;position:relative}
 .scheda-barra::before{content:"";position:absolute;top:4px;left:50%;width:36px;
@@ -580,26 +585,99 @@ padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
 .quick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .quick .anchor{font-size:11px;color:var(--dim);margin-left:auto}
 input[data-rule-pattern]{min-width:340px;font-family:ui-monospace,monospace;font-size:12px}
-/* Il log vive in un pannello a destra: la pagina si stringe invece di
-   finirgli sotto, cosi' si legge la dashboard mentre il modello lavora. */
-#log{position:fixed;top:0;right:0;bottom:0;width:440px;background:var(--card);
-border-left:.5px solid var(--line);display:none;flex-direction:column;z-index:20;
-box-shadow:-12px 0 40px rgba(0,0,0,.08)}
-body.log-on #log{display:flex}
-body.log-on .wrap{margin-right:440px}
-#log .top{display:flex;align-items:center;gap:8px;padding:10px 12px;
-border-bottom:1px solid var(--line);font:12px var(--sans)}
-#log .top b{font-size:15px;color:var(--ink);font-weight:600}
-#log pre{margin:0;padding:10px 12px;overflow:auto;flex:1;white-space:pre-wrap;
-word-break:break-word;font:11px/1.5 ui-monospace,SFMono-Regular,monospace;
-color:var(--dim)}
-#log .llm{color:var(--ink)}
-#log .ok{color:var(--accent)}
-#log .ko{color:var(--warn)}
-#log .think{opacity:.65;font-style:italic}
+/* Ricarica e log: un pannello sospeso che scivola da destra (su telefono
+   sale dal basso, vedi sotto i 640px) con la curva dei fogli di iOS. Resta
+   sempre nel DOM e si muove con transform: con display:none non ci sarebbe
+   niente da animare. visibility arriva in ritardo alla chiusura, cosi' il
+   pannello resta visibile finche' non e' uscito del tutto. */
+#log{position:fixed;top:12px;right:12px;bottom:12px;width:420px;max-width:calc(100% - 24px);
+background:var(--bg);border-radius:16px;z-index:50;overflow:hidden;display:flex;
+box-shadow:0 0 0 .5px var(--line),0 20px 60px rgba(0,0,0,.3);
+transform:translateX(calc(100% + 24px));visibility:hidden;
+transition:transform .5s cubic-bezier(.32,.72,0,1),visibility 0s linear .5s}
+body.log-on #log{transform:none;visibility:visible;
+transition:transform .5s cubic-bezier(.32,.72,0,1),visibility 0s}
+.log-velo{position:fixed;inset:0;z-index:49;background:rgba(0,0,0,.35);opacity:0;
+pointer-events:none;transition:opacity .4s ease}
+/* Su desktop la dashboard resta da leggere accanto: il velo c'e' (chiude al
+   tocco) ma non scurisce. */
+@media (min-width:641px){.log-velo{background:transparent}}
+body.log-on .log-velo{opacity:1;pointer-events:auto}
+/* Le due pagine affiancate: "Mostra il log completo" scorre alla seconda. */
+.log-pagine{display:flex;flex:none;width:200%;height:100%;
+transition:transform .45s cubic-bezier(.32,.72,0,1)}
+#log.grezzo .log-pagine{transform:translateX(-50%)}
+.log-pagina{width:50%;height:100%;overflow-y:auto;padding:0 16px 16px;
+display:flex;flex-direction:column;font-family:var(--sans)}
+.log-barra{display:flex;align-items:center;gap:8px;padding:16px 0 6px;position:sticky;
+top:0;background:var(--bg);z-index:1}
+.log-barra b{flex:1;text-align:center;font-size:17px;font-weight:600}
+.log-barra button{background:none;border:none;color:var(--accent);font:17px var(--sans);
+padding:0;min-width:64px;text-align:left;min-height:0}
+.log-barra button:last-child{text-align:right}
+.log-barra .forte{font-weight:600}
+.log-barra button.hide{display:block;visibility:hidden}
+.log-hero{text-align:center;padding:14px 0 18px}
+.log-hero h3{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.log-hero p{margin:4px 0 0;font-size:14px;color:var(--dim)}
+.lh-ico{width:64px;height:64px;border-radius:50%;margin:0 auto 12px;display:grid;
+place-items:center;color:#fff;font:700 32px var(--sans)}
+.lh-ico.ok{background:var(--in);animation:spunta .5s cubic-bezier(.32,.72,0,1)}
+.lh-ico.ok svg{width:34px;height:34px}
+.lh-ico.err{background:var(--out)}
+.lh-ico.gira{border:6px solid var(--soft);border-top-color:var(--accent);
+animation:girare .9s linear infinite}
+@keyframes spunta{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.log-kpi:not(:empty){display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
+.log-kpi div{background:var(--card);border-radius:12px;padding:10px 12px;min-width:0}
+.log-kpi span{display:block;font-size:12px;color:var(--dim)}
+.log-kpi b{font-size:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.log-kpi .pos{color:var(--in)}.log-kpi .neg{color:var(--out)}
+.log-eti{font-size:13px;color:var(--dim);text-transform:uppercase;margin:0 16px 6px}
+.log-grp{background:var(--card);border-radius:12px;overflow:hidden;margin-bottom:20px;flex:none}
+.log-riga{display:flex;align-items:center;gap:8px;width:100%;min-height:46px;padding:0 16px;
+border:none;border-radius:0;background:none;color:var(--ink);font:16px var(--sans);
+text-align:left;position:relative}
+.log-riga+.log-riga::before,.log-passo+.log-passo::before{content:"";position:absolute;
+top:0;left:16px;right:0;border-top:.5px solid var(--line)}
+.log-passo+.log-passo::before{left:54px}
+.log-riga span{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
+.log-riga span.w{color:var(--out)}
+.log-riga i{font-style:normal;color:var(--dim);font-size:18px;opacity:.6}
+.log-riga.link{color:var(--accent)}.log-riga.link i{margin-left:auto}
+.log-riga:hover{filter:none;background:var(--soft)}
+.log-passo{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;
+min-height:56px;padding:8px 14px;position:relative}
+.lp-ico{width:24px;height:24px;border-radius:50%;display:grid;place-items:center}
+.log-passo.fatto .lp-ico{background:var(--in)}
+.log-passo.fatto .lp-ico::after{content:"";width:6px;height:11px;margin-top:-3px;
+border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.log-passo.corre .lp-ico{border:3px solid var(--soft);border-top-color:var(--accent);
+animation:girare .9s linear infinite}
+.log-passo.attesa .lp-ico{border:1.5px solid var(--dim);opacity:.5}
+.lp-txt b{display:block;font-size:16px;font-weight:400}
+.lp-txt small{display:block;font-size:13px;color:var(--dim)}
+.log-passo.attesa b{color:var(--dim)}
+.log-passo em{font-style:normal;font-size:13px;color:var(--dim);
+font-variant-numeric:tabular-nums}
+/* I passi entrano uno dopo l'altro ogni volta che la scheda si apre. */
+body.log-on .log-passo{animation:passoEntra .45s cubic-bezier(.32,.72,0,1) both}
+body.log-on .log-passo:nth-child(2){animation-delay:.06s}
+body.log-on .log-passo:nth-child(3){animation-delay:.12s}
+body.log-on .log-passo:nth-child(4){animation-delay:.18s}
+@keyframes passoEntra{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.log-stato-riga{display:flex;align-items:center;gap:8px;margin:4px 2px 10px}
+.log-stato-riga .mini{flex:1;font-size:13px}
+.log-stato-riga button{background:none;border:none;color:var(--accent);font:600 15px var(--sans);
+padding:0;min-height:0}
+#log pre{margin:0;padding:12px 14px;overflow:auto;flex:1;white-space:pre-wrap;
+word-break:break-word;font:11.5px/1.55 ui-monospace,SFMono-Regular,monospace;
+color:var(--dim);background:var(--card);border-radius:12px}
+#log-body .llm{color:var(--ink)}
+#log-body .ok{color:var(--accent)}
+#log-body .ko{color:var(--warn)}
+#log-body .think{opacity:.65;font-style:italic}
 @media (max-width:1100px){
-  #log{width:100%;border-left:none}
-  body.log-on .wrap{margin-right:0;display:none}
   /* Sotto questa larghezza la spalla non ci sta di fianco: torna una fascia
      in cima, con sezioni e azioni in orizzontale. Se restasse alta 100vh
      mangerebbe tutto lo schermo. */
@@ -877,22 +955,14 @@ color:var(--dim)}
   .switch-ios input:checked+span{background:#34c759}
   .switch-ios input:checked+span::after{transform:translateX(20px)}
 
-  /* --- il log come scheda dal basso --- */
-  body.log-on::before{content:"";position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49}
-  #log{top:calc(env(safe-area-inset-top,0px) + 44px);border:none;z-index:50;
-    border-radius:12px 12px 0 0;background:var(--bg);box-shadow:0 -10px 40px rgba(0,0,0,.3);
-    padding:0 14px env(safe-area-inset-bottom,0px)}
-  #log .top{flex-wrap:wrap;border-bottom:none;padding:16px 2px 10px;position:relative}
-  #log .top::before{content:"";position:absolute;top:6px;left:50%;width:36px;height:5px;
+  /* --- Ricarica e log: da telefono un foglio che sale dal basso --- */
+  #log{top:calc(env(safe-area-inset-top,0px) + 44px);left:0;right:0;bottom:0;
+    width:auto;max-width:none;border-radius:14px 14px 0 0;
+    box-shadow:0 -10px 40px rgba(0,0,0,.3);transform:translateY(100%)}
+  .log-pagina{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .log-barra{padding-top:18px}
+  .log-barra::before{content:"";position:absolute;top:6px;left:50%;width:36px;height:5px;
     margin-left:-18px;border-radius:3px;background:var(--dim);opacity:.4}
-  #log .top b{order:2;flex:1;text-align:center;font-size:17px}
-  #log .top .grow{display:none}
-  #log #log-close{order:1;background:none;color:var(--accent);font-size:17px;padding:0}
-  #log #log-follow{order:3;background:none;color:var(--accent);font-size:17px;
-    font-weight:600;padding:0}
-  #log #log-state{order:4;width:100%;margin-top:10px;font-size:13px}
-  #log pre{background:var(--card);border-radius:12px;padding:12px 14px;
-    margin-bottom:14px;font-size:12px}
 
   /* --- in alto: "Seleziona", "+", e il campo Cerca sotto il titolo --- */
   .azioni-scheda{display:flex;align-items:center;gap:6px;flex:none}
@@ -1264,15 +1334,40 @@ button:disabled{opacity:.45;cursor:default}
      scelte (smartphone). -->
 <div class="azioni-sel ui" id="azioni-sel"></div>
 
-<aside id="log">
-  <div class="top">
-    <b>Log</b>
-    <span id="log-state" class="mini"></span>
-    <span class="grow"></span>
-    <button class="link" id="log-follow" title="segui la coda">Segui</button>
-    <button class="link" id="log-close">Chiudi</button>
+<!-- Ricarica e log: una scheda (da smartphone sale dal basso, su desktop
+     scivola da destra) con due pagine. La prima racconta il giro a passi e
+     ne dice l'esito; la seconda e' il log grezzo, a un tocco. -->
+<div class="log-velo" id="log-velo"></div>
+<aside id="log" class="ui" aria-label="Ricarica">
+  <div class="log-pagine">
+    <section class="log-pagina" id="log-esito">
+      <div class="log-barra">
+        <button type="button" id="log-close">Chiudi</button>
+        <b>Ricarica</b>
+        <button type="button" id="log-fine" class="forte">Fine</button>
+      </div>
+      <div class="log-hero" id="log-hero"></div>
+      <div class="log-kpi" id="log-kpi"></div>
+      <div id="log-guarda"></div>
+      <div class="log-grp log-passi" id="log-passi">
+        <div class="log-passo" data-passo="regole"><span class="lp-ico"></span><span class="lp-txt"><b>Regole e storico</b><small></small></span><em></em></div>
+        <div class="log-passo" data-passo="estratti"><span class="lp-ico"></span><span class="lp-txt"><b>Estratti conto</b><small></small></span><em></em></div>
+        <div class="log-passo" data-passo="categorie"><span class="lp-ico"></span><span class="lp-txt"><b>Categorie</b><small></small></span><em></em></div>
+        <div class="log-passo" data-passo="totali"><span class="lp-ico"></span><span class="lp-txt"><b>Totali</b><small></small></span><em></em></div>
+      </div>
+      <div class="log-grp"><button type="button" class="log-riga link" id="log-apri-raw">Mostra il log completo<i>›</i></button></div>
+    </section>
+    <section class="log-pagina" id="log-grezzo">
+      <div class="log-barra">
+        <button type="button" id="log-indietro">‹ Ricarica</button>
+        <b>Log</b>
+        <button type="button" id="log-copia">Copia</button>
+      </div>
+      <div class="log-stato-riga"><span id="log-state" class="mini"></span>
+        <button type="button" id="log-follow" title="segui la coda">Segui</button></div>
+      <pre id="log-body"></pre>
+    </section>
   </div>
-  <pre id="log-body"></pre>
 </aside>
 
 <script>
@@ -3337,7 +3432,9 @@ VIEWS.categorie = () => {
   const natures = uniq(Object.keys(NATURE_COLOR).concat(S.nature));
   const rows = S.categories.slice().sort((a,b) => a.totale - b.totale);
   return '<div class="card solo-desktop"><div class="head"><h2>Categorie</h2>'
-    + `<span class="mini">${rows.length}</span></div>`
+    + `<span class="mini">${rows.length}</span>`
+    + '<span class="grow"></span><button class="primary" data-cat-nuova="1">'
+    + "+ categoria</button></div>"
     + tableHTML(["categoria","sottocategoria","tx","totale","natura","azioni"],
         rows.map(c => [
           esc(c.categoria), esc(c.sottocategoria || "—"),
@@ -3377,6 +3474,30 @@ function categorieMobileHTML(rows){
       + `<span class="amt fine${c.totale > 0 ? " pos" : ""}">${euroSegno(c.totale)}`
       + '<i class="chev-r">›</i></span></div>').join("") + "</div>").join("")
     + "</div></div>";
+}
+
+// Una categoria nuova: area (scelta fra quelle che ci sono o scritta),
+// sottocategoria facoltativa, natura. Esiste da quando ha una natura in
+// natura.csv: e' la stessa strada del cambio di natura, su un nome nuovo.
+function schedaNuovaCategoriaHTML(){
+  const aree = uniq(S.categories.map(c => c.categoria)).filter(Boolean).sort();
+  const natures = uniq(Object.keys(NATURE_COLOR).concat(S.nature))
+    .filter(n => n && n !== "Da classificare");
+  return '<div class="scheda-barra"><button type="button" data-scheda-chiudi="1">Annulla</button>'
+    + '<b>Nuova categoria</b><button type="button" class="fine" data-cat-crea="1">Salva</button></div>'
+    + '<div class="scheda-eti">Nome</div><div class="scheda-grp">'
+    + '<label class="cella"><span>Area</span><input id="nc-area" list="nc-aree" '
+    + 'placeholder="es. Casa" autocomplete="off">'
+    // Il datalist dentro la cella: fra due .cella romperebbe il filetto.
+    + `<datalist id="nc-aree">${aree.map(a => `<option value="${esc(a)}">`).join("")}</datalist></label>`
+    + '<label class="cella"><span>Sottocategoria</span><input id="nc-sotto" '
+    + 'placeholder="facoltativa" autocomplete="off"></label></div>'
+    + '<p class="scheda-nota">Un\'area che c\'è già (Casa, Viaggi…) aggiunge una voce '
+    + "dentro di lei; un nome nuovo crea anche l'area.</p>"
+    + '<div class="scheda-eti">Natura</div><div class="scheda-grp">'
+    + natures.map((n, i) => `<button type="button" class="cella-scelta nc-natura${i ? "" : " on"}" `
+      + `data-nc-natura="${esc(n)}">${esc(n)}</button>`).join("")
+    + "</div>";
 }
 
 function schedaCategoriaHTML(c){
@@ -3638,9 +3759,11 @@ function render(){
     : TAB === "regole" ? "Cerca testo, categoria o negozio" : "Cerca negozio o descrizione";
   if(document.activeElement !== el("m-text"))
     el("m-text").value = cercaAltro ? CERCA_ALTRO : F.text;
-  if(TAB === "regole")
-    el("azioni-scheda").innerHTML = '<button class="ibtn piu" data-regola-nuova="1" '
-      + 'aria-label="Nuova regola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+  if(TAB === "regole" || TAB === "categorie")
+    el("azioni-scheda").innerHTML = `<button class="ibtn piu" `
+      + (TAB === "regole" ? 'data-regola-nuova="1" aria-label="Nuova regola"'
+                          : 'data-cat-nuova="1" aria-label="Nuova categoria"')
+      + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
       + 'stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>';
   const azioniSel = TAB === "revisione"
     ? [["categoria", "Categoria"], ["conferma", "Confermo"]]
@@ -3966,6 +4089,34 @@ async function gestisciClick(t){
     await post("/api/layout", {layout:S.layout}); render(); return;
   }
   // Smartphone: le schede di categorie e regole.
+  if(d.catNuova){ apriSchedaAltro(schedaNuovaCategoriaHTML()); return; }
+  if(d.ncNatura !== undefined){
+    document.querySelectorAll("[data-nc-natura]")
+      .forEach(b => b.classList.toggle("on", b === t));
+    return;
+  }
+  if(d.catCrea){
+    const area = el("nc-area").value.trim(), sotto = el("nc-sotto").value.trim();
+    const scelta = document.querySelector("[data-nc-natura].on");
+    if(!area) return avvisa("Scrivi almeno l'area.");
+    // ">" e' il separatore fra area e sottocategoria: dentro un nome
+    // spezzerebbe la voce in due livelli sbagliati.
+    if((area + sotto).includes(">")) return avvisa('Il simbolo ">" non puo\' stare nel nome.');
+    const nome = whole({Categoria: area, Sottocategoria: sotto});
+    if(S.categories.some(c => c.nome.toLowerCase() === nome.toLowerCase()))
+      return avvisa(`"${nome}" c'e' gia'.`);
+    if(!scelta) return avvisa("Scegli la natura.");
+    const r = await post("/api/categories", {azione:"natura", nome, natura:scelta.dataset.ncNatura});
+    if(r && r.errore) return;
+    chiudiScheda();
+    await reload();
+    // Da smartphone si ritrova la voce appena creata, con la sua scheda.
+    if(window.matchMedia && window.matchMedia("(max-width:640px)").matches){
+      const c = S.categories.find(x => x.nome === nome);
+      if(c) apriSchedaAltro(schedaCategoriaHTML(c));
+    }
+    return;
+  }
   if(d.catApri){
     const c = S.categories.find(x => x.nome === d.catApri);
     if(c) apriSchedaAltro(schedaCategoriaHTML(c));
@@ -4249,7 +4400,8 @@ document.addEventListener("click", ev => {
     + "[data-bulk-clear],[data-elimina],[data-dove-pie],[data-dove-back],"
     + "[data-tx-apri],[data-selezione],[data-sel-tutto],[data-sel-azione],"
     + "[data-cat-apri],[data-natura-set],[data-regole-vista],[data-regola-apri],"
-    + "[data-regola-nuova],[data-regola-salva],[data-regola-sposta],[data-regola-elimina]");
+    + "[data-regola-nuova],[data-regola-salva],[data-regola-sposta],[data-regola-elimina],"
+    + "[data-cat-nuova],[data-cat-crea],[data-nc-natura]");
   if(!t) return;
   // .finally() sulla promise, non try/finally dentro gestisciClick: un
   // "return handleRule(d)" dentro un try fa scattare il finally non appena
@@ -4456,11 +4608,153 @@ let LOG_AT = 0;          // segnalibro: da quale riga chiedere la prossima volta
 let LOG_TIMER = null;
 let LOG_FOLLOW = true;
 
-const openLog = () => { document.body.classList.add("log-on"); pullLog(); };
+// Tutte le righe del giro (per leggerne i passi e per "Copia"), il giro che
+// si sta guardando dal vivo (quando parte da Ricarica/Carica: solo allora si
+// possono misurare i tempi dei passi) e l'istante in cui ogni passo e'
+// comparso.
+let LOG_RIGHE = [];
+let LOG_LIVE = null;
+let LOG_TEMPI = {};
+
+const openLog = () => {
+  el("log").classList.remove("grezzo");
+  document.body.classList.add("log-on");
+  aggiornaRicarica(false);
+  pullLog();
+};
 const closeLog = () => {
   document.body.classList.remove("log-on");
   clearTimeout(LOG_TIMER); LOG_TIMER = null;
 };
+
+// I passi del giro, dalle intestazioni che bilancio.run() gia' stampa.
+const PASSI = [
+  ["regole", t => t === "categorie e storico"],
+  ["estratti", t => t === "EXPORT"],
+  ["categorie", t => t === "categorizzazione"],
+  ["totali", t => /^\d+ transazioni -> /.test(t)],
+];
+const numeroLog = s => parseFloat(String(s).replace(/,/g, ""));
+// Il punto anche sulle migliaia a quattro cifre ("1.368"), come euro():
+// toLocaleString("it-IT") le lascia attaccate.
+const migliaia = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+// Dal testo del log a quello che serve alla pagina: dove inizia ogni passo,
+// due numeri per passo, e i totali di fine giro.
+function riassuntoLog(righe){
+  const inizio = {};
+  righe.forEach((r, i) => {
+    const t = r.trim();
+    for(const [k, prova] of PASSI) if(inizio[k] === undefined && prova(t)) inizio[k] = i;
+  });
+  const sezione = k => {
+    if(inizio[k] === undefined) return [];
+    const dopo = PASSI.map(([n]) => inizio[n]).filter(i => i !== undefined && i > inizio[k]);
+    return righe.slice(inizio[k], dopo.length ? Math.min(...dopo) : righe.length);
+  };
+  const cerca = (sez, re) => { for(const r of sez){ const m = r.match(re); if(m) return m; } return null; };
+  const det = {};
+  const reg = sezione("regole");
+  det.regole = [[/(\d+) regole caricate/, "regole"], [/(\d+) override manuali/, "correzioni"],
+                [/(\d+) merchant canonici/, "negozi"]]
+    .map(([re, eti]) => { const m = cerca(reg, re); return m ? `${migliaia(+m[1])} ${eti}` : ""; })
+    .filter(Boolean).join(" · ");
+  const est = sezione("estratti");
+  const mov = cerca(est, /(\d+) transazioni/), coppie = cerca(est, /(\d+) coppie non fuse/);
+  det.estratti = [mov ? `${migliaia(+mov[1])} movimenti` : "",
+                  coppie ? `${coppie[1]} coppie da guardare` : ""].filter(Boolean).join(" · ");
+  const NOMI = {regola:"da regola", "storico-esatto":"dallo storico", override:"a mano",
+                giroconto:"giroconti", "storico-simile":"simili allo storico", llm:"dal modello"};
+  det.categorie = sezione("categorie").map(r => r.match(/^\s+(\d+)\s+(\S+)\s*$/)).filter(Boolean)
+    .slice(0, 3).map(m => `${migliaia(+m[1])} ${NOMI[m[2]] || m[2]}`).join(" · ");
+  const tot = sezione("totali");
+  const val = re => { const m = cerca(tot, re); return m ? numeroLog(m[1]) : null; };
+  const totali = {movimenti: val(/^(\d+) transazioni -> /), rivedere: val(/^(\d+) da controllare/),
+    scartate: val(/^(\d+) scartate/), entrate: val(/^entrate\s+(-?[\d,.]+)/),
+    uscite: val(/^uscite\s+(-?[\d,.]+)/), risparmio: val(/^risparmio\s+(-?[\d,.]+)/),
+    coppie: coppie ? +coppie[1] : 0};
+  det.totali = totali.risparmio !== null ? `risparmio ${euro(totali.risparmio)}` : "";
+  return {inizio, det, totali,
+          errore: righe.some(r => r.startsWith("Traceback")) || !!(S && S.error && !righe.length)};
+}
+
+// Disegna la pagina del giro. I quattro passi esistono gia' nel markup e si
+// aggiornano sul posto: ridisegnarli a ogni lettura del log rifarebbe
+// partire la loro animazione d'entrata.
+function aggiornaRicarica(running){
+  const R = riassuntoLog(LOG_RIGHE);
+  const adesso = Date.now();
+  if(LOG_LIVE){
+    if(running) LOG_LIVE.visto = true;
+    // Appena premuto, il server puo' non aver ancora azzerato il log del giro
+    // prima: per qualche secondo il giro conta come iniziato anche se non lo
+    // dice ancora.
+    if(!running && !LOG_LIVE.visto && adesso - LOG_LIVE.inizio < 4000) running = true;
+    for(const [k] of PASSI)
+      if(R.inizio[k] !== undefined && LOG_TEMPI[k] === undefined) LOG_TEMPI[k] = adesso;
+    if(!running && LOG_LIVE.visto && !LOG_LIVE.fine) LOG_LIVE.fine = adesso;
+  }
+  const errore = R.errore || (!running && S && S.error);
+  const finito = !running && LOG_RIGHE.length > 0;
+  const corrente = running ? [...PASSI].reverse().find(([k]) => R.inizio[k] !== undefined) : null;
+  const durata = (k, i) => {
+    if(!LOG_LIVE || LOG_TEMPI[k] === undefined) return "";
+    const prossimo = PASSI.slice(i + 1).map(([n]) => LOG_TEMPI[n]).find(x => x !== undefined)
+      || LOG_LIVE.fine;
+    // Sotto il decimo di secondo vuol dire che due passi sono arrivati nella
+    // stessa lettura del log: il tempo non e' misurato, meglio non dirlo.
+    const ms = prossimo ? prossimo - LOG_TEMPI[k] : 0;
+    return ms >= 100 ? `${(ms / 1000).toFixed(1).replace(".", ",")} s` : "";
+  };
+  PASSI.forEach(([k], i) => {
+    const riga = document.querySelector(`.log-passo[data-passo="${k}"]`);
+    if(!riga) return;
+    const visto = R.inizio[k] !== undefined;
+    const stato = corrente && corrente[0] === k ? "corre" : visto ? "fatto"
+      : running ? "attesa" : errore ? "attesa" : "fatto";
+    riga.className = "log-passo " + stato;
+    riga.querySelector("small").textContent = stato === "corre"
+      ? (R.det[k] || "in corso…") : stato === "attesa" ? "in attesa" : (R.det[k] || "");
+    riga.querySelector("em").textContent = stato === "fatto" ? durata(k, i) : "";
+  });
+  const motivo = LOG_LIVE && LOG_LIVE.carica ? "Carico i nuovi export" : "Rielaboro i file gia' caricati";
+  const fineIn = LOG_LIVE && LOG_LIVE.fine
+    ? `alle ${new Date(LOG_LIVE.fine).toLocaleTimeString("it-IT", {hour:"2-digit", minute:"2-digit"})}`
+      + ` · ${((LOG_LIVE.fine - LOG_LIVE.inizio) / 1000).toFixed(1).replace(".", ",")} secondi`
+    : "ultimo giro";
+  el("log-hero").innerHTML = running
+    ? '<div class="lh-ico gira"></div><h3>Sto ricaricando…</h3>' + `<p>${esc(motivo)}</p>`
+    : errore
+      ? '<div class="lh-ico err">!</div><h3>Qualcosa e\' andato storto</h3>'
+        + `<p>${esc((S && S.error) || "Guarda il log completo per il dettaglio.")}</p>`
+      : finito
+        ? '<div class="lh-ico ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+          + 'stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>'
+          + `<h3>Tutto aggiornato</h3><p>${esc(fineIn)}</p>`
+        : '<div class="lh-ico gira"></div><h3>Un attimo…</h3><p>Leggo il log</p>';
+  const T = R.totali;
+  el("log-kpi").innerHTML = finito && !errore && T.movimenti !== null
+    ? `<div><span>Movimenti</span><b>${migliaia(T.movimenti)}</b></div>`
+      + `<div><span>Entrate</span><b class="pos">+${euro(T.entrate || 0)}</b></div>`
+      + `<div><span>Uscite</span><b class="neg">${euro(T.uscite || 0)}</b></div>` : "";
+  // Da rivedere porta alla sua pagina; scartate e coppie si leggono nel log.
+  el("log-guarda").innerHTML = finito && !errore && T.movimenti !== null
+    ? '<div class="log-eti">Da guardare</div><div class="log-grp">'
+      + `<button type="button" class="log-riga" data-log-vai="revisione">Da rivedere<span>${T.rivedere || 0}</span><i>›</i></button>`
+      + `<button type="button" class="log-riga" data-log-vai="grezzo">Scartate<span>${T.scartate || 0}</span><i>›</i></button>`
+      + `<button type="button" class="log-riga" data-log-vai="grezzo">Coppie non fuse`
+      + `<span class="${T.coppie ? "w" : ""}">${T.coppie}</span><i>›</i></button></div>` : "";
+  el("log-close").classList.toggle("hide", finito && !errore);
+  el("log-fine").classList.toggle("hide", running);
+}
+
+async function copiaLog(){
+  try{
+    await navigator.clipboard.writeText(LOG_RIGHE.join("\n"));
+    el("log-copia").textContent = "Copiato";
+  }catch(e){ el("log-copia").textContent = "Non riesco"; }
+  setTimeout(() => { el("log-copia").textContent = "Copia"; }, 1500);
+}
 
 function logLine(text){
   // Le righe del modello si distinguono a colpo d'occhio: quando ne scorrono
@@ -4483,16 +4777,18 @@ async function pullLog(){
     data = await (await fetch("/api/log?from=" + LOG_AT)).json();
   }catch(e){ LOG_TIMER = setTimeout(pullLog, 2000); return; }
 
-  if(data.next < LOG_AT){ LOG_AT = 0; el("log-body").innerHTML = ""; }
+  if(data.next < LOG_AT){ LOG_AT = 0; LOG_RIGHE = []; el("log-body").innerHTML = ""; }
   if(data.lines.length){
     const body = el("log-body");
     body.insertAdjacentHTML("beforeend",
       data.lines.map(logLine).join("\n") + "\n");
+    LOG_RIGHE = LOG_RIGHE.concat(data.lines);
     LOG_AT = data.next;
     if(LOG_FOLLOW) body.scrollTop = body.scrollHeight;
   }
   el("log-state").textContent = data.running
     ? `elaboro… ${data.next} righe` : `${data.next} righe`;
+  aggiornaRicarica(data.running);
   // Mentre gira si guarda spesso, a riposo quasi mai.
   LOG_TIMER = setTimeout(pullLog, data.running ? 600 : 3000);
 }
@@ -4500,6 +4796,20 @@ async function pullLog(){
 el("btn-log").addEventListener("click", () =>
   document.body.classList.contains("log-on") ? closeLog() : openLog());
 el("log-close").addEventListener("click", closeLog);
+el("log-fine").addEventListener("click", closeLog);
+// Toccare fuori dalla scheda la chiude, come un foglio di sistema.
+el("log-velo").addEventListener("click", closeLog);
+el("log-apri-raw").addEventListener("click", () => el("log").classList.add("grezzo"));
+el("log-indietro").addEventListener("click", () => el("log").classList.remove("grezzo"));
+el("log-copia").addEventListener("click", copiaLog);
+// "Da guardare": Da rivedere apre la sua scheda, il resto si legge nel log.
+el("log-esito").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-log-vai]");
+  if(!b) return;
+  if(b.dataset.logVai === "grezzo"){ el("log").classList.add("grezzo"); return; }
+  closeLog();
+  TAB = b.dataset.logVai; SELECTED.clear(); SELEZIONE = false; render();
+});
 el("log-follow").addEventListener("click", () => {
   LOG_FOLLOW = !LOG_FOLLOW;
   el("log-follow").textContent = LOG_FOLLOW ? "Segui" : "Fermo";
@@ -4524,6 +4834,9 @@ el("log-body").addEventListener("scroll", () => {
 async function start(button, route){
   el(button).disabled = true;
   LOG_AT = 0;
+  LOG_RIGHE = [];
+  LOG_TEMPI = {};
+  LOG_LIVE = {inizio: Date.now(), visto: false, fine: 0, carica: route === "/api/carica"};
   el("log-body").innerHTML = "";
   openLog();
   await post(route, {llm: false});
