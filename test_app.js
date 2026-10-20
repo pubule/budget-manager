@@ -51,7 +51,7 @@ global.clearTimeout = () => {};
 const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
- txCardsHTML, TABS, TAB_CODA, posizionaTablist,
+ txCardsHTML, TABS, TAB_CODA, posizionaTablist, DOVE_APERTE, schedaTxHTML, nomeLeggibile,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
@@ -580,8 +580,10 @@ check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'))
   const tanti = api.lineChart(
     Array.from({length: 24}, (_, i) => "2025-" + i),
     [{name:"x", values: Array(24).fill(10), color:"#000"}]);
+  // I pallini "sel" sono quelli della selezione, nascosti finche' il mouse
+  // non passa: non contano come pallini disegnati.
   check("con molti punti resta una linea pulita, senza pallini",
-        !tanti.includes("<circle"));
+        !/<circle (?!class="sel)/.test(tanti));
   const F3 = api.getF();
   const [da, a] = api.QUICK[5][1]();          // ultimo mese con dati
   F3.from = da; F3.to = a;
@@ -616,7 +618,8 @@ check("barChart marca le zone cliccabili", bars.includes('data-drill="nature"'))
     Array.from({length: 30}, (_, i) => "2024-" + String((i % 12) + 1).padStart(2, "0")),
     [{name:"x", values: Array(30).fill(10), color:"#000"}]);
   check("le fasce ci sono anche senza pallini",
-        !lungo.includes("<circle") && (lungo.match(/data-tip="/g) || []).length === 30);
+        !/<circle (?!class="sel)/.test(lungo)
+        && (lungo.match(/data-tip="/g) || []).length === 30);
   check("il mese per esteso regge un'etichetta strana",
         api.meseLeggibile("boh") === "boh" && api.meseLeggibile("") === "");
   // La riga verticale spiega perche' il tooltip porta TUTTE le serie: legge
@@ -632,7 +635,7 @@ check("le barre sono in percentuale, cosi' si adattano al riquadro",
 check("la barra piu' lunga arriva al 100%", bars.includes("width:100.0%"));
 const line = api.lineChart(["2025-01", "2025-02", "2025-03"],
   [{name: "x", values: [10, 40, 20], color: "#000"}]);
-check("lineChart produce SVG", line.includes("<polyline"));
+check("lineChart produce SVG", line.includes('<path d="M'));
 check("lineChart non produce NaN", !/NaN/.test(line) && !/NaN/.test(bars));
 
 console.log("=== riquadri ===");
@@ -680,8 +683,22 @@ const soloDesktop = (txOut.split('class="desktop-rows"')[1] || "")
   .split('class="bl-tx-wrap"')[0];
 const descDesktop = (soloDesktop.match(/data-fix="Descrizione"/g) || []).length;
 const descTotale = (txOut.match(/data-fix="Descrizione"/g) || []).length;
-check("le card hanno lo stesso data-fix della tabella (stesso dispatch)",
-      descDesktop > 0 && descTotale === descDesktop * 2);
+// Da smartphone i campi non stanno piu' nella riga ma nella scheda di
+// dettaglio: la lista ne e' priva, la scheda ha gli stessi data-* della
+// tabella (stesso dispatch, stessi listener su document).
+const scheda = api.schedaTxHTML(all[0], {editable:true});
+check("la lista mobile non ripete i campi della tabella",
+      descDesktop > 0 && descTotale === descDesktop);
+check("la scheda ha gli stessi data-* della tabella (stesso dispatch)",
+      ['data-fix="Descrizione"', 'data-fix="Merchant"', 'data-fix="Data"',
+       'data-fix="Importo"', "data-setcat=", "data-quota-chi=", "data-quota=",
+       "data-escludi=", "data-reset-tx="].every(a => scheda.includes(a)));
+check("la scheda di Da rivedere offre confermo e regola",
+      ["data-conferma=", "data-rule="].every(a =>
+        api.schedaTxHTML(all[0], {editable:false}).includes(a)));
+check("il nome in maiuscolo della banca diventa leggibile",
+      api.nomeLeggibile({Descrizione:"ANTHROPIC* CLAUDE SUB"}) === "Anthropic Claude Sub"
+      && api.nomeLeggibile({Descrizione:"x", Merchant:"Enel Energia"}) === "Enel Energia");
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);
 // "Altro" (tab bar da smartphone): stesse 3 schede di coda, stesso data-tab
@@ -758,6 +775,45 @@ check("neutralizzata anche dentro la card mobile, non solo in tabella",
       rendered.includes('class="bl-tx"')
       && !rendered.includes("<img src=x") && !rendered.includes("<script>bad"));
 
+// Restyle: il banner dei nuovi export, l'andamento a tre linee, le azioni
+// sui dati dentro "Altro".
+api.setState({...state, pending: ["a.csv", "b.xlsx"]});
+api.setStatus();
+check('il banner conta gli export in attesa',
+      api.el("banner-titolo").textContent === "2 nuovi export nella cartella"
+      && api.el("source").textContent === "a.csv · b.xlsx");
+api.render();
+check('"Altro" offre Carica solo con export in attesa',
+      api.el("tablist").innerHTML.includes('data-azione="carica"'));
+api.setState({...state, pending: []});
+api.render();
+check('senza export in attesa "Altro" non offre Carica, ma Ricarica/Esporta/Log si',
+      !api.el("tablist").innerHTML.includes('data-azione="carica"')
+      && ["run","export","log"].every(a =>
+           api.el("tablist").innerHTML.includes(`data-azione="${a}"`)));
+api.setState(state);
+{
+  const and = api.CARDS.andamento(api.filtered());
+  check("l'andamento disegna entrate, uscite e netto",
+        ["entrate", "uscite", "netto"].every(n => and.includes(`</i>${n}</span>`))
+        && !and.includes("uscite ordinarie"));
+  check("l'andamento offre 3M / Anno / Tutto al posto dei campi mese",
+        ["3M", "Anno", "Tutto"].every(e => and.includes(`>${e}</button>`))
+        && !and.includes('type="month"'));
+  // "Dove vanno i soldi" desktop: capsula in cima, aree chiuse di partenza,
+  // aprirne una mostra le sue sottocategorie.
+  const chiusa = api.CARDS.dove(api.filtered());
+  const prima = (chiusa.match(/data-dove-apri="([^"]*)"/) || [])[1];
+  check("la tabella ha la capsula delle proporzioni", chiusa.includes('class="capsula"'));
+  check("le aree partono chiuse", !chiusa.includes('<tr class="sub"'));
+  if(prima){
+    api.DOVE_APERTE.add(prima.replace(/&amp;/g, "&"));
+    check("aprire un'area mostra le sue voci",
+          api.CARDS.dove(api.filtered()).includes('<tr class="sub"'));
+    api.DOVE_APERTE.clear();
+  }
+}
+
 // Durante un giro i pulsanti che avviano la pipeline restano spenti.
 api.setState({...state, running: true});
 api.setStatus();
@@ -820,8 +876,13 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
 // affiancati che questa disposizione esiste per togliere.
 {
   const html = api.VIEWS.dashboard(api.filtered());
+  // L'andamento, se acceso, sta sopra il pannello a tutta larghezza.
+  const conAndamento = state.layout.some(c => c.visibile && c.id === "andamento");
   check("la dashboard e' un pannello a due colonne",
-        html.startsWith('<div class="pannello">'));
+        conAndamento
+          ? html.indexOf('<div class="card">') < html.indexOf('<div class="pannello">')
+            && html.includes('<div class="pannello">')
+          : html.startsWith('<div class="pannello">'));
   check("c'e' una pila a destra", html.includes('<div class="pila">'));
   const accesi = state.layout.filter(c => c.visibile && api.CARDS[c.id]);
   const quadri = (html.match(/<div class="card">/g) || []).length;
@@ -866,16 +927,18 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
         api.spesa(-1234));
   const cresciuta = api.scarto(-100, -180);
   check("una spesa cresciuta si dice a parole",
-        cresciuta.verso === "peggio" && cresciuta.testo.includes("in piu'"),
+        cresciuta.verso === "peggio" && cresciuta.testo === "+" + api.spesa(80),
         JSON.stringify(cresciuta));
   const calata = api.scarto(-180, -100);
   check("una spesa calata si dice a parole",
-        calata.verso === "meglio" && calata.testo.includes("in meno"),
+        calata.verso === "meglio" && calata.testo === "-" + api.spesa(80),
         JSON.stringify(calata));
   const fuoriScala = api.scarto(-110, -1152);
-  check("uno scarto fuori scala dice da dove a dove",
-        fuoriScala.testo.includes("da ") && !fuoriScala.testo.includes("%"),
+  check("uno scarto fuori scala resta la differenza col segno, senza %",
+        fuoriScala.testo === "+" + api.spesa(1042) && !fuoriScala.testo.includes("%"),
         fuoriScala.testo);
+  check("una spesa nuova e' solo un +, non 'nuova:'",
+        api.scarto(0, -1499).testo === "+" + api.spesa(1499));
   check("due periodi uguali non inventano uno scarto",
         api.scarto(-100, -100).verso === "pari");
   check("senza spesa in nessuno dei due periodi non c'e' scarto",
@@ -912,7 +975,8 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
   const barraHtml = api.indicatori(righeKpi);
   const tabellaHtml = api.CARDS.dove(righeKpi);
   const uscite = barraHtml.match(/<span>uscite<\/span><b>([^<]*)<\/b>/);
-  const rigaCategoria = tabellaHtml.match(/>Viaggi<\/button><\/td><td>([^<]*)<\/td>/);
+  const rigaCategoria = tabellaHtml.match(
+    />Viaggi<\/button>(?:<small>[^<]*<\/small>)?<\/div><\/td><td>([^<]*)<\/td>/);
   check("nel mese in corso anche la barra mostra il totale reale",
         !!uscite && uscite[1] === api.spesa(1500), uscite && uscite[1]);
   check("la card mostra il totale reale della quota nel periodo",
@@ -938,6 +1002,56 @@ check("una riga senza categoria da' stringa vuota", api.whole({}) === "");
   Fden.category = "";
 
   Object.assign(Fden, salvaFden);
+}
+
+// La colonna di confronto della card segue "confronta con": stessa finestra
+// delle KPI, stessa quota, media divisa per i mesi davvero presenti.
+{
+  const Fc = api.getF();
+  const salvaFc = {...Fc};
+  const tx = (Data, Importo) => ({Data, Importo, Natura:"Spese",
+    Categoria:"Viaggi", Sottocategoria:"", Merchant:"", Descrizione:"x"});
+  api.setState({...state, transactions: [
+    tx("2024-03-01", -200), tx("2025-09-05", -400), tx("2026-07-10", -600),
+    tx("2026-08-10", -1000), tx("2026-09-19", -1500)]});
+  Object.assign(Fc, {from:"2026-09-01", to:"2026-09-30", account:"", nature:"",
+                     category:"", sub:"", text:"", vista:"", lettura:""});
+  const cella = confronto => {
+    Fc.confronto = confronto;
+    const h = api.CARDS.dove(api.filtered());
+    const th = h.match(/<th class="num">(vs [^<]*|confronto)<\/th>/);
+    const riga = h.match(/>Viaggi<\/button>.*?<td class="delta [a-z]+">([^<]*)<\/td>/);
+    return {th: th && th[1], testo: riga && riga[1]};
+  };
+  const attesa = (prima, ora) => api.scarto(prima, ora).testo.replace(/'/g, "&#39;");
+
+  let c = cella("precedente");
+  check("mese prima: intestazione col ritaglio", c.th === "vs mese prima (1–19)", c.th);
+  check("mese prima: stessa finestra delle KPI", c.testo === attesa(-1000, -1500), c.testo);
+  c = cella("annoPrima");
+  check("stesso mese anno scorso: intestazione", c.th === "vs set 2025 (1–19)", c.th);
+  check("stesso mese anno scorso: valore", c.testo === attesa(-400, -1500), c.testo);
+  c = cella("media12");
+  check("media 12 mesi: intestazione", /^vs media 12 mesi/.test(c.th), c.th);
+  check("media 12 mesi: si divide per i mesi presenti (3), non per 12",
+        c.testo === attesa(-2000 / 3, -1500), c.testo);
+  // Mese in corso (dati fino al 19): il KPI deve dividere la media come la
+  // card. Senza, 1.500 contro 2.000 di tre mesi sommati diceva "-25%".
+  const uscite = api.indicatori(api.filtered()).match(/uscite[^]*?<\/div>/)[0];
+  check("KPI media 12 mesi in corso: la media e' divisa per i mesi",
+        uscite.includes("+125%"), uscite);
+  Object.assign(Fc, {from:"2026-01-01", to:"2026-12-31"});
+  c = cella("media3");
+  check("media 3 anni: si divide per gli anni presenti (2), non per 3",
+        c.testo === attesa(-600 / 2, -3100), c.testo);
+  Fc.confronto = ""; Fc.from = ""; Fc.to = "";
+  const senza = api.CARDS.dove(api.filtered());
+  check("senza periodo la colonna e' 'confronto' e le celle sono vuote",
+        senza.includes('<th class="num">confronto</th>')
+        && !/class="delta /.test(senza));
+
+  Object.assign(Fc, salvaFc);
+  api.setState(state);
 }
 
 // Il ramo "ricorrenti" di CARDS.dove e' l'unico che scrive m come testo, ed

@@ -6,7 +6,7 @@
  },
  {
   "id": "andamento",
-  "titolo": "Uscite mese per mese",
+  "titolo": "Andamento",
   "visibile": true
  },
  {
@@ -22,6 +22,6 @@
  {
   "id": "revisione",
   "titolo": "Da rivedere",
-  "visibile": true
+  "visibile": false
  }
 ]

@@ -102,8 +102,8 @@ DEFAULT_LAYOUT = [
     {"id": "dove", "titolo": "Dove vanno i soldi", "visibile": True},
     {"id": "leve", "titolo": "Le leve, dalla piu' facile", "visibile": True},
     {"id": "anno", "titolo": "Anno su anno", "visibile": True},
-    {"id": "andamento", "titolo": "Uscite mese per mese", "visibile": True},
-    {"id": "revisione", "titolo": "Da rivedere", "visibile": True},
+    {"id": "andamento", "titolo": "Andamento", "visibile": True},
+    {"id": "revisione", "titolo": "Da rivedere", "visibile": False},
 ]
 
 
