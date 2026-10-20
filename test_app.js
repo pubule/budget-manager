@@ -743,7 +743,9 @@ check("il nome in maiuscolo della banca diventa leggibile",
   const R = api.riassuntoLog(["categorie e storico", "  71 regole caricate da regole.csv",
     "  233 override manuali da override.csv", "  47 merchant canonici da merchant.csv",
     "EXPORT", "  consolidato.csv: 1999 transazioni riprese, nessun export",
-    "  8 coppie non fuse: stesso importo e data", "", "categorizzazione",
+    "  8 coppie non fuse: stesso importo e data",
+    "      -200.00  Acconto Idraulico               <-> DISPOSIZIONE DI BONIFICO BONIFICO ",
+    "", "categorizzazione",
     "    1368  regola", "     376  storico-esatto", "     214  override",
     "1992 transazioni -> consolidato.csv", "0 da controllare -> da_rivedere.csv",
     "9 scartate -> scartate.csv", "entrate     166,353.23", "uscite     -158,798.01",
@@ -756,6 +758,10 @@ check("il nome in maiuscolo della banca diventa leggibile",
         && R.totali.movimenti === 1992 && R.totali.scartate === 9 && R.totali.coppie === 8
         && Math.abs(R.totali.entrate - 166353.23) < 0.01 && !R.errore,
         JSON.stringify(R.det));
+  check("Ricarica: le coppie non fuse si leggono una per una",
+        R.coppie.length === 1 && R.coppie[0].importo === -200
+        && R.coppie[0].a === "Acconto Idraulico"
+        && R.coppie[0].b === "DISPOSIZIONE DI BONIFICO BONIFICO", JSON.stringify(R.coppie));
 }
 {
   // "Da identificare" con confidenza piena (da regola o a mano) e' comunque

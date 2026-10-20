@@ -604,10 +604,21 @@ pointer-events:none;transition:opacity .4s ease}
 @media (min-width:641px){.log-velo{background:transparent}}
 body.log-on .log-velo{opacity:1;pointer-events:auto}
 /* Le due pagine affiancate: "Mostra il log completo" scorre alla seconda. */
-.log-pagine{display:flex;flex:none;width:200%;height:100%;
+.log-pagine{display:flex;flex:none;width:300%;height:100%;
 transition:transform .45s cubic-bezier(.32,.72,0,1)}
-#log.grezzo .log-pagine{transform:translateX(-50%)}
-.log-pagina{width:50%;height:100%;overflow-y:auto;padding:0 16px 16px;
+#log.grezzo .log-pagine{transform:translateX(-33.3333%)}
+#log.coppie .log-pagine{transform:translateX(-66.6667%)}
+.log-nota{font-size:13px;color:var(--dim);margin:4px 4px 14px}
+.coppia{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;
+padding:10px 16px;position:relative}
+.coppia+.coppia::before{content:"";position:absolute;top:0;left:16px;right:0;
+border-top:.5px solid var(--line)}
+.coppia button{grid-column:1;background:none;border:none;padding:2px 0;min-height:0;
+text-align:left;color:var(--accent);font:15px var(--sans);white-space:nowrap;
+overflow:hidden;text-overflow:ellipsis}
+.coppia button+button::before{content:"↔ ";color:var(--dim)}
+.coppia b{grid-column:2;grid-row:1/3;font-variant-numeric:tabular-nums;font-weight:600}
+.log-pagina{width:33.3333%;height:100%;overflow-y:auto;padding:0 16px 16px;
 display:flex;flex-direction:column;font-family:var(--sans)}
 .log-barra{display:flex;align-items:center;gap:8px;padding:16px 0 6px;position:sticky;
 top:0;background:var(--bg);z-index:1}
@@ -1366,6 +1377,19 @@ button:disabled{opacity:.45;cursor:default}
       <div class="log-stato-riga"><span id="log-state" class="mini"></span>
         <button type="button" id="log-follow" title="segui la coda">Segui</button></div>
       <pre id="log-body"></pre>
+    </section>
+    <!-- Le coppie che il motore non ha unito, una per riga: nel log grezzo
+         stavano a meta' del testo e non si trovavano. -->
+    <section class="log-pagina" id="log-coppie">
+      <div class="log-barra">
+        <button type="button" data-log-torna="1">‹ Ricarica</button>
+        <b>Coppie non fuse</b>
+        <button type="button" class="hide">.</button>
+      </div>
+      <p class="log-nota">Stesso giorno e stesso importo, ma descrizioni diverse: il
+        motore non le ha unite. Tocca una descrizione per trovarla in Transazioni
+        e, se e' la stessa spesa contata due volte, escluderne una.</p>
+      <div id="log-coppie-lista"></div>
     </section>
   </div>
 </aside>
@@ -4635,7 +4659,7 @@ let LOG_LIVE = null;
 let LOG_TEMPI = {};
 
 const openLog = () => {
-  el("log").classList.remove("grezzo");
+  el("log").classList.remove("grezzo", "coppie");
   document.body.classList.add("log-on");
   aggiornaRicarica(false);
   pullLog();
@@ -4692,7 +4716,10 @@ function riassuntoLog(righe){
     uscite: val(/^uscite\s+(-?[\d,.]+)/), risparmio: val(/^risparmio\s+(-?[\d,.]+)/),
     coppie: coppie ? +coppie[1] : 0};
   det.totali = totali.risparmio !== null ? `risparmio ${euro(totali.risparmio)}` : "";
-  return {inizio, det, totali,
+  // Le coppie non fuse: "   -200.00  Acconto Idraulico  <-> DISPOSIZIONE DI ..."
+  const coppie_ = est.map(r => r.match(/^\s+(-?[\d,.]+)\s+(.+?)\s+<->\s+(.+?)\s*$/))
+    .filter(Boolean).map(m => ({importo: numeroLog(m[1]), a: m[2].trim(), b: m[3].trim()}));
+  return {inizio, det, totali, coppie: coppie_,
           errore: righe.some(r => r.startsWith("Traceback")) || !!(S && S.error && !righe.length)};
 }
 
@@ -4760,8 +4787,14 @@ function aggiornaRicarica(running){
     ? '<div class="log-eti">Da guardare</div><div class="log-grp">'
       + `<button type="button" class="log-riga" data-log-vai="revisione">Da rivedere<span>${T.rivedere || 0}</span><i>›</i></button>`
       + `<button type="button" class="log-riga" data-log-vai="grezzo">Scartate<span>${T.scartate || 0}</span><i>›</i></button>`
-      + `<button type="button" class="log-riga" data-log-vai="grezzo">Coppie non fuse`
+      + `<button type="button" class="log-riga" data-log-vai="coppie">Coppie non fuse`
       + `<span class="${T.coppie ? "w" : ""}">${T.coppie}</span><i>›</i></button></div>` : "";
+  el("log-coppie-lista").innerHTML = R.coppie.length
+    ? '<div class="log-grp">' + R.coppie.map(c => '<div class="coppia">'
+        + `<button type="button" data-log-cerca="${esc(c.a)}">${esc(c.a)}</button>`
+        + `<button type="button" data-log-cerca="${esc(c.b)}">${esc(c.b)}</button>`
+        + `<b>${euro(c.importo)}</b></div>`).join("") + "</div>"
+    : '<p class="log-nota">Nessuna coppia in questo giro.</p>';
   el("log-close").classList.toggle("hide", finito && !errore);
   el("log-fine").classList.toggle("hide", running);
 }
@@ -4821,10 +4854,22 @@ el("log-apri-raw").addEventListener("click", () => el("log").classList.add("grez
 el("log-indietro").addEventListener("click", () => el("log").classList.remove("grezzo"));
 el("log-copia").addEventListener("click", copiaLog);
 // "Da guardare": Da rivedere apre la sua scheda, il resto si legge nel log.
+el("log-coppie").addEventListener("click", ev => {
+  if(ev.target.closest("[data-log-torna]")){ el("log").classList.remove("coppie"); return; }
+  const c = ev.target.closest("[data-log-cerca]");
+  if(!c) return;
+  // In Transazioni con la descrizione gia' cercata e su tutto il periodo:
+  // il log non dice la data della coppia, che puo' stare fuori dal periodo
+  // scelto.
+  closeLog();
+  F.text = c.dataset.logCerca; F.from = ""; F.to = "";
+  TAB = "transazioni"; SELECTED.clear(); SELEZIONE = false; render();
+});
 el("log-esito").addEventListener("click", ev => {
   const b = ev.target.closest("[data-log-vai]");
   if(!b) return;
   if(b.dataset.logVai === "grezzo"){ el("log").classList.add("grezzo"); return; }
+  if(b.dataset.logVai === "coppie"){ el("log").classList.add("coppie"); return; }
   closeLog();
   TAB = b.dataset.logVai; SELECTED.clear(); SELEZIONE = false; render();
 });
