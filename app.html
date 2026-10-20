@@ -4900,6 +4900,9 @@ async function reload(){
 
 async function poll(){
   try{
+    // Il primo caricamento puo' essere fallito (server spento o in riavvio):
+    // finche' non ci sono dati, ogni giro riprova quello intero.
+    if(!S) return await reload();
     const r = await fetch("/api/state?light=1");
     const light = await r.json();
     const attesaOra = (S && S.pending) ? S.pending.length : 0;
@@ -4925,7 +4928,14 @@ mostraOverlay({testo: "carico i dati…"});
 // finally, non dentro il then: se il primo giro fallisse (server non ancora
 // su, telefono che si connette proprio mentre parte), lo spinner non deve
 // restare acceso in eterno solo perche' reload() e' andata in errore.
-reload().finally(nascondiOverlay).then(() => setInterval(poll, 4000));
+// Il controllo ogni 4 secondi parte comunque, anche se il primo giro fallisce:
+// prima partiva solo dopo un reload() riuscito, e una pagina aperta mentre il
+// server si riavviava restava ferma per sempre, senza vedere export nuovi.
+reload().catch(() => {}).finally(nascondiOverlay);
+setInterval(poll, 4000);
+// Tornando sull'app (iPhone che la riprende dallo sfondo, scheda che torna
+// in primo piano) si controlla subito invece di aspettare il giro.
+document.addEventListener("visibilitychange", () => { if(!document.hidden) poll(); });
 
 // Ruotare il telefono (o ridimensionare la finestra oltre i 640px) deve
 // spostare subito #tablist nel suo posto giusto, non aspettare fino a 4
