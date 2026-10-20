@@ -582,8 +582,13 @@ def set_rule(payload):
         position = payload.get("posizione")
         # L'ordine conta: vince la prima regola che combacia, quindi le
         # specifiche devono poter stare sopra le generiche.
-        if isinstance(position, int) and 0 <= position <= len(rows):
-            rows.insert(position, entry)
+        # La posizione e' quella che vede l'app, che le righe di commento
+        # (editable()) non le mostra: contarle qui spostava di un posto in
+        # su ogni regola salvata sotto un commento.
+        if isinstance(position, int) and position >= 0:
+            vere = [k for k, r in enumerate(rows)
+                    if not (r.get("pattern") or "").lstrip().startswith("#")]
+            rows.insert(vere[position] if position < len(vere) else len(rows), entry)
         else:
             rows.append(entry)
     write_rows(name, rows)

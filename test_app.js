@@ -52,6 +52,7 @@ const api = eval(`(function(){
 ${js}
 ;return {euro, filtered, groupSum, barChart, lineChart, tableHTML,
  txCardsHTML, TABS, TAB_CODA, posizionaTablist, DOVE_APERTE, schedaTxHTML, nomeLeggibile,
+ patternLeggibile, schedaCategoriaHTML,
  CARDS, VIEWS, outflow, inflow, sum, sommaPiena, monthsOf, spending,
  setStatus, el, whole, uniq, patternNegozio, meseLeggibile,
  indicatori, spesa, scarto, VISTE, mesiEffettivi, mesiPeriodo, quotaDi,
@@ -710,6 +711,26 @@ check("il nome in maiuscolo della banca diventa leggibile",
         cm.includes('class="michela-hero"') && cm.includes('data-tx-apri="cm1"')
         && cm.includes("Lei ti deve") && cm.includes("+30"));
   api.setState(state);
+}
+// Le pagine di "Altro" da smartphone: liste accanto alle tabelle desktop.
+{
+  const cat = api.VIEWS.categorie();
+  check("Categorie: tabella desktop e lista mobile",
+        cat.includes('class="card solo-desktop"') && cat.includes("data-cat-apri="));
+  const reg = api.VIEWS.regole();
+  check("Regole: segmenti e righe che aprono la scheda",
+        reg.includes('data-regole-vista="merchant"') && reg.includes('data-regola-apri="rule:0"'));
+  const com = api.VIEWS.componi();
+  check("Componi: interruttori con gli stessi data-card e data-move",
+        com.includes('class="switch-ios"') && (com.match(/data-card=/g) || []).length
+          === 2 * state.layout.length);
+  check("il pattern si legge senza la sintassi",
+        api.patternLeggibile("(?i)Zoom.*Progress") === "Zoom … Progress"
+        && api.patternLeggibile("(?i)amzn|amazon") === "amzn · amazon");
+  const sc = api.schedaCategoriaHTML(state.categories[0]);
+  check("la scheda categoria ha natura e azioni",
+        sc.includes("data-natura-set=") && sc.includes("data-cat-merge=")
+        && sc.includes("data-cat-drop="));
 }
 check("le card non duplicano la barra multi-selezione (stesso #bulk-cat)",
       (txOut.match(/id="bulk-cat"/g) || []).length <= 1);

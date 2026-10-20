@@ -121,6 +121,25 @@ background:none;color:var(--accent);font:16px var(--sans);min-height:46px;
 padding:0 16px;position:relative}
 .azione:hover{filter:none;background:var(--soft)}
 .azione.rossa{color:var(--out)}
+.azione:disabled{opacity:.35}
+.scheda-barra b{font-size:17px;flex:1;text-align:center}
+.scheda-barra span:empty+b{flex:1}
+.scheda-nota{font-size:13px;color:var(--dim);margin:-14px 16px 22px}
+.scheda-nota b{color:var(--in)}
+.scheda-nota .rossa{color:var(--out)}
+#rs-esito:empty{display:none}
+.cella input.mono{font:15px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+color:var(--ink);text-align:left;text-align-last:left;flex:1}
+.cella select#rs-valore,.cella input#rs-valore{text-align:left;text-align-last:left;
+color:var(--ink);margin-left:0}
+/* La natura come elenco con la spunta, come una scelta nelle Impostazioni. */
+.cella-scelta{display:flex;align-items:center;width:100%;text-align:left;border:none;
+border-radius:0;background:none;color:var(--ink);font:16px var(--sans);min-height:44px;
+padding:0 16px;position:relative}
+.cella-scelta+.cella-scelta::before{content:"";position:absolute;top:0;left:16px;right:0;
+border-top:.5px solid var(--line)}
+.cella-scelta.on::after{content:"✓";margin-left:auto;color:var(--accent);font-weight:700}
+.cella-scelta:hover{filter:none;background:var(--soft)}
 /* La checkbox che apre il pannello filtri da smartphone: sempre invisibile,
    sempre funzionante (un <label for> la aziona anche a display:none). */
 .sheet-toggle{display:none}
@@ -721,6 +740,9 @@ color:var(--dim)}
     align-items:center;gap:2px;min-width:44px;min-height:44px;height:auto;
     border-radius:0;padding:0 6px;font-size:10px;text-align:center;
     position:relative}
+  /* margin:0 contro la vecchia nav>button{margin-bottom:7px}: alzava le
+     quattro schede di 3,5px rispetto ad "Altro", che non e' un <button>. */
+  #tablist>button{margin:0}
   #tablist button{color:var(--dim);background:none;font-weight:500}
   #tablist button.on{color:var(--accent);background:none}
   #tablist button svg{display:block;width:24px;height:24px;color:currentColor}
@@ -738,6 +760,10 @@ color:var(--dim)}
   .tab-more summary{list-style:none;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:2px;font-size:10px;
     font-weight:500;color:var(--dim);cursor:pointer;min-width:44px;
+    /* line-height come i <button> accanto (che hanno "normal" dal font:
+       della regola dei bottoni): con quella ereditata dal body, 1.45,
+       icona e scritta di "Altro" scendevano di 3px rispetto alle altre. */
+    line-height:normal;font-family:var(--sans);
     min-height:44px;padding:0 6px}
   .tab-more summary::-webkit-details-marker{display:none}
   .tab-more summary svg{width:24px;height:24px}
@@ -817,6 +843,56 @@ color:var(--dim)}
     font-variant-numeric:tabular-nums}
   div.bl-tx .amt.pos{color:var(--in)}
   div.bl-tx .amt small{display:block;font-size:12px;font-weight:400;color:var(--dim)}
+
+  /* --- Categorie, Regole, Componi: liste come le Impostazioni di iOS. Le
+     tabelle desktop (.solo-desktop) qui non si vedono. --- */
+  .solo-desktop{display:none !important}
+  .tx-ico.quad{border-radius:8px;width:32px;height:32px;font-size:14px}
+  div.bl-tx .amt.fine{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--dim)}
+  div.bl-tx .amt.fine.pos{color:var(--in)}
+  .chev-r{font-style:normal;color:var(--dim);font-size:18px;opacity:.6}
+  .tx-foot{font:13px var(--sans);color:var(--dim);margin:8px 16px 0}
+  .seg-ios.largo{display:flex;margin:2px 0 4px}
+  .seg-ios.largo button{flex:1;padding:7px 0}
+  div.bl-tx.regola{grid-template-columns:22px minmax(0,1fr) 10px;min-height:56px}
+  div.bl-tx.regola+div.bl-tx.regola::before{left:48px}
+  .pos-n{font:12px var(--sans);color:var(--dim);text-align:right;
+    font-variant-numeric:tabular-nums}
+  .pallino{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;
+    vertical-align:0}
+  div.bl-tx.comp{grid-template-columns:30px minmax(0,1fr) auto;cursor:default;min-height:52px}
+  div.bl-tx.comp+div.bl-tx.comp::before{left:56px}
+  div.bl-tx.comp:active{background:none}
+  div.bl-tx.comp.spenta .m{color:var(--dim)}
+  .ord{display:flex;flex-direction:column;gap:1px}
+  .ord button{background:none;border:none;color:var(--dim);font-size:11px;
+    line-height:1;padding:3px 6px;min-height:0}
+  .switch-ios{position:relative;width:51px;height:31px;flex:none}
+  .switch-ios input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+  .switch-ios span{position:absolute;inset:0;border-radius:16px;background:var(--soft);
+    transition:background-color .2s}
+  .switch-ios span::after{content:"";position:absolute;left:2px;top:2px;width:27px;
+    height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);
+    transition:transform .2s}
+  .switch-ios input:checked+span{background:#34c759}
+  .switch-ios input:checked+span::after{transform:translateX(20px)}
+
+  /* --- il log come scheda dal basso --- */
+  body.log-on::before{content:"";position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49}
+  #log{top:calc(env(safe-area-inset-top,0px) + 44px);border:none;z-index:50;
+    border-radius:12px 12px 0 0;background:var(--bg);box-shadow:0 -10px 40px rgba(0,0,0,.3);
+    padding:0 14px env(safe-area-inset-bottom,0px)}
+  #log .top{flex-wrap:wrap;border-bottom:none;padding:16px 2px 10px;position:relative}
+  #log .top::before{content:"";position:absolute;top:6px;left:50%;width:36px;height:5px;
+    margin-left:-18px;border-radius:3px;background:var(--dim);opacity:.4}
+  #log .top b{order:2;flex:1;text-align:center;font-size:17px}
+  #log .top .grow{display:none}
+  #log #log-close{order:1;background:none;color:var(--accent);font-size:17px;padding:0}
+  #log #log-follow{order:3;background:none;color:var(--accent);font-size:17px;
+    font-weight:600;padding:0}
+  #log #log-state{order:4;width:100%;margin-top:10px;font-size:13px}
+  #log pre{background:var(--card);border-radius:12px;padding:12px 14px;
+    margin-bottom:14px;font-size:12px}
 
   /* --- in alto: "Seleziona", "+", e il campo Cerca sotto il titolo --- */
   .azioni-scheda{display:flex;align-items:center;gap:6px;flex:none}
@@ -1193,8 +1269,8 @@ button:disabled{opacity:.45;cursor:default}
     <b>Log</b>
     <span id="log-state" class="mini"></span>
     <span class="grow"></span>
-    <button class="link" id="log-follow" title="segui la coda">↓ segui</button>
-    <button class="link" id="log-close">chiudi</button>
+    <button class="link" id="log-follow" title="segui la coda">Segui</button>
+    <button class="link" id="log-close">Chiudi</button>
   </div>
   <pre id="log-body"></pre>
 </aside>
@@ -1216,6 +1292,11 @@ let VERSION = -1;
 let SELECTED = new Set();
 // Smartphone: le spunte compaiono solo dopo "Seleziona", come in Mail.
 let SELEZIONE = false;
+// Smartphone, Categorie e Regole: il testo del campo Cerca (F.text e' delle
+// transazioni, qui si cercano voci e regole). E quale elenco di regole e'
+// aperto: quelle di categoria o i negozi.
+let CERCA_ALTRO = "";
+let REGOLE_VISTA = "rule";
 // Di default si parte sull'anno in corso: confrontoScelto() ricade gia' da
 // solo su "anno prima" quando il periodo e' un anno intero, quindi basta il
 // periodo per avere anche il confronto giusto acceso.
@@ -2191,6 +2272,13 @@ function apriScheda(id){
 // Le entrate col "+" davanti, come in Wallet: le uscite hanno gia' il meno.
 const euroSegno = v => (v > 0 ? "+" : "") + euro(v);
 const chiudiScheda = () => { if(el("tx-scheda").open) el("tx-scheda").close(); };
+// La stessa scheda per categorie e regole: niente transazione da rinfrescare.
+function apriSchedaAltro(html){
+  SCHEDA_ID = "";
+  el("tx-scheda-corpo").innerHTML = html;
+  if(!el("tx-scheda").open) el("tx-scheda").showModal();
+  if(document.activeElement) document.activeElement.blur();
+}
 
 // "Con Michela" da smartphone, nello stile di Transazioni: in cima il saldo
 // grande, sotto le spese divise come righe di Wallet. A destra non l'importo
@@ -3248,7 +3336,7 @@ VIEWS.partita = () => {
 VIEWS.categorie = () => {
   const natures = uniq(Object.keys(NATURE_COLOR).concat(S.nature));
   const rows = S.categories.slice().sort((a,b) => a.totale - b.totale);
-  return '<div class="card"><div class="head"><h2>Categorie</h2>'
+  return '<div class="card solo-desktop"><div class="head"><h2>Categorie</h2>'
     + `<span class="mini">${rows.length}</span></div>`
     + tableHTML(["categoria","sottocategoria","tx","totale","natura","azioni"],
         rows.map(c => [
@@ -3263,25 +3351,71 @@ VIEWS.categorie = () => {
         [2,3])
     + '<p class="note">"ignora" non cancella le transazioni: dice al motore di '
     + 'non imparare da quella categoria, e le righe vengono ricategorizzate '
-    + 'dalle regole.</p></div>';
+    + 'dalle regole.</p></div>'
+    + categorieMobileHTML(rows);
 };
+
+// Smartphone: le aree come sezioni (col loro totale), le voci come righe.
+// Toccare una voce apre la sua scheda: natura e azioni.
+function categorieMobileHTML(rows){
+  const cerca = CERCA_ALTRO.toLowerCase();
+  const visibili = rows.filter(c => !cerca || c.nome.toLowerCase().includes(cerca));
+  const aree = uniq(visibili.map(c => c.categoria));
+  const totaleDi = a => visibili.filter(c => c.categoria === a).reduce((s, c) => s + c.totale, 0);
+  // Prima le aree che pesano di piu' in uscita, le entrate in fondo.
+  aree.sort((x, y) => totaleDi(x) - totaleDi(y));
+  if(!aree.length)
+    return '<div class="bl-tx-wrap"><p class="tx-foot">Nessuna categoria trovata.</p></div>';
+  return '<div class="bl-tx-wrap"><div class="bl-txlist">' + aree.map(a =>
+    `<div class="tx-giorno"><b>${esc(a)}</b><span>${euroSegno(totaleDi(a))}</span></div>`
+    + '<div class="tx-grp">' + visibili.filter(c => c.categoria === a).map(c =>
+      `<div class="bl-tx" data-cat-apri="${esc(c.nome)}">`
+      + `<span class="tx-ico quad" style="background:${coloreCategoria({Categoria: c.categoria, Importo: c.totale})}">`
+      + `${c.totale > 0 ? "€" : esc(c.categoria.charAt(0).toUpperCase())}</span>`
+      + `<span class="who"><span class="m">${esc(c.sottocategoria || c.categoria)}</span>`
+      + `<span class="tx-sub">${c.n} moviment${c.n === 1 ? "o" : "i"} · ${esc(c.natura || "—")}</span></span>`
+      + `<span class="amt fine${c.totale > 0 ? " pos" : ""}">${euroSegno(c.totale)}`
+      + '<i class="chev-r">›</i></span></div>').join("") + "</div>").join("")
+    + "</div></div>";
+}
+
+function schedaCategoriaHTML(c){
+  const natures = uniq(Object.keys(NATURE_COLOR).concat(S.nature)).filter(n => n !== "Entrate" || c.totale > 0);
+  return '<div class="scheda-barra"><button type="button" data-scheda-chiudi="1">Chiudi</button>'
+    + '<span></span><button type="button" class="fine" data-scheda-chiudi="1">Fine</button></div>'
+    + '<div class="scheda-hero">'
+    + `<span class="tx-ico quad" style="background:${coloreCategoria({Categoria: c.categoria, Importo: c.totale})}">`
+    + `${c.totale > 0 ? "€" : esc(c.categoria.charAt(0).toUpperCase())}</span>`
+    + `<span class="chi">${esc(c.sottocategoria || c.categoria)}</span>`
+    + `<span class="quando">${c.sottocategoria ? esc(c.categoria) + " · " : ""}`
+    + `${c.n} moviment${c.n === 1 ? "o" : "i"} · ${euroSegno(c.totale)}</span></div>`
+    + '<div class="scheda-eti">Natura</div><div class="scheda-grp">'
+    + natures.map(n => `<button type="button" class="cella-scelta${n === c.natura ? " on" : ""}" `
+      + `data-natura-set="${esc(c.nome)}" data-v="${esc(n)}">${esc(n)}</button>`).join("")
+    + '</div><p class="scheda-nota">Vale per tutte le righe di questa voce: la natura '
+    + "discende dalla categoria.</p>"
+    + '<div class="scheda-eti">Azioni</div><div class="scheda-grp">'
+    + `<button type="button" class="azione" data-cat-rename="${esc(c.nome)}">Rinomina…</button>`
+    + `<button type="button" class="azione" data-cat-merge="${esc(c.nome)}">Unisci con un'altra voce…</button>`
+    + `<button type="button" class="azione rossa" data-cat-drop="${esc(c.nome)}">Ignora questa voce</button>`
+    + '</div><p class="scheda-nota">"Ignora" non cancella le transazioni: il motore '
+    + "smette di imparare da questa voce e le righe passano alle regole.</p>";
+}
 
 VIEWS.regole = () => {
   // Il valore di una regola e' il nome INTERO della categoria: nel file sta
   // su due colonne, ma qui si scrive e si legge unito, ed e' il server a
   // dividerlo. Mostrare la sola area faceva sparire la sottocategoria al
   // primo salvataggio.
-  const valore = (r, kind) => kind === "merchant" ? (r.merchant || "")
-    : whole({Categoria: r.categoria, Sottocategoria: r.sottocategoria});
   const block = (title, list, kind, valueField, note) =>
-    '<div class="card"><div class="head">' + `<h2>${esc(title)}</h2>`
+    '<div class="card solo-desktop"><div class="head">' + `<h2>${esc(title)}</h2>`
     + `<span class="mini">${list.length}</span></div>`
     + `<p class="note">${note}</p>`
     + tableHTML(["#","pattern",valueField,""],
         list.map((r,i) => [
           `<span class="mini">${i+1}</span>`,
           `<input class="wide" value="${esc(r.pattern)}" data-rule-pattern="${kind}" data-i="${i}">`,
-          `<input value="${esc(valore(r, kind))}" data-rule-value="${kind}" data-i="${i}">`,
+          `<input value="${esc(valoreRegola(r, kind))}" data-rule-value="${kind}" data-i="${i}">`,
           `<button class="link" data-rule-save="${kind}" data-i="${i}">salva</button>`
           + `<button class="link" data-rule-test="${kind}" data-i="${i}">prova</button>`
           + `<button class="link" data-rule-del="${kind}" data-i="${i}">elimina</button>`]),
@@ -3300,17 +3434,141 @@ VIEWS.regole = () => {
       + "prima di salvare.")
     + block("Merchant canonici", S.merchants, "merchant", "merchant",
       "Unifica le grafie dello stesso negozio. Senza questa mappa lo stesso "
-      + "supermercato conta come decine di negozi diversi.");
+      + "supermercato conta come decine di negozi diversi.")
+    + regoleMobileHTML();
 };
 
-VIEWS.componi = () => '<div class="card"><div class="head">'
+const valoreRegola = (r, kind) => kind === "merchant" ? (r.merchant || "")
+  : whole({Categoria: r.categoria, Sottocategoria: r.sottocategoria});
+
+// "(?i)Zoom.*Progress" si legge "Zoom … Progress": via i segni della
+// sintassi, ".*" diventa i puntini, "|" un separatore. Solo per il titolo
+// della riga; il pattern vero resta nella scheda.
+function patternLeggibile(p){
+  const s = (p || "").replace(/^\(\?i\)/, "").replace(/\\[bB]/g, "")
+    .replace(/\.[*+]/g, " … ").replace(/\\s[*+]?/g, " ").replace(/\|/g, " · ")
+    .replace(/[()?^$\\[\]{}*+]/g, "").replace(/\s+/g, " ").trim();
+  return s || p || "—";
+}
+
+// Smartphone: regole e negozi in un controllo a segmenti, una riga per
+// regola nell'ordine in cui il motore le prova.
+function regoleMobileHTML(){
+  const kind = REGOLE_VISTA;
+  const lista = kind === "merchant" ? S.merchants : S.rules;
+  const cerca = CERCA_ALTRO.toLowerCase();
+  const righe = lista.map((r, i) => ({r, i})).filter(({r}) => !cerca
+    || (r.pattern || "").toLowerCase().includes(cerca)
+    || valoreRegola(r, kind).toLowerCase().includes(cerca));
+  const seg = '<div class="seg-ios largo">'
+    + [["rule", `Categorie ${S.rules.length}`], ["merchant", `Negozi ${S.merchants.length}`]]
+      .map(([k, eti]) => `<button type="button" data-regole-vista="${k}" `
+        + `class="${k === kind ? "on" : ""}">${eti}</button>`).join("") + "</div>";
+  return '<div class="bl-tx-wrap">' + seg
+    + (righe.length ? '<div class="bl-txlist"><div class="tx-grp">' + righe.map(({r, i}) => {
+      const v = valoreRegola(r, kind);
+      const colore = kind === "merchant" ? "var(--dim)"
+        : coloreCategoria({Categoria: r.categoria, Importo: -1});
+      return `<div class="bl-tx regola" data-regola-apri="${kind}:${i}">`
+        + `<span class="pos-n">${i + 1}</span>`
+        + `<span class="who"><span class="m">${esc(patternLeggibile(r.pattern))}</span>`
+        + `<span class="tx-sub"><i class="pallino" style="background:${colore}"></i>`
+        + `${esc(kind === "merchant" ? v : v.replace(SEP, " · "))}</span></span>`
+        + '<i class="chev-r">›</i></div>';
+    }).join("") + "</div></div>" : '<p class="tx-foot">Nessuna regola trovata.</p>')
+    + `<p class="tx-foot">${kind === "merchant"
+        ? "Unifica le grafie dello stesso negozio."
+        : "Vince la prima che combacia: le specifiche stanno sopra le generiche."}</p></div>`;
+}
+
+// La regola aperta nella scheda: tipo, posizione (-1 = nuova) e il pattern
+// com'era, che il server usa per trovarla e sostituirla.
+let REGOLA_APERTA = null;
+function apriRegola(kind, i){
+  const lista = kind === "merchant" ? S.merchants : S.rules;
+  const r = i >= 0 ? lista[i] : null;
+  if(i >= 0 && !r) return chiudiScheda();
+  REGOLA_APERTA = {kind, i, prima: r ? r.pattern : ""};
+  const v = r ? valoreRegola(r, kind) : "";
+  const campoValore = kind === "merchant"
+    ? `<input id="rs-valore" value="${esc(v)}" placeholder="Nome del negozio">`
+    : `<select id="rs-valore"><option value="">— scegli —</option>${categoryOptions(v)}</select>`;
+  const ultimo = i === lista.length - 1;
+  apriSchedaAltro('<div class="scheda-barra"><button type="button" data-scheda-chiudi="1">Annulla</button>'
+    + `<b>${i >= 0 ? (kind === "merchant" ? "Negozio " : "Regola ") + (i + 1) : "Nuova regola"}</b>`
+    + '<button type="button" class="fine" data-regola-salva="1">Salva</button></div>'
+    + '<div class="scheda-eti">Se la descrizione contiene</div><div class="scheda-grp">'
+    + `<label class="cella"><input id="rs-pattern" class="mono" value="${esc(r ? r.pattern : "(?i)")}" `
+    + 'autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>'
+    + '<p class="scheda-nota" id="rs-esito"></p>'
+    + `<div class="scheda-eti">${kind === "merchant" ? "Allora il negozio è" : "Allora la categoria è"}</div>`
+    + `<div class="scheda-grp"><label class="cella">${campoValore}</label></div>`
+    + (i >= 0
+      ? '<div class="scheda-eti">Posizione</div><div class="scheda-grp">'
+        + `<button type="button" class="azione resta" data-regola-sposta="cima" ${i === 0 ? "disabled" : ""}>Sposta in cima</button>`
+        + `<button type="button" class="azione resta" data-regola-sposta="su" ${i === 0 ? "disabled" : ""}>Sposta su di una</button>`
+        + `<button type="button" class="azione resta" data-regola-sposta="giu" ${ultimo ? "disabled" : ""}>Sposta giù di una</button>`
+        + '</div><div class="scheda-grp">'
+        + '<button type="button" class="azione rossa" data-regola-elimina="1">Elimina</button></div>'
+      : ""));
+  provaRegola();
+}
+
+// Quante righe colpirebbe il pattern scritto, mentre lo si scrive: lo stesso
+// /api/rules/preview del bottone "prova" su desktop.
+let provaTimer = null;
+function provaRegola(){
+  clearTimeout(provaTimer);
+  provaTimer = setTimeout(async () => {
+    const p = el("rs-pattern"), esito = el("rs-esito");
+    if(!p || !esito || !REGOLA_APERTA) return;
+    if(!p.value.trim() || p.value.trim() === "(?i)"){ esito.textContent = ""; return; }
+    // fetch e non post(): un pattern a meta' e' un'espressione non valida, e
+    // post() lo direbbe con un avviso a ogni tasto premuto.
+    let r;
+    try {
+      r = await (await fetch("/api/rules/preview", {method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({pattern: p.value.trim(),
+          valore: REGOLA_APERTA.kind === "merchant" ? "" : (el("rs-valore").value || "")})})).json();
+    } catch(e) { return; }
+    esito.innerHTML = r.errore ? `<span class="rossa">${esc(r.errore)}</span>`
+      : `Colpisce <b>${r.n} transazion${r.n === 1 ? "e" : "i"}</b>`
+        + (REGOLA_APERTA.kind === "merchant" ? "" : `, ${r.cambierebbero} cambierebbero categoria`);
+  }, 350);
+}
+
+VIEWS.componi = () => '<div class="card solo-desktop"><div class="head">'
   + "<h2>Composizione della dashboard</h2></div>"
   + '<div class="compose">' + S.layout.map((c,i) =>
       `<div><input type="checkbox" data-card="${esc(c.id)}" ${c.visibile?"checked":""}>`
       + `<span class="grow">${esc(c.titolo)}</span>`
       + `<button class="link" data-move="${i}" data-dir="-1">↑</button>`
       + `<button class="link" data-move="${i}" data-dir="1">↓</button></div>`).join("")
-  + "</div></div>";
+  + "</div></div>" + componiMobileHTML();
+
+// Smartphone: interruttori di sistema, frecce per l'ordine, le card spente
+// in una sezione a parte. Gli indici sono quelli veri di S.layout, cosi'
+// data-move e data-card restano gli stessi della versione desktop.
+function componiMobileHTML(){
+  const riga = (c, i) => `<div class="bl-tx comp${c.visibile ? "" : " spenta"}">`
+    + `<span class="ord"><button type="button" data-move="${i}" data-dir="-1" aria-label="Sposta su">▲</button>`
+    + `<button type="button" data-move="${i}" data-dir="1" aria-label="Sposta giù">▼</button></span>`
+    + `<span class="who"><span class="m">${esc(c.titolo)}</span></span>`
+    + `<label class="switch-ios"><input type="checkbox" data-card="${esc(c.id)}" `
+    + `${c.visibile ? "checked" : ""}><span></span></label></div>`;
+  const accese = S.layout.map((c, i) => [c, i]).filter(([c]) => c.visibile);
+  const spente = S.layout.map((c, i) => [c, i]).filter(([c]) => !c.visibile);
+  return '<div class="bl-tx-wrap"><div class="bl-txlist">'
+    + '<div class="tx-giorno"><b>Sulla dashboard</b></div>'
+    + (accese.length ? '<div class="tx-grp">' + accese.map(([c, i]) => riga(c, i)).join("") + "</div>"
+       : '<p class="tx-foot">Nessuna card accesa.</p>')
+    + '<p class="tx-foot">Andamento sta sempre in cima a tutta larghezza; le altre '
+    + "seguono quest'ordine.</p>"
+    + (spente.length ? '<div class="tx-giorno"><b>Nascoste</b></div><div class="tx-grp">'
+       + spente.map(([c, i]) => riga(c, i)).join("") + "</div>" : "")
+    + "</div></div>";
+}
 
 // --------------------------------------------------------------------------
 // disegno
@@ -3373,8 +3631,17 @@ function render(){
     document.body.classList.toggle("vista-lista", lista);
     document.body.classList.toggle("selezione", SELEZIONE);
   }
-  el("cerca-ios").classList.toggle("hide", !lista || SELEZIONE);
-  if(document.activeElement !== el("m-text")) el("m-text").value = F.text;
+  // Cerca anche in Categorie e Regole, su un testo tutto loro.
+  const cercaAltro = TAB === "categorie" || TAB === "regole";
+  el("cerca-ios").classList.toggle("hide", !(lista || cercaAltro) || SELEZIONE);
+  el("m-text").placeholder = TAB === "categorie" ? "Cerca categoria"
+    : TAB === "regole" ? "Cerca testo, categoria o negozio" : "Cerca negozio o descrizione";
+  if(document.activeElement !== el("m-text"))
+    el("m-text").value = cercaAltro ? CERCA_ALTRO : F.text;
+  if(TAB === "regole")
+    el("azioni-scheda").innerHTML = '<button class="ibtn piu" data-regola-nuova="1" '
+      + 'aria-label="Nuova regola"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+      + 'stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>';
   const azioniSel = TAB === "revisione"
     ? [["categoria", "Categoria"], ["conferma", "Confermo"]]
     : [["categoria", "Categoria"], ["conto", "Conto"], ["quota", "Quota"],
@@ -3447,6 +3714,9 @@ function render(){
   // lettura non tolgono ne' aggiungono righe, cambiano solo come le leggo, e
   // hanno gia' il loro pulsante acceso altrove. Mescolarli coi filtri veri
   // farebbe sembrare il toggle un filtro sui dati, che non e'.
+  // Dove il periodo non conta (Categorie, Regole, Componi) non si mostra
+  // nemmeno cosa e' filtrato: non toglie niente a quelle pagine.
+  el("crumbs").classList.toggle("hide", senzaFiltri);
   el("crumbs").innerHTML = Object.entries(F)
     .filter(([k,v]) => v && k !== "confronto" && k !== "vista" && k !== "lettura")
     .map(([k,v]) => `<span class="chip" data-clear="${k}">`
@@ -3695,6 +3965,66 @@ async function gestisciClick(t){
     [S.layout[i], S.layout[j]] = [S.layout[j], S.layout[i]];
     await post("/api/layout", {layout:S.layout}); render(); return;
   }
+  // Smartphone: le schede di categorie e regole.
+  if(d.catApri){
+    const c = S.categories.find(x => x.nome === d.catApri);
+    if(c) apriSchedaAltro(schedaCategoriaHTML(c));
+    return;
+  }
+  if(d.naturaSet !== undefined){
+    t.closest(".scheda-grp").querySelectorAll("[data-natura-set]")
+      .forEach(b => b.classList.toggle("on", b === t));
+    await post("/api/categories", {azione:"natura", nome:d.naturaSet, natura:d.v});
+    return reload();
+  }
+  if(d.regoleVista){ REGOLE_VISTA = d.regoleVista; render(); return; }
+  if(d.regolaApri){
+    const [k, i] = d.regolaApri.split(":");
+    return apriRegola(k, +i);
+  }
+  if(d.regolaNuova) return apriRegola(REGOLE_VISTA, -1);
+  if(d.regolaSalva || d.regolaSposta || d.regolaElimina){
+    const R = REGOLA_APERTA;
+    if(!R) return;
+    const tipo = R.kind === "merchant" ? "merchant" : "regola";
+    const lista = R.kind === "merchant" ? S.merchants : S.rules;
+    if(d.regolaElimina){
+      if(!await chiedi(`Eliminare la regola "${patternLeggibile(R.prima)}"?`)) return;
+      await post("/api/rules", {tipo, pattern:R.prima, elimina:true});
+      return reload();
+    }
+    if(d.regolaSposta){
+      // Si sposta la regola com'e' salvata, non quella che si sta scrivendo:
+      // il server la toglie e la reinserisce alla posizione data.
+      const j = {cima: 0, su: R.i - 1, giu: R.i + 1}[d.regolaSposta];
+      if(j < 0 || j >= lista.length) return;
+      await post("/api/rules", {tipo, pattern:R.prima, valore:valoreRegola(lista[R.i], R.kind),
+                                pattern_precedente:R.prima, posizione:j});
+      await reload();
+      return apriRegola(R.kind, j);
+    }
+    const p = el("rs-pattern").value.trim(), v = el("rs-valore").value.trim();
+    if(!p || p === "(?i)" || !v) return avvisa("Servono il testo da cercare e "
+      + (R.kind === "merchant" ? "il nome del negozio." : "la categoria."));
+    // Una regola nuova va in cima: e' quasi sempre piu' specifica di quelle
+    // che ci sono. Una modificata resta dov'era.
+    const r = await post("/api/rules", {tipo, pattern:p, valore:v,
+      pattern_precedente: R.i >= 0 ? R.prima : p, posizione: R.i >= 0 ? R.i : 0});
+    if(r && r.errore) return;
+    chiudiScheda();
+    return reload();
+  }
+  if(d.catMerge){
+    const name = d.catMerge;
+    // Un menu delle voci che esistono, non un campo libero: unire dentro un
+    // nome scritto male creerebbe una categoria nuova invece di unire.
+    const target = await modale({testo:`Unisci "${name}" dentro:`, valore:"",
+      scelte: S.categories.map(c => c.nome).filter(n => n && n !== name),
+      annullabile:true, ok:"Unisci"});
+    if(!target || target === name) return;
+    await post("/api/categories", {azione:"unisci", nome:name, destinazione:target});
+    return reload();
+  }
   if(d.catRename || d.catMerge){
     const name = d.catRename || d.catMerge;
     const target = await domanda(d.catRename ? `Nuovo nome per "${name}":`
@@ -3893,7 +4223,7 @@ document.addEventListener("click", ev => {
   if(ev.target.closest("[data-scheda-chiudi]")){ chiudiScheda(); return; }
   // Un'azione della scheda (escludi, annulla, regola, confermo...) chiude
   // la scheda prima di partire: le sue domande si aprono sopra la lista.
-  if(ev.target.closest("#tx-scheda button.azione")) chiudiScheda();
+  if(ev.target.closest("#tx-scheda button.azione:not(.resta)")) chiudiScheda();
   if(ev.target.closest(".menu-piu .menu-lista button, .menu-piu .menu-lista label"))
     ev.target.closest(".menu-piu").open = false;
   // Le azioni sui dati ripetute in "Altro" e nel menu "...": cliccano il
@@ -3917,7 +4247,9 @@ document.addEventListener("click", ev => {
     + "[data-more],[data-andamento-reset],[data-andamento-da],[data-dove-apri],"
     + "[data-bulk-apply],[data-bulk-confirm],"
     + "[data-bulk-clear],[data-elimina],[data-dove-pie],[data-dove-back],"
-    + "[data-tx-apri],[data-selezione],[data-sel-tutto],[data-sel-azione]");
+    + "[data-tx-apri],[data-selezione],[data-sel-tutto],[data-sel-azione],"
+    + "[data-cat-apri],[data-natura-set],[data-regole-vista],[data-regola-apri],"
+    + "[data-regola-nuova],[data-regola-salva],[data-regola-sposta],[data-regola-elimina]");
   if(!t) return;
   // .finally() sulla promise, non try/finally dentro gestisciClick: un
   // "return handleRule(d)" dentro un try fa scattare il finally non appena
@@ -3965,8 +4297,10 @@ async function handleRule(d){
               esc(e["Categoria intera"] || e.Categoria || "—")]), [2]);
     return;
   }
+  // posizione: senza, il server toglieva la regola e la riaccodava in
+  // fondo, e salvarne una modificata le cambiava anche la precedenza.
   await post("/api/rules", {tipo:type, pattern:p, valore:v,
-                            pattern_precedente:before,
+                            pattern_precedente:before, posizione: +i,
                             elimina: !!d.ruleDel});
   reload();
 }
@@ -4098,7 +4432,15 @@ el("f-text").addEventListener("input", () => {
 });
 el("m-text").addEventListener("input", () => {
   clearTimeout(typing);
-  typing = setTimeout(() => { F.text = el("m-text").value; render(); }, 250);
+  typing = setTimeout(() => {
+    if(TAB === "categorie" || TAB === "regole") CERCA_ALTRO = el("m-text").value;
+    else F.text = el("m-text").value;
+    render();
+  }, 250);
+});
+// La prova dal vivo della regola aperta nella scheda.
+document.addEventListener("input", ev => {
+  if(ev.target.id === "rs-pattern" || ev.target.id === "rs-valore") provaRegola();
 });
 el("f-reset").addEventListener("click", () => {
   Object.keys(F).forEach(k => F[k] = "");
@@ -4160,7 +4502,7 @@ el("btn-log").addEventListener("click", () =>
 el("log-close").addEventListener("click", closeLog);
 el("log-follow").addEventListener("click", () => {
   LOG_FOLLOW = !LOG_FOLLOW;
-  el("log-follow").textContent = LOG_FOLLOW ? "↓ segui" : "↓ fermo";
+  el("log-follow").textContent = LOG_FOLLOW ? "Segui" : "Fermo";
   if(LOG_FOLLOW) el("log-body").scrollTop = el("log-body").scrollHeight;
 });
 // Scorrere a mano verso l'alto significa "voglio leggere qui": non trascinare.
@@ -4169,7 +4511,7 @@ el("log-body").addEventListener("scroll", () => {
   const inCoda = b.scrollHeight - b.scrollTop - b.clientHeight < 30;
   if(LOG_FOLLOW !== inCoda){
     LOG_FOLLOW = inCoda;
-    el("log-follow").textContent = LOG_FOLLOW ? "↓ segui" : "↓ fermo";
+    el("log-follow").textContent = LOG_FOLLOW ? "Segui" : "Fermo";
   }
 });
 
